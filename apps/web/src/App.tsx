@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchProducts, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchProducts, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel } from './auth';
 
 type CartLine = { product: Product; quantity: number };
@@ -16,6 +16,7 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [adminMessage, setAdminMessage] = useState('');
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => { if (view === 'admin') fetchAdminOrders().then(setOrders).catch(() => setOrders([])); }, [view, checkoutMessage]);
@@ -45,6 +46,18 @@ export default function App() {
     setCheckoutMessage(`Order ${checkout.orderId} reserved — Stripe Checkout handoff ready for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
+  }
+
+  async function handleImageUpload(product: Product, file: File | undefined) {
+    if (!file) return;
+    setAdminMessage(`Uploading image for ${product.title}...`);
+    try {
+      const updated = await uploadProductImage(product.slug, file);
+      setProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
+      setAdminMessage(`Updated image for ${updated.title}.`);
+    } catch {
+      setAdminMessage(`Could not upload image for ${product.title}.`);
+    }
   }
 
   return <main>
@@ -82,7 +95,7 @@ export default function App() {
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
 
-    {view === 'admin' && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings and review orders. Product creation API is ready; next step is protected admin auth and image uploads.</p><div className="admin-grid"><div><h3>Listings</h3>{products.map((p) => <p key={p.id}>{p.title} — {formatMoney(p.price)} — {p.inventory} in stock</p>)}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
+    {view === 'admin' && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin auth hardening is next before launch.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Listings</h3>{products.map((p) => <article className="admin-listing" key={p.id}><img src={p.image} alt="" /><div><strong>{p.title}</strong><p>{formatMoney(p.price)} — {p.inventory} in stock</p><label>Upload image for {p.title}<input aria-label={`Upload image for ${p.title}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(p, e.currentTarget.files?.[0])} /></label></div></article>)}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
 
     <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
   </main>;

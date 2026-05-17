@@ -43,4 +43,22 @@ describe('storefront API', () => {
     const orders = await app.inject({ method: 'GET', url: '/api/admin/orders' });
     expect(orders.json().orders[0]).toMatchObject({ id: orderId, status: 'paid' });
   });
+
+  it('uploads and saves a product image for an admin listing', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, {
+      uploadImage: async () => ({ url: 'https://images.example.com/golden.jpg' })
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/products/golden-hour-commander-proxy/image',
+      payload: { fileName: 'golden.jpg', contentType: 'image/jpeg', dataUrl: 'data:image/jpeg;base64,abc123' }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().product).toMatchObject({ slug: 'golden-hour-commander-proxy', image: 'https://images.example.com/golden.jpg' });
+    const product = await store.getProduct('golden-hour-commander-proxy');
+    expect(product?.image).toBe('https://images.example.com/golden.jpg');
+  });
 });

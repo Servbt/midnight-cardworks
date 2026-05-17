@@ -65,6 +65,10 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const saved = await prisma.product.upsert({ where: { slug: product.slug }, update: product, create: product });
       return toProduct(saved);
     },
+    async updateProductImage(slug, image) {
+      const saved = await prisma.product.update({ where: { slug }, data: { image } }).catch(() => undefined);
+      return saved ? toProduct(saved) : undefined;
+    },
     async listOrders() {
       const orders = await prisma.order.findMany({ include: { items: true }, orderBy: { createdAt: 'desc' } });
       return orders.map(toOrder);

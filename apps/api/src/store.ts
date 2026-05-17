@@ -9,6 +9,13 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async getProduct(slug) { return products.get(slug); },
     async upsertProduct(product) { products.set(product.slug, { ...product }); return product; },
+    async updateProductImage(slug, image) {
+      const product = products.get(slug);
+      if (!product) return undefined;
+      const updated = { ...product, image };
+      products.set(slug, updated);
+      return updated;
+    },
     async listOrders() { return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async createOrder(input) {
       const productList = [...products.values()];

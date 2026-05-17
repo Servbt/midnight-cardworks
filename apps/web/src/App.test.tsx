@@ -12,6 +12,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: '/checkout/success', total: 1299 }), { status: 201 });
+    if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', total: 1299, status: 'pending_payment', items: [] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
@@ -48,6 +49,18 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
     const panel = await screen.findByText('Orders');
     expect(within(panel.parentElement!).getByText(/ord_test/)).toBeInTheDocument();
+  });
+
+  it('uploads a product image from the admin dashboard', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    const upload = await screen.findByLabelText('Upload image for Golden Hour Commander Proxy');
+    const file = new File(['image-bytes'], 'golden.jpg', { type: 'image/jpeg' });
+
+    await userEvent.upload(upload, file);
+
+    expect(await screen.findByText('Updated image for Golden Hour Commander Proxy.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST' }));
   });
 
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {

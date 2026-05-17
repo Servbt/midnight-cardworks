@@ -95,7 +95,22 @@ npm run db:migrate && npm run build && npm run dev:api
 
 Seed products are upserted on API startup when Prisma storage is enabled, so the initial catalog is present after deployment.
 
+## Product Image Uploads
+
+The admin dashboard can upload replacement product images. The frontend reads the image file as a data URL, sends it to the API, and the API updates the product's stored image URL.
+
+- Without `CLOUDINARY_URL`, local/test uploads echo the data URL so the flow works without credentials.
+- With `CLOUDINARY_URL`, the API uploads images to Cloudinary under `midnight-cardworks/products` and stores the returned secure URL.
+
+Required production env var:
+
+```bash
+CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
+```
+
+Do not commit real Cloudinary credentials. Add the value only in the production host's environment settings.
+
 ## Next production steps
 
-1. Add image uploads via Cloudinary/UploadThing.
-2. Deploy API + web on Render/Vercel.
+1. Deploy API + web on Render/Vercel.
+2. Add Clerk-backed admin route protection before accepting real admin traffic.
