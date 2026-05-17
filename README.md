@@ -54,9 +54,23 @@ stripe listen --forward-to localhost:4000/api/stripe/webhook
 # Put the printed whsec_... value into STRIPE_WEBHOOK_SECRET
 ```
 
+## Customer Accounts
+
+Clerk is wired into the frontend for production sign-in/sign-up/account management.
+
+- Without `VITE_CLERK_PUBLISHABLE_KEY`, the app shows a safe setup prompt instead of a fake email account form.
+- With `VITE_CLERK_PUBLISHABLE_KEY`, the account page uses Clerk's modal sign-in flow and user menu.
+
+Required production env var:
+
+```bash
+VITE_CLERK_PUBLISHABLE_KEY=pk_live_or_test_key
+```
+
+Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
+
 ## Next production steps
 
-1. Replace demo auth with Clerk/Supabase Auth.
-2. Move store to Postgres/Prisma.
-3. Add image uploads via Cloudinary/UploadThing.
-4. Deploy API + web on Render/Vercel.
+1. Move store to Postgres/Prisma.
+2. Add image uploads via Cloudinary/UploadThing.
+3. Deploy API + web on Render/Vercel.

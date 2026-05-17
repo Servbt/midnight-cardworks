@@ -49,4 +49,11 @@ describe('Midnight Cardworks storefront', () => {
     const panel = await screen.findByText('Orders');
     expect(within(panel.parentElement!).getByText(/ord_test/)).toBeInTheDocument();
   });
+
+  it('uses Clerk-ready account actions instead of a manual demo email form', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+    expect(screen.getByRole('button', { name: 'Sign in with Clerk' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument();
+  });
 });

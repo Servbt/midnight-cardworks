@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckout, fetchAdminOrders, fetchProducts, type Order, type Product } from './api';
+import { AccountPanel } from './auth';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'shop' | 'cart' | 'account' | 'admin';
@@ -13,7 +14,6 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [email, setEmail] = useState('');
-  const [accountEmail, setAccountEmail] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
 
@@ -41,7 +41,7 @@ export default function App() {
   }
 
   async function checkout() {
-    const checkout = await createCheckout(email || accountEmail || 'guest@example.com', cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+    const checkout = await createCheckout(email || 'guest@example.com', cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — Stripe Checkout handoff ready for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
@@ -80,7 +80,7 @@ export default function App() {
 
     {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><button onClick={checkout}>Checkout securely</button></>}</section>}
 
-    {view === 'account' && <section className="panel narrow"><h2>Customer account</h2><p>Create a lightweight demo account now; production auth can be swapped to Clerk or Supabase.</p><input aria-label="Account email" placeholder="you@example.com" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} /><button onClick={() => setAccountEmail(accountEmail || 'collector@example.com')}>Save account</button>{accountEmail && <p className="success">Signed in as {accountEmail}</p>}{checkoutMessage && <p className="success">{checkoutMessage}</p>}</section>}
+    {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
 
     {view === 'admin' && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings and review orders. Product creation API is ready; next step is protected admin auth and image uploads.</p><div className="admin-grid"><div><h3>Listings</h3>{products.map((p) => <p key={p.id}>{p.title} — {formatMoney(p.price)} — {p.inventory} in stock</p>)}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
 
