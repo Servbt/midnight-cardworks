@@ -9,7 +9,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Persistent browser cart with quantity controls
 - Checkout flow that creates orders through the API; Stripe-ready service seam
 - Admin dashboard for listing management and order review
-- Fastify API with in-memory/file-backed store
+- Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
 
 ## Local development
@@ -69,8 +69,33 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_live_or_test_key
 
 Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
 
+## Database Storage
+
+The API now uses Prisma with PostgreSQL when `DATABASE_URL` is configured. Without `DATABASE_URL`, tests and local demo runs continue to use the in-memory store.
+
+Required production env var:
+
+```bash
+DATABASE_URL=postgresql://user:password@host:5432/midnight_cardworks
+```
+
+Useful commands:
+
+```bash
+npm run db:generate   # regenerate Prisma client
+npm run db:dev        # create/apply a local development migration
+npm run db:migrate    # apply migrations in production/deploy
+```
+
+Production startup should run migrations before the API starts, for example:
+
+```bash
+npm run db:migrate && npm run build && npm run dev:api
+```
+
+Seed products are upserted on API startup when Prisma storage is enabled, so the initial catalog is present after deployment.
+
 ## Next production steps
 
-1. Move store to Postgres/Prisma.
-2. Add image uploads via Cloudinary/UploadThing.
-3. Deploy API + web on Render/Vercel.
+1. Add image uploads via Cloudinary/UploadThing.
+2. Deploy API + web on Render/Vercel.

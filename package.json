@@ -1,1 +1,19 @@
-{"private":true,"type":"module","workspaces":["apps/api","apps/web"],"scripts":{"dev":"node scripts/dev.mjs","dev:api":"npm run dev --workspace @midnight-cardworks/api","dev:web":"npm run dev --workspace @midnight-cardworks/web","test":"npm run test --workspaces","typecheck":"npm run typecheck --workspaces","build":"npm run build --workspaces"},"devDependencies":{"typescript":"^5.9.3"}}
+{
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/api", "apps/web"],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "npm run dev --workspace @midnight-cardworks/api",
+    "dev:web": "npm run dev --workspace @midnight-cardworks/web",
+    "test": "npm run test --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "build": "npm run build --workspaces",
+    "db:generate": "npm run db:generate --workspace @midnight-cardworks/api",
+    "db:migrate": "npm run db:migrate --workspace @midnight-cardworks/api",
+    "db:dev": "npm run db:dev --workspace @midnight-cardworks/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
