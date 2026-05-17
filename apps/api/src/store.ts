@@ -21,6 +21,12 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, items, subtotal, total: subtotal, status: 'pending_payment', createdAt: new Date().toISOString() };
       orders.push(order);
       return order;
+    },
+    async markOrderPaid(orderId) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      order.status = 'paid';
+      return order;
     }
   };
 }
