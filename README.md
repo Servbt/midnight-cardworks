@@ -4,7 +4,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 
 ## MVP features
 
-- Customer account mock flow with local demo session
+- Clerk customer accounts with production sign-in/sign-up wiring
 - Product catalog, search, category filters, product detail cards
 - Persistent browser cart with quantity controls
 - Checkout flow that creates orders through the API; Stripe-ready service seam
@@ -87,10 +87,10 @@ npm run db:dev        # create/apply a local development migration
 npm run db:migrate    # apply migrations in production/deploy
 ```
 
-Production startup should run migrations before the API starts, for example:
+Production deploys should run migrations before the API starts. The included Render Blueprint does this with:
 
 ```bash
-npm run db:migrate && npm run build && npm run dev:api
+npm run render:build
 ```
 
 Seed products are upserted on API startup when Prisma storage is enabled, so the initial catalog is present after deployment.
@@ -110,7 +110,45 @@ CLOUDINARY_URL=cloudinary://api_key:api_secret@cloud_name
 
 Do not commit real Cloudinary credentials. Add the value only in the production host's environment settings.
 
+## Render Deployment
+
+This repo includes `render.yaml`, so Render can create the web service and Postgres database from GitHub.
+
+Deployment flow:
+
+1. In Render, create a new Blueprint from the private GitHub repo.
+2. Render reads `render.yaml` and creates:
+   - `midnight-cardworks` web service
+   - `midnight-cardworks-db` Postgres database
+3. Fill the secret env vars in Render:
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET` after webhook creation
+   - `VITE_CLERK_PUBLISHABLE_KEY`
+   - `CLOUDINARY_URL`
+   - `APP_BASE_URL` after Render gives the live URL
+4. Deploy.
+5. After the first deploy, set `APP_BASE_URL` to the Render URL, then redeploy.
+6. In Stripe, add webhook endpoint:
+
+```text
+https://your-render-url.onrender.com/api/stripe/webhook
+```
+
+Render commands:
+
+```bash
+Build: npm ci --include=dev && npm run render:build
+Start: npm run start
+```
+
+Production behavior:
+
+- Fastify serves the built React app from `apps/web/dist`.
+- Frontend API calls use same-origin URLs when `VITE_API_BASE_URL` is empty.
+- Non-API routes return the React app for browser refresh/client-side navigation.
+- Missing API routes return JSON 404s.
+
 ## Next production steps
 
-1. Deploy API + web on Render/Vercel.
+1. Deploy on Render and test the live URL.
 2. Add Clerk-backed admin route protection before accepting real admin traffic.

@@ -1,5 +1,8 @@
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
 import { createCheckoutResponse } from './checkout.js';
@@ -12,13 +15,19 @@ import type { Store } from './types.js';
 const checkoutSchema = z.object({ email: z.string().email(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 
-type ServerOptions = { uploadImage?: UploadImage };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string };
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
   app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
+  if (options.serveStaticRoot) {
+    const staticRoot = path.resolve(options.serveStaticRoot);
+    if (existsSync(staticRoot)) {
+      app.register(fastifyStatic, { root: staticRoot, prefix: '/', wildcard: false });
+    }
+  }
   app.get('/health', async () => ({ ok: true }));
   app.get('/api/products', async () => ({ products: await store.listProducts() }));
   app.get('/api/products/:slug', async (request, reply) => {
@@ -69,5 +78,11 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     if (!product?.slug || !product?.title) return reply.code(400).send({ error: 'Product slug and title required' });
     return { product: await store.upsertProduct(product) };
   });
+  if (options.serveStaticRoot) {
+    app.setNotFoundHandler(async (request, reply) => {
+      if (request.url.startsWith('/api/')) return reply.code(404).send({ error: 'Not found' });
+      return reply.sendFile('index.html');
+    });
+  }
   return app;
 }

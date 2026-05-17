@@ -9,6 +9,8 @@
     "test": "npm run test --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "build": "npm run build --workspaces",
+    "start": "node apps/api/dist/index.js",
+    "render:build": "npm run db:generate && npm run build && npm run db:migrate",
     "db:generate": "npm run db:generate --workspace @midnight-cardworks/api",
     "db:migrate": "npm run db:migrate --workspace @midnight-cardworks/api",
     "db:dev": "npm run db:dev --workspace @midnight-cardworks/api"

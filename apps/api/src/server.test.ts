@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildServer } from './server.js';
 import { createInMemoryStore } from './store.js';
@@ -60,5 +63,27 @@ describe('storefront API', () => {
     expect(res.json().product).toMatchObject({ slug: 'golden-hour-commander-proxy', image: 'https://images.example.com/golden.jpg' });
     const product = await store.getProduct('golden-hour-commander-proxy');
     expect(product?.image).toBe('https://images.example.com/golden.jpg');
+  });
+
+  it('serves the built React app and keeps API 404s as JSON in production mode', async () => {
+    const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
+    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>Midnight Cardworks</title><div id="root"></div>');
+
+    try {
+      const app = buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
+      const home = await app.inject({ method: 'GET', url: '/' });
+      const clientRoute = await app.inject({ method: 'GET', url: '/account' });
+      const missingApi = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+
+      expect(home.statusCode).toBe(200);
+      expect(home.headers['content-type']).toContain('text/html');
+      expect(home.body).toContain('Midnight Cardworks');
+      expect(clientRoute.statusCode).toBe(200);
+      expect(clientRoute.body).toContain('Midnight Cardworks');
+      expect(missingApi.statusCode).toBe(404);
+      expect(missingApi.json()).toEqual({ error: 'Not found' });
+    } finally {
+      await rm(staticRoot, { recursive: true, force: true });
+    }
   });
 });
