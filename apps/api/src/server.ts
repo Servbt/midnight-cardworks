@@ -23,7 +23,7 @@ export function buildServer(store: Store = createInMemoryStore()) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
       const order = await store.createOrder(parsed.data);
-      return reply.code(201).send(createCheckoutResponse(order));
+      return reply.code(201).send(await createCheckoutResponse(order));
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
