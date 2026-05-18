@@ -2,6 +2,9 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { redirectToCheckout } from './checkoutRedirect';
+
+vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 
 const products = [
   { id: 'p1', slug: 'golden', title: 'Golden Hour Commander Proxy', description: 'Premium commander centerpiece', price: 1299, category: 'Commander', tags: ['commander'], image: 'x', inventory: 20, active: true },
@@ -11,7 +14,7 @@ const products = [
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
-    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: '/checkout/success', total: 1299 }), { status: 201 });
+    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', total: 1299, status: 'pending_payment', items: [] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
@@ -41,6 +44,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.type(screen.getByLabelText('Checkout email'), 'buyer@example.com');
     await userEvent.click(screen.getByRole('button', { name: 'Checkout securely' }));
     expect(await screen.findByText(/Order ord_test reserved/)).toBeInTheDocument();
+    expect(redirectToCheckout).toHaveBeenCalledWith('https://checkout.stripe.test/session');
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/checkout'), expect.objectContaining({ method: 'POST' }));
   });
 

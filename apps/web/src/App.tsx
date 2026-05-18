@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createCheckout, fetchAdminOrders, fetchProducts, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel } from './auth';
+import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'shop' | 'cart' | 'account' | 'admin';
@@ -43,9 +44,10 @@ export default function App() {
 
   async function checkout() {
     const checkout = await createCheckout(email || 'guest@example.com', cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
-    setCheckoutMessage(`Order ${checkout.orderId} reserved — Stripe Checkout handoff ready for ${formatMoney(checkout.total)}.`);
+    setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
+    redirectToCheckout(checkout.checkoutUrl);
   }
 
   async function handleImageUpload(product: Product, file: File | undefined) {
