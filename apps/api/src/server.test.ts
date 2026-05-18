@@ -24,11 +24,23 @@ describe('storefront API', () => {
     expect(body.products[0]).toHaveProperty('price');
   });
 
-  it('creates a checkout order from cart items', async () => {
-    const app = buildServer(createInMemoryStore());
-    const res = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 2 }] } });
+  it('creates a checkout order from cart items with customer and shipping details', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/checkout',
+      payload: {
+        email: 'buyer@example.com',
+        customerName: 'Ari Buyer',
+        shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001',
+        items: [{ productId: 'p1', quantity: 2 }]
+      }
+    });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ status: 'pending_payment', total: 2598 });
+    const order = await store.getOrder(res.json().orderId);
+    expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001' });
   });
 
   it('exposes admin order review after checkout', async () => {
@@ -67,6 +79,21 @@ describe('storefront API', () => {
 
     expect(receipt.statusCode).toBe(200);
     expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', total: 1299, status: 'paid' });
+  });
+
+  it('lets admins mark paid orders fulfilled', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId);
+
+    const fulfill = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/fulfill`, headers: adminHeaders });
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+
+    expect(fulfill.statusCode).toBe(200);
+    expect(fulfill.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
+    expect(receipt.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
   });
 
   it('uploads and saves a product image for an admin listing', async () => {

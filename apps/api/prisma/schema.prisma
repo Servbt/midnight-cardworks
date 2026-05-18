@@ -33,8 +33,10 @@ model Product {
 
 model Order {
   id        String      @id
-  email     String
-  subtotal  Int
+  email           String
+  customerName    String?
+  shippingAddress String?
+  subtotal        Int
   total     Int
   status    OrderStatus @default(pending_payment)
   createdAt DateTime    @default(now())

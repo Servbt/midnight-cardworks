@@ -30,9 +30,10 @@ beforeEach(() => {
     }
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
+    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
-    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
-    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', total: 1299, status: 'pending_payment', items: [] }] }), { status: 200 });
+    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
 });
@@ -59,10 +60,12 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
     expect(screen.getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
     await userEvent.type(screen.getByLabelText('Checkout email'), 'buyer@example.com');
+    await userEvent.type(screen.getByLabelText('Full name for checkout'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Shipping address'), '123 Midnight Lane');
     await userEvent.click(screen.getByRole('button', { name: 'Checkout securely' }));
     expect(await screen.findByText(/Order ord_test reserved/)).toBeInTheDocument();
     expect(redirectToCheckout).toHaveBeenCalledWith('https://checkout.stripe.test/session');
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/checkout'), expect.objectContaining({ method: 'POST' }));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/checkout'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('123 Midnight Lane') }));
   });
 
   it('shows admin order review', async () => {
@@ -70,7 +73,20 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
     const panel = await screen.findByText('Orders');
-    expect(within(panel.parentElement!).getByText(/ord_test/)).toBeInTheDocument();
+    expect(within(panel.parentElement!).getByText(/ord_test: buyer@example.com/)).toBeInTheDocument();
+  });
+
+  it('lets admins mark paid orders fulfilled', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+
+    expect(await screen.findByText(/Ari Buyer/)).toBeInTheDocument();
+    expect(screen.getByText(/123 Midnight Lane/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Mark ord_test fulfilled' }));
+
+    expect(await screen.findByText(/ord_test: buyer@example.com — Ari Buyer — 123 Midnight Lane — \$12.99 — fulfilled/)).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/fulfill'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
   });
 
   it('uploads a product image from the admin dashboard', async () => {
@@ -142,6 +158,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(await screen.findByText('Payment verified')).toBeInTheDocument();
     expect(screen.getByText(/Order ord_test/)).toBeInTheDocument();
     expect(screen.getByText(/1 × Golden Hour Commander Proxy — \$12.99/)).toBeInTheDocument();
+    expect(screen.getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
     expect(screen.getByText(/Total paid: \$12.99/)).toBeInTheDocument();
   });
 

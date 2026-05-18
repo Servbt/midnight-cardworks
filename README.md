@@ -7,7 +7,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Clerk customer accounts with production sign-in/sign-up wiring
 - Product catalog, search, category filters, product detail cards
 - Persistent browser cart with quantity controls
-- Checkout flow that creates orders through the API; Stripe-ready service seam
+- Checkout flow collects receipt email, customer name, and shipping address before Stripe Checkout
 - Admin dashboard for listing management and order review, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
@@ -38,6 +38,8 @@ The checkout endpoint is production-ready at the service seam:
 - With `STRIPE_SECRET_KEY`, `/api/checkout` creates a real Stripe Checkout Session.
 - Stripe webhooks should point to `/api/stripe/webhook`.
 - The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`.
+- `/api/checkout` accepts `customerName` and `shippingAddress`; receipts and admin order review display those details.
+- Admins can mark paid orders `fulfilled` after shipping/hand-off.
 
 Required production env vars:
 
@@ -77,6 +79,7 @@ Protected API routes:
 
 ```text
 GET /api/admin/orders
+POST /api/admin/orders/:orderId/fulfill
 GET /api/admin/products
 POST /api/admin/products
 POST /api/admin/products/:slug/image

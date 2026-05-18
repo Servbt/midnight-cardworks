@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { PrismaClient } from '@prisma/client';
-import type { CartItemInput, Order, OrderStatus, Product, Store } from './types.js';
+import type { CheckoutInput, Order, OrderStatus, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 
 type PrismaProduct = Awaited<ReturnType<PrismaClient['product']['findFirstOrThrow']>>;
@@ -28,6 +28,8 @@ function toOrder(order: PrismaOrder): Order {
   return {
     id: order.id,
     email: order.email,
+    customerName: order.customerName ?? undefined,
+    shippingAddress: order.shippingAddress ?? undefined,
     subtotal: order.subtotal,
     total: order.total,
     status: order.status as OrderStatus,
@@ -81,7 +83,7 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
       return order ? toOrder(order) : undefined;
     },
-    async createOrder(input: { email: string; items: CartItemInput[] }) {
+    async createOrder(input: CheckoutInput) {
       const productIds = input.items.map((item) => item.productId);
       const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
       const orderItems = input.items.map((item) => {
@@ -94,6 +96,8 @@ export function createPrismaStore(prisma: PrismaClient): Store {
         data: {
           id: `ord_${nanoid(8)}`,
           email: input.email,
+          customerName: input.customerName,
+          shippingAddress: input.shippingAddress,
           subtotal,
           total: subtotal,
           status: 'pending_payment',
@@ -105,6 +109,10 @@ export function createPrismaStore(prisma: PrismaClient): Store {
     },
     async markOrderPaid(orderId) {
       const order = await prisma.order.update({ where: { id: orderId }, data: { status: 'paid' }, include: { items: true } }).catch(() => undefined);
+      return order ? toOrder(order) : undefined;
+    },
+    async markOrderFulfilled(orderId) {
+      const order = await prisma.order.update({ where: { id: orderId }, data: { status: 'fulfilled' }, include: { items: true } }).catch(() => undefined);
       return order ? toOrder(order) : undefined;
     }
   };

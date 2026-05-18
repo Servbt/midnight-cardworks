@@ -13,7 +13,7 @@ import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { Store } from './types.js';
 
-const checkoutSchema = z.object({ email: z.string().email(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
+const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
 const productSchema = z.object({
   id: z.string().min(1).optional(),
   slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -100,6 +100,12 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   });
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
+  app.post('/api/admin/orders/:orderId/fulfill', { preHandler: requireAdmin }, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string };
+    const order = await store.markOrderFulfilled(orderId);
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
+    return { order };
+  });
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = productSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Valid product details required' });

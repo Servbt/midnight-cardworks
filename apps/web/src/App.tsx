@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProducts, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProducts, fulfillAdminOrder, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
@@ -17,6 +17,8 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [email, setEmail] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [shippingAddress, setShippingAddress] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
@@ -70,7 +72,7 @@ export default function App() {
   }
 
   async function checkout() {
-    const checkout = await createCheckout(email || 'guest@example.com', cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+    const checkout = await createCheckout(email || 'guest@example.com', customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
@@ -114,6 +116,18 @@ export default function App() {
       if (!product.id) setNewProduct(blankProduct);
     } catch {
       setAdminMessage(`Could not save ${product.title || 'product listing'}.`);
+    }
+  }
+
+  async function handleOrderFulfilled(order: Order) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const updated = await fulfillAdminOrder(order.id, token);
+      setOrders((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setAdminMessage(`Marked ${updated.id} fulfilled.`);
+    } catch {
+      setAdminMessage(`Could not fulfill ${order.id}.`);
     }
   }
 
@@ -170,13 +184,13 @@ export default function App() {
       </article>)}</div>
     </section>}
 
-    {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><button onClick={checkout}>Checkout securely</button></>}</section>}
+    {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><div className="checkout-fields"><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><input aria-label="Full name for checkout" placeholder="full name for shipping" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /><textarea aria-label="Shipping address" placeholder="shipping address" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></div><button onClick={checkout}>Checkout securely</button></>}</section>}
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'fulfilled' ? 'fulfilled' : receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
-    {view === 'admin' && isAdmin && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin actions require your signed-in admin account.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Create listing</h3>{productEditor(newProduct, true)}<h3>Listings</h3>{adminProducts.map((p) => productEditor(p))}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
+    {view === 'admin' && isAdmin && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin actions require your signed-in admin account.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Create listing</h3>{productEditor(newProduct, true)}<h3>Listings</h3>{adminProducts.map((p) => productEditor(p))}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <div className="order-card" key={o.id}><p>{o.id}: {o.email}{o.customerName ? ` — ${o.customerName}` : ''}{o.shippingAddress ? ` — ${o.shippingAddress}` : ''} — {formatMoney(o.total)} — {o.status}</p>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</div>)}</div></div></section>}
 
     <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
   </main>;
