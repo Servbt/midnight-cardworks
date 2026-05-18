@@ -65,6 +65,21 @@ describe('storefront API', () => {
     expect(product?.image).toBe('https://images.example.com/golden.jpg');
   });
 
+  it('accepts practical product image payload sizes for admin uploads', async () => {
+    const app = buildServer(createInMemoryStore(), {
+      uploadImage: async () => ({ url: 'https://images.example.com/large-golden.jpg' })
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/products/golden-hour-commander-proxy/image',
+      payload: { fileName: 'large-golden.jpg', contentType: 'image/jpeg', dataUrl: `data:image/jpeg;base64,${'a'.repeat(2_000_000)}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().product.image).toBe('https://images.example.com/large-golden.jpg');
+  });
+
   it('serves the built React app and keeps API 404s as JSON in production mode', async () => {
     const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
     await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>Midnight Cardworks</title><div id="root"></div>');

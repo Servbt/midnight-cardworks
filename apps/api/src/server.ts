@@ -14,6 +14,7 @@ import type { Store } from './types.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
+const imageUploadBodyLimit = 16 * 1024 * 1024;
 
 type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string };
 
@@ -59,7 +60,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
     }
   });
-  app.post('/api/admin/products/:slug/image', async (request, reply) => {
+  app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const parsed = imageUploadSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Valid image upload required' });
