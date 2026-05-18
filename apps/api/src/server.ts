@@ -47,6 +47,12 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
   });
+  app.get('/api/orders/:orderId', async (request, reply) => {
+    const { orderId } = request.params as { orderId: string };
+    const order = await store.getOrder(orderId);
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
+    return { order };
+  });
   app.post('/api/stripe/webhook', async (request, reply) => {
     try {
       const event = await parseStripeWebhookEvent(request);

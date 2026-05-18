@@ -47,6 +47,19 @@ describe('storefront API', () => {
     expect(orders.json().orders[0]).toMatchObject({ id: orderId, status: 'paid' });
   });
 
+  it('shows a checkout receipt with current order status', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store);
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId);
+
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+
+    expect(receipt.statusCode).toBe(200);
+    expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', total: 1299, status: 'paid' });
+  });
+
   it('uploads and saves a product image for an admin listing', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store, {

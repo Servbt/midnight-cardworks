@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchProducts, uploadProductImage, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchOrder, fetchProducts, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'shop' | 'cart' | 'account' | 'admin';
+type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
@@ -18,8 +18,22 @@ export default function App() {
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [adminMessage, setAdminMessage] = useState('');
+  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [receiptMessage, setReceiptMessage] = useState('');
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order');
+    if (window.location.pathname === '/checkout/success' && orderId) {
+      setView('receipt');
+      setReceiptMessage('Checking payment status...');
+      fetchOrder(orderId).then((order) => {
+        setReceiptOrder(order);
+        setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
+      }).catch(() => setReceiptMessage('Could not verify this order yet'));
+    }
+  }, []);
   useEffect(() => { if (view === 'admin') fetchAdminOrders().then(setOrders).catch(() => setOrders([])); }, [view, checkoutMessage]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
@@ -96,6 +110,8 @@ export default function App() {
     {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><button onClick={checkout}>Checkout securely</button></>}</section>}
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
+
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
     {view === 'admin' && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin auth hardening is next before launch.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Listings</h3>{products.map((p) => <article className="admin-listing" key={p.id}><img src={p.image} alt="" /><div><strong>{p.title}</strong><p>{formatMoney(p.price)} — {p.inventory} in stock</p><label>Upload image for {p.title}<input aria-label={`Upload image for ${p.title}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(p, e.currentTarget.files?.[0])} /></label></div></article>)}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
 

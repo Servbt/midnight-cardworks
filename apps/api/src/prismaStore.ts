@@ -73,6 +73,10 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const orders = await prisma.order.findMany({ include: { items: true }, orderBy: { createdAt: 'desc' } });
       return orders.map(toOrder);
     },
+    async getOrder(orderId) {
+      const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      return order ? toOrder(order) : undefined;
+    },
     async createOrder(input: { email: string; items: CartItemInput[] }) {
       const productIds = input.items.map((item) => item.productId);
       const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
