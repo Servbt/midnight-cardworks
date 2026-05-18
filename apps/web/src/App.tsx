@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchOrder, fetchProducts, uploadProductImage, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProducts, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
@@ -7,6 +7,8 @@ type CartLine = { product: Product; quantity: number };
 type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
+const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, active: true };
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -17,6 +19,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [adminProducts, setAdminProducts] = useState<Product[]>([]);
+  const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
@@ -37,7 +41,12 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;
-    getAdminToken().then((token) => fetchAdminOrders(token ?? undefined)).then(setOrders).catch(() => setOrders([]));
+    getAdminToken().then(async (token) => {
+      const authToken = token ?? undefined;
+      const [adminListings, adminOrders] = await Promise.all([fetchAdminProducts(authToken), fetchAdminOrders(authToken)]);
+      setAdminProducts(adminListings);
+      setOrders(adminOrders);
+    }).catch(() => { setAdminProducts([]); setOrders([]); });
   }, [view, checkoutMessage, isAdmin]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
@@ -76,10 +85,58 @@ export default function App() {
       if (!token) throw new Error('Admin token required');
       const updated = await uploadProductImage(product.slug, file, token);
       setProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
+      setAdminProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
       setAdminMessage(`Updated image for ${updated.title}.`);
     } catch {
       setAdminMessage(`Could not upload image for ${product.title}.`);
     }
+  }
+
+  function updateAdminProduct(slug: string, patch: Partial<Product>) {
+    setAdminProducts((items) => items.map((item) => item.slug === slug ? { ...item, ...patch } : item));
+  }
+
+  function rememberSavedProduct(saved: Product) {
+    setAdminProducts((items) => items.some((item) => item.slug === saved.slug) ? items.map((item) => item.slug === saved.slug ? saved : item) : [...items, saved]);
+    setProducts((items) => {
+      const without = items.filter((item) => item.slug !== saved.slug);
+      return saved.active ? [...without, saved] : without;
+    });
+  }
+
+  async function handleProductSave(product: Product) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const saved = await saveAdminProduct(product, token);
+      rememberSavedProduct(saved);
+      setAdminMessage(`Saved ${saved.title}.`);
+      if (!product.id) setNewProduct(blankProduct);
+    } catch {
+      setAdminMessage(`Could not save ${product.title || 'product listing'}.`);
+    }
+  }
+
+  function productEditor(product: Product, isNew = false) {
+    const originalTitle = isNew ? 'new product' : products.find((item) => item.slug === product.slug)?.title || product.title || product.slug;
+    const setProduct = (patch: Partial<Product>) => isNew ? setNewProduct((item) => ({ ...item, ...patch })) : updateAdminProduct(product.slug, patch);
+    const saveLabel = isNew ? 'Create product listing' : `Save ${originalTitle}`;
+    return <article className="admin-listing product-editor" key={isNew ? 'new-product' : product.id}>
+      {!isNew && <img src={product.image} alt="" />}
+      <div className="editor-grid">
+        <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
+        <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
+        <label>{isNew ? 'New product description' : `Description for ${originalTitle}`}<textarea aria-label={isNew ? 'New product description' : `Description for ${originalTitle}`} value={product.description} onChange={(e) => setProduct({ description: e.target.value })} /></label>
+        <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
+        <label>{isNew ? 'New product category' : `Category for ${originalTitle}`}<input aria-label={isNew ? 'New product category' : `Category for ${originalTitle}`} value={product.category} onChange={(e) => setProduct({ category: e.target.value })} /></label>
+        <label>{isNew ? 'New product tags' : `Tags for ${originalTitle}`}<input aria-label={isNew ? 'New product tags' : `Tags for ${originalTitle}`} value={product.tags.join(', ')} onChange={(e) => setProduct({ tags: e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} /></label>
+        <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
+        <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
+        <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
+        {!isNew && <label>Upload image for {originalTitle}<input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} /></label>}
+        <button onClick={() => void handleProductSave(product)}>{saveLabel}</button>
+      </div>
+    </article>;
   }
 
   return <main>
@@ -119,7 +176,7 @@ export default function App() {
 
     {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
-    {view === 'admin' && isAdmin && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin actions require your signed-in admin account.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Listings</h3>{products.map((p) => <article className="admin-listing" key={p.id}><img src={p.image} alt="" /><div><strong>{p.title}</strong><p>{formatMoney(p.price)} — {p.inventory} in stock</p><label>Upload image for {p.title}<input aria-label={`Upload image for ${p.title}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(p, e.currentTarget.files?.[0])} /></label></div></article>)}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
+    {view === 'admin' && isAdmin && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin actions require your signed-in admin account.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Create listing</h3>{productEditor(newProduct, true)}<h3>Listings</h3>{adminProducts.map((p) => productEditor(p))}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <p key={o.id}>{o.id}: {o.email} — {formatMoney(o.total)} — {o.status}</p>)}</div></div></section>}
 
     <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
   </main>;

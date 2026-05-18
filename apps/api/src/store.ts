@@ -7,6 +7,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
   const orders: Order[] = [];
   return {
     async listProducts() { return [...products.values()].filter((p) => p.active); },
+    async listAdminProducts() { return [...products.values()]; },
     async getProduct(slug) { return products.get(slug); },
     async upsertProduct(product) { products.set(product.slug, { ...product }); return product; },
     async updateProductImage(slug, image) {

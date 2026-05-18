@@ -77,6 +77,7 @@ Protected API routes:
 
 ```text
 GET /api/admin/orders
+GET /api/admin/products
 POST /api/admin/products
 POST /api/admin/products/:slug/image
 ```
@@ -93,6 +94,8 @@ VITE_ADMIN_EMAILS=owner@example.com
 - `ADMIN_EMAILS` is the backend allowlist that actually protects admin actions.
 - `VITE_ADMIN_EMAILS` only controls whether the frontend shows the Admin button. It must match `ADMIN_EMAILS`, but it is not a security boundary.
 - Separate multiple admin emails with commas.
+
+Admin product management supports creating new listings, editing existing listing title/description/price/category/tags/inventory/image URL, toggling active/inactive status, and uploading listing images. Inactive listings remain visible in admin but are hidden from the public storefront.
 
 ## Database Storage
 

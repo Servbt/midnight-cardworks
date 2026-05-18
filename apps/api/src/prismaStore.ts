@@ -57,6 +57,10 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const products = await prisma.product.findMany({ where: { active: true }, orderBy: { createdAt: 'asc' } });
       return products.map(toProduct);
     },
+    async listAdminProducts() {
+      const products = await prisma.product.findMany({ orderBy: { createdAt: 'asc' } });
+      return products.map(toProduct);
+    },
     async getProduct(slug) {
       const product = await prisma.product.findUnique({ where: { slug } });
       return product ? toProduct(product) : undefined;

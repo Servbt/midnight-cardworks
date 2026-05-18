@@ -106,6 +106,52 @@ describe('storefront API', () => {
     expect(res.json().product.image).toBe('https://images.example.com/large-golden.jpg');
   });
 
+  it('creates and updates admin products while keeping inactive products out of the storefront', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+
+    const create = await app.inject({
+      method: 'POST',
+      url: '/api/admin/products',
+      headers: adminHeaders,
+      payload: {
+        slug: 'secret-drop',
+        title: 'Secret Drop Proxy',
+        description: 'Hidden draft listing',
+        price: 1599,
+        category: 'Commander',
+        tags: ['draft', 'commander'],
+        image: 'https://images.example.com/secret.jpg',
+        inventory: 4,
+        active: false
+      }
+    });
+    const shop = await app.inject({ method: 'GET', url: '/api/products' });
+    const adminProducts = await app.inject({ method: 'GET', url: '/api/admin/products', headers: adminHeaders });
+    const update = await app.inject({
+      method: 'POST',
+      url: '/api/admin/products',
+      headers: adminHeaders,
+      payload: {
+        slug: 'secret-drop',
+        title: 'Secret Drop Proxy Updated',
+        description: 'Live listing',
+        price: 1699,
+        category: 'Commander',
+        tags: ['commander'],
+        image: 'https://images.example.com/secret.jpg',
+        inventory: 7,
+        active: true
+      }
+    });
+
+    expect(create.statusCode).toBe(200);
+    expect(create.json().product).toMatchObject({ slug: 'secret-drop', active: false });
+    expect(shop.json().products.map((product: { slug: string }) => product.slug)).not.toContain('secret-drop');
+    expect(adminProducts.json().products.map((product: { slug: string }) => product.slug)).toContain('secret-drop');
+    expect(update.json().product).toMatchObject({ slug: 'secret-drop', title: 'Secret Drop Proxy Updated', price: 1699, inventory: 7, active: true });
+  });
+
   it('blocks anonymous and non-admin access to admin orders', async () => {
     const app = buildServer(createInMemoryStore(), { adminAuth });
 

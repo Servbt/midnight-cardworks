@@ -21,6 +21,13 @@ beforeEach(() => {
   mockAuth.isAdmin = false;
   mockAuth.token = 'admin-token';
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+    if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        return new Response(JSON.stringify({ product: { ...body, id: body.id ?? `prod_${body.slug}` } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ products }), { status: 200 });
+    }
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
@@ -77,6 +84,47 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Updated image for Golden Hour Commander Proxy.')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
+  });
+
+  it('edits product listing details from the admin dashboard', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+
+    await userEvent.clear(await screen.findByLabelText('Title for Golden Hour Commander Proxy'));
+    await userEvent.type(screen.getByLabelText('Title for Golden Hour Commander Proxy'), 'Golden Hour Commander Proxy Deluxe');
+    await userEvent.clear(screen.getByLabelText('Price in dollars for Golden Hour Commander Proxy'));
+    await userEvent.type(screen.getByLabelText('Price in dollars for Golden Hour Commander Proxy'), '14.99');
+    await userEvent.clear(screen.getByLabelText('Inventory for Golden Hour Commander Proxy'));
+    await userEvent.type(screen.getByLabelText('Inventory for Golden Hour Commander Proxy'), '12');
+    await userEvent.click(screen.getByLabelText('Active listing for Golden Hour Commander Proxy'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save Golden Hour Commander Proxy' }));
+
+    expect(await screen.findByText('Saved Golden Hour Commander Proxy Deluxe.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products'), expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ authorization: 'Bearer admin-token' }),
+      body: expect.stringContaining('Golden Hour Commander Proxy Deluxe')
+    }));
+    expect(String((fetch as any).mock.calls.find((call: unknown[]) => String(call[0]).includes('/api/admin/products') && (call[1] as RequestInit | undefined)?.method === 'POST')?.[1]?.body)).toContain('"active":false');
+  });
+
+  it('creates a new product listing from the admin dashboard', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+
+    await userEvent.type(await screen.findByLabelText('New product slug'), 'moonlit-token');
+    await userEvent.type(screen.getByLabelText('New product title'), 'Moonlit Token Pack');
+    await userEvent.type(screen.getByLabelText('New product description'), 'Fresh token bundle');
+    await userEvent.type(screen.getByLabelText('New product price in dollars'), '9.50');
+    await userEvent.type(screen.getByLabelText('New product category'), 'Tokens');
+    await userEvent.type(screen.getByLabelText('New product tags'), 'tokens, moonlit');
+    await userEvent.type(screen.getByLabelText('New product inventory'), '5');
+    await userEvent.click(screen.getByRole('button', { name: 'Create product listing' }));
+
+    expect(await screen.findByText('Saved Moonlit Token Pack.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('moonlit-token') }));
   });
 
   it('hides the admin dashboard from non-admin customers', async () => {

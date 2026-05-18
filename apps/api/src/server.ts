@@ -14,6 +14,19 @@ import { uploadProductImage } from './imageUpload.js';
 import type { Store } from './types.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
+const productSchema = z.object({
+  id: z.string().min(1).optional(),
+  slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  price: z.number().int().nonnegative(),
+  category: z.string().min(1),
+  tags: z.array(z.string()).default([]),
+  image: z.string().min(1),
+  inventory: z.number().int().nonnegative(),
+  active: z.boolean(),
+  featured: z.boolean().optional()
+});
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
 
@@ -86,10 +99,12 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     }
   });
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
+  app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
-    const product = request.body as any;
-    if (!product?.slug || !product?.title) return reply.code(400).send({ error: 'Product slug and title required' });
-    return { product: await store.upsertProduct(product) };
+    const parsed = productSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Valid product details required' });
+    const existing = await store.getProduct(parsed.data.slug);
+    return { product: await store.upsertProduct({ ...parsed.data, id: parsed.data.id ?? existing?.id ?? `prod_${parsed.data.slug}` }) };
   });
   if (options.serveStaticRoot) {
     app.setNotFoundHandler(async (request, reply) => {
