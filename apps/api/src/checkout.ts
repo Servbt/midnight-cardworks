@@ -6,7 +6,7 @@ export async function createCheckoutResponse(order: Order) {
 
   if (stripeSecret && !stripeSecret.includes('replace_me')) {
     const stripeModule = await import('stripe');
-    const StripeClient = stripeModule as unknown as { new (key: string): { checkout: { sessions: { create(input: unknown): Promise<{ url: string | null }> } } } };
+    const StripeClient = ((stripeModule as any).default ?? stripeModule) as { new (key: string): { checkout: { sessions: { create(input: unknown): Promise<{ url: string | null }> } } } };
     const stripe = new StripeClient(stripeSecret);
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
