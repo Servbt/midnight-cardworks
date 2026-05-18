@@ -14,7 +14,8 @@ vi.mock('./auth', () => ({
 
 const products = [
   { id: 'p1', slug: 'golden', title: 'Golden Hour Commander Proxy', description: 'Premium commander centerpiece', price: 1299, category: 'Commander', tags: ['commander'], image: 'x', inventory: 20, active: true },
-  { id: 'p2', slug: 'token', title: 'Midnight Token Pack', description: 'Token bundle', price: 899, category: 'Tokens', tags: ['tokens'], image: 'x', inventory: 35, active: true }
+  { id: 'p2', slug: 'token', title: 'Midnight Token Pack', description: 'Token bundle', price: 899, category: 'Tokens', tags: ['tokens'], image: 'x', inventory: 35, active: true },
+  { id: 'p3', slug: 'sold-out', title: 'Archive Showcase Proxy', description: 'Display-only showcase card', price: 1599, category: 'Display', tags: ['display', 'archive'], image: 'x', inventory: 0, active: true }
 ];
 
 beforeEach(() => {
@@ -45,6 +46,28 @@ afterEach(() => {
 });
 
 describe('Midnight Cardworks storefront', () => {
+  it('shows launch polish with trust cues and product metadata', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(screen.getByText('Secure Stripe checkout')).toBeInTheDocument();
+    expect(screen.getByText('Made-to-order fulfillment')).toBeInTheDocument();
+    expect(screen.getByText('Casual-play clarity')).toBeInTheDocument();
+    expect(screen.getByText('20 in stock')).toBeInTheDocument();
+    expect(screen.getByText('#commander')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sold out: Archive Showcase Proxy' })).toBeDisabled();
+  });
+
+  it('shows a polished empty state when filters find no products', async () => {
+    render(<App />);
+    await screen.findByText('Golden Hour Commander Proxy');
+
+    await userEvent.type(screen.getByLabelText('Search products'), 'goblin thunderstorm');
+
+    expect(screen.getByText('No signal on this channel.')).toBeInTheDocument();
+    expect(screen.getByText('Clear search')).toBeInTheDocument();
+  });
+
   it('renders a searchable product catalog', async () => {
     render(<App />);
     expect(await screen.findByText('Golden Hour Commander Proxy')).toBeInTheDocument();

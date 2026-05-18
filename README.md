@@ -6,6 +6,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 
 - Clerk customer accounts with production sign-in/sign-up wiring
 - Product catalog, search, category filters, product detail cards
+- Launch-polished storefront with trust cues, inventory status, tags, sold-out handling, and empty search state
 - Persistent browser cart with quantity controls
 - Checkout flow collects receipt email, customer name, and shipping address before Stripe Checkout
 - Email notifications for paid orders and fulfilled orders via Resend
