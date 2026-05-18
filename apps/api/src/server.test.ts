@@ -13,6 +13,16 @@ const adminAuth = {
   }
 };
 const adminHeaders = { authorization: 'Bearer admin-token' };
+function createEmailNotifierSpy() {
+  const sent: Array<{ type: string; order: { id: string; email: string; status: string } }> = [];
+  return {
+    sent,
+    notifier: {
+      sendOrderPaid: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'paid', order }); },
+      sendOrderFulfilled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'fulfilled', order }); }
+    }
+  };
+}
 
 describe('storefront API', () => {
   it('lists active products for the shop grid', async () => {
@@ -94,6 +104,37 @@ describe('storefront API', () => {
     expect(fulfill.statusCode).toBe(200);
     expect(fulfill.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
     expect(receipt.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
+  });
+
+  it('sends an order confirmation email when Stripe confirms checkout completion', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', items: [{ productId: 'p1', quantity: 1 }] } });
+    const orderId = checkout.json().orderId;
+
+    const webhook = await app.inject({
+      method: 'POST',
+      url: '/api/stripe/webhook',
+      payload: { type: 'checkout.session.completed', data: { object: { metadata: { orderId } } } }
+    });
+
+    expect(webhook.statusCode).toBe(200);
+    expect(emailSpy.sent).toEqual([{ type: 'paid', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'paid' }) }]);
+  });
+
+  it('sends a fulfillment email when admins mark orders fulfilled', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId);
+
+    const fulfill = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/fulfill`, headers: adminHeaders });
+
+    expect(fulfill.statusCode).toBe(200);
+    expect(emailSpy.sent).toEqual([{ type: 'fulfilled', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'fulfilled' }) }]);
   });
 
   it('uploads and saves a product image for an admin listing', async () => {

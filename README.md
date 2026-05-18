@@ -8,6 +8,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Product catalog, search, category filters, product detail cards
 - Persistent browser cart with quantity controls
 - Checkout flow collects receipt email, customer name, and shipping address before Stripe Checkout
+- Email notifications for paid orders and fulfilled orders via Resend
 - Admin dashboard for listing management and order review, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
@@ -40,6 +41,7 @@ The checkout endpoint is production-ready at the service seam:
 - The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`.
 - `/api/checkout` accepts `customerName` and `shippingAddress`; receipts and admin order review display those details.
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
+- When Resend is configured, paid orders send a customer confirmation email plus an optional shop-owner notification. Fulfilled orders send a customer fulfillment email.
 
 Required production env vars:
 
@@ -55,6 +57,21 @@ Local Stripe CLI test flow:
 stripe listen --forward-to localhost:4000/api/stripe/webhook
 # Put the printed whsec_... value into STRIPE_WEBHOOK_SECRET
 ```
+
+## Email Notifications
+
+Email sending is optional and uses Resend when configured. Without `RESEND_API_KEY` or `EMAIL_FROM`, the app safely skips sending email so local checkout still works.
+
+```bash
+RESEND_API_KEY=re_...
+EMAIL_FROM=Midnight Cardworks <orders@your-domain.com>
+ORDER_NOTIFICATION_EMAIL=owner@example.com
+```
+
+- `EMAIL_FROM` must be a verified Resend sender/domain.
+- Customer confirmation emails are sent after Stripe confirms payment via webhook.
+- Customer fulfillment emails are sent when an admin marks an order fulfilled.
+- `ORDER_NOTIFICATION_EMAIL` is optional and receives owner copies for newly paid orders.
 
 ## Customer Accounts
 

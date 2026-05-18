@@ -32,6 +32,12 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ORDER_NOTIFICATION_EMAIL
+        sync: false
 
 databases:
   - name: midnight-cardworks-db

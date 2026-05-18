@@ -12,6 +12,7 @@ import { getCompletedCheckoutOrderId, parseStripeWebhookEvent } from './stripeWe
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { Store } from './types.js';
+import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
 const productSchema = z.object({
@@ -30,11 +31,12 @@ const productSchema = z.object({
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; emailNotifier?: EmailNotifier };
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
   const adminAuth = options.adminAuth ?? createAdminAuthFromEnv();
+  const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
   app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
@@ -79,6 +81,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       if (orderId) {
         const order = await store.markOrderPaid(orderId);
         if (!order) return reply.code(404).send({ error: 'Order not found' });
+        await emailNotifier.sendOrderPaid(order);
       }
       return { received: true };
     } catch (error) {
@@ -104,6 +107,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const { orderId } = request.params as { orderId: string };
     const order = await store.markOrderFulfilled(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
+    await emailNotifier.sendOrderFulfilled(order);
     return { order };
   });
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
