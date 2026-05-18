@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
 import { createCheckoutResponse } from './checkout.js';
+import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createInMemoryStore } from './store.js';
 import { getCompletedCheckoutOrderId, parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
@@ -16,10 +17,11 @@ const checkoutSchema = z.object({ email: z.string().email(), items: z.array(z.ob
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth };
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
+  const adminAuth = options.adminAuth ?? createAdminAuthFromEnv();
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
   app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
@@ -30,6 +32,10 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     }
   }
   app.get('/health', async () => ({ ok: true }));
+  async function requireAdmin(request: { headers: { authorization?: string } }, reply: { code(statusCode: number): { send(payload: unknown): unknown } }) {
+    const result = await adminAuth.authorize(request.headers.authorization);
+    if (result.ok === false) return reply.code(result.status).send({ error: result.error });
+  }
   app.get('/api/products', async () => ({ products: await store.listProducts() }));
   app.get('/api/products/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
@@ -66,7 +72,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
     }
   });
-  app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit }, async (request, reply) => {
+  app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit, preHandler: requireAdmin }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const parsed = imageUploadSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Valid image upload required' });
@@ -79,8 +85,8 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Image upload failed' });
     }
   });
-  app.get('/api/admin/orders', async () => ({ orders: await store.listOrders() }));
-  app.post('/api/admin/products', async (request, reply) => {
+  app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
+  app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
     const product = request.body as any;
     if (!product?.slug || !product?.title) return reply.code(400).send({ error: 'Product slug and title required' });
     return { product: await store.upsertProduct(product) };

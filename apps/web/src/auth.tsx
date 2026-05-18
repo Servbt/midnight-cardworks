@@ -1,4 +1,4 @@
-import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton, useUser } from '@clerk/clerk-react';
+import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton, useAuth, useUser } from '@clerk/clerk-react';
 import type { ReactNode } from 'react';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
@@ -29,6 +29,26 @@ export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
     </SignedIn>
     {checkoutMessage && <p className="success">{checkoutMessage}</p>}
   </section>;
+}
+
+export function useAdminAccess() {
+  const { getToken } = useAuth();
+  const { isSignedIn, user } = useUser();
+  const adminEmails = new Set(
+    ((import.meta.env.VITE_ADMIN_EMAILS as string | undefined) ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+  const isAdmin = Boolean(isSignedIn && email && adminEmails.has(email));
+  return {
+    isAdmin,
+    async getAdminToken() {
+      if (!isAdmin) return undefined;
+      return getToken();
+    }
+  };
 }
 
 function AccountSummary() {

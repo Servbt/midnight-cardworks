@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { redirectToCheckout } from './checkoutRedirect';
 
+const mockAuth = vi.hoisted(() => ({ isAdmin: false, token: 'admin-token' }));
+
 vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
+vi.mock('./auth', () => ({
+  AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
+  useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token })
+}));
 
 const products = [
   { id: 'p1', slug: 'golden', title: 'Golden Hour Commander Proxy', description: 'Premium commander centerpiece', price: 1299, category: 'Commander', tags: ['commander'], image: 'x', inventory: 20, active: true },
@@ -12,6 +18,8 @@ const products = [
 ];
 
 beforeEach(() => {
+  mockAuth.isAdmin = false;
+  mockAuth.token = 'admin-token';
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
@@ -51,6 +59,7 @@ describe('Midnight Cardworks storefront', () => {
   });
 
   it('shows admin order review', async () => {
+    mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
     const panel = await screen.findByText('Orders');
@@ -58,6 +67,7 @@ describe('Midnight Cardworks storefront', () => {
   });
 
   it('uploads a product image from the admin dashboard', async () => {
+    mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
     const upload = await screen.findByLabelText('Upload image for Golden Hour Commander Proxy');
@@ -66,7 +76,14 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.upload(upload, file);
 
     expect(await screen.findByText('Updated image for Golden Hour Commander Proxy.')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST' }));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
+  });
+
+  it('hides the admin dashboard from non-admin customers', async () => {
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin dashboard')).not.toBeInTheDocument();
   });
 
   it('shows a verified receipt when returning from Stripe Checkout', async () => {

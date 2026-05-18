@@ -8,7 +8,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Product catalog, search, category filters, product detail cards
 - Persistent browser cart with quantity controls
 - Checkout flow that creates orders through the API; Stripe-ready service seam
-- Admin dashboard for listing management and order review
+- Admin dashboard for listing management and order review, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
 
@@ -69,6 +69,31 @@ VITE_CLERK_PUBLISHABLE_KEY=pk_live_or_test_key
 
 Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
 
+## Admin Access
+
+Admin dashboard UI and admin API routes are restricted to signed-in Clerk users whose email appears in the admin allowlist.
+
+Protected API routes:
+
+```text
+GET /api/admin/orders
+POST /api/admin/products
+POST /api/admin/products/:slug/image
+```
+
+Required production env vars:
+
+```bash
+CLERK_SECRET_KEY=sk_live_or_test_key
+ADMIN_EMAILS=owner@example.com
+VITE_ADMIN_EMAILS=owner@example.com
+```
+
+- `CLERK_SECRET_KEY` stays server-only and lets the API verify Clerk session tokens and fetch the signed-in user's email.
+- `ADMIN_EMAILS` is the backend allowlist that actually protects admin actions.
+- `VITE_ADMIN_EMAILS` only controls whether the frontend shows the Admin button. It must match `ADMIN_EMAILS`, but it is not a security boundary.
+- Separate multiple admin emails with commas.
+
 ## Database Storage
 
 The API now uses Prisma with PostgreSQL when `DATABASE_URL` is configured. Without `DATABASE_URL`, tests and local demo runs continue to use the in-memory store.
@@ -124,6 +149,9 @@ Deployment flow:
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET` after webhook creation
    - `VITE_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+   - `ADMIN_EMAILS`
+   - `VITE_ADMIN_EMAILS`
    - `CLOUDINARY_URL`
    - `APP_BASE_URL` after Render gives the live URL
 4. Deploy.

@@ -24,6 +24,12 @@ services:
         sync: false
       - key: VITE_CLERK_PUBLISHABLE_KEY
         sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: VITE_ADMIN_EMAILS
+        sync: false
       - key: CLOUDINARY_URL
         sync: false
 
