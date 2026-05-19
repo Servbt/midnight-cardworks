@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -56,7 +56,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('Premium commander centerpiece')).toBeInTheDocument();
     expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
     expect(screen.getByText('/products/golden')).toBeInTheDocument();
-    expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks');
+    await waitFor(() => expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks'));
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
   });
 
@@ -111,12 +111,30 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/checkout'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('123 Midnight Lane') }));
   });
 
+  it('shows Etsy-style admin tabs for orders and listing edits', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+
+    expect(await screen.findByRole('tab', { name: /Orders \(1\)/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Listings \(3\)/ })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('heading', { name: 'Order navigation' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Listing edits' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: /Listings \(3\)/ }));
+
+    expect(screen.getByRole('tab', { name: /Listings \(3\)/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Listing edits' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Order navigation' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('New product slug')).toBeInTheDocument();
+  });
+
   it('shows admin order review', async () => {
     mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
-    const panel = await screen.findByText('Orders');
-    expect(within(panel.parentElement!).getByText(/ord_test: buyer@example.com/)).toBeInTheDocument();
+    const panel = await screen.findByRole('tabpanel');
+    expect(within(panel).getByText(/buyer@example.com/)).toHaveTextContent('ord_test: buyer@example.com');
   });
 
   it('lets admins mark paid orders fulfilled', async () => {
@@ -128,7 +146,10 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText(/123 Midnight Lane/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Mark ord_test fulfilled' }));
 
-    expect(await screen.findByText(/ord_test: buyer@example.com — Ari Buyer — 123 Midnight Lane — \$12.99 — fulfilled/)).toBeInTheDocument();
+    expect(await screen.findByText(/Marked ord_test fulfilled/)).toBeInTheDocument();
+    const fulfilledPanel = screen.getByRole('tabpanel');
+    expect(within(fulfilledPanel).getByText(/buyer@example.com/)).toHaveTextContent('ord_test: buyer@example.com');
+    expect(within(fulfilledPanel).getByText(/Ari Buyer/)).toHaveTextContent('Ari Buyer — 123 Midnight Lane — $12.99 — fulfilled');
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/fulfill'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
   });
 
@@ -136,6 +157,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
     const upload = await screen.findByLabelText('Upload image for Golden Hour Commander Proxy');
     const file = new File(['image-bytes'], 'golden.jpg', { type: 'image/jpeg' });
 
@@ -149,6 +171,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
 
     await userEvent.clear(await screen.findByLabelText('Title for Golden Hour Commander Proxy'));
     await userEvent.type(screen.getByLabelText('Title for Golden Hour Commander Proxy'), 'Golden Hour Commander Proxy Deluxe');
@@ -172,6 +195,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isAdmin = true;
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
 
     await userEvent.type(await screen.findByLabelText('New product slug'), 'moonlit-token');
     await userEvent.type(screen.getByLabelText('New product title'), 'Moonlit Token Pack');

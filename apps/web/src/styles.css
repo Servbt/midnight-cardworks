@@ -89,6 +89,21 @@ textarea { min-height: 7rem; resize: vertical; }
 .success, .status-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
 .empty-state { text-align: center; padding: 2rem; }
 .empty-state h3 { color: #ffd600; font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 .5rem; }
+.admin-panel { display: grid; gap: 1.1rem; }
+.admin-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; flex-wrap: wrap; }
+.admin-header h2 { margin: .6rem 0 .2rem; font-size: clamp(2rem, 5vw, 4rem); text-transform: uppercase; color: #ffd600; }
+.admin-summary { display: flex; gap: .7rem; flex-wrap: wrap; }
+.admin-summary span { border: 1px solid rgba(255,214,0,.35); border-radius: 999px; padding: .55rem .85rem; color: #fff4a3; background: rgba(255,255,255,.055); font-weight: 900; }
+.admin-tabs { display: flex; gap: .7rem; padding: .45rem; border: 1px solid rgba(255,214,0,.22); border-radius: 999px; background: rgba(255,255,255,.045); width: fit-content; max-width: 100%; overflow-x: auto; }
+.admin-tabs button { box-shadow: none; white-space: nowrap; }
+.admin-tabs .active-tab { background: #ffd600; color: #111; }
+.admin-workspace { border: 1px solid rgba(255,214,0,.22); border-radius: 1.4rem; padding: 1rem; background: rgba(255,255,255,.045); }
+.listing-layout { display: grid; grid-template-columns: minmax(260px, .75fr) minmax(0, 1.25fr); gap: 1rem; align-items: start; }
+.listing-layout > div { padding: 1rem; border-radius: 1rem; background: rgba(0,0,0,.18); }
+.order-list { display: grid; gap: .8rem; }
+.order-card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; padding: 1rem; border: 1px solid rgba(255,214,0,.2); border-radius: 1rem; background: rgba(0,0,0,.18); }
+.order-card strong { color: #ffd600; }
+.order-card p { margin: .35rem 0 0; color: #d9d2a8; }
 .admin-grid { align-items: flex-start; }
 .admin-grid > div { flex: 1 1 280px; padding: 1rem; border-radius: 1rem; background: rgba(255,255,255,.05); }
 .admin-listing { display: grid; grid-template-columns: 88px 1fr; gap: .9rem; align-items: center; padding: .9rem 0; border-bottom: 1px solid rgba(255,214,0,.18); }
@@ -104,7 +119,10 @@ textarea { min-height: 7rem; resize: vertical; }
 .checkbox-row input { width: auto; }
 footer { padding: 2rem; color: #b8b184; text-align: center; }
 @media (max-width: 860px) {
-  .hero-grid, .launch-strip, .product-detail-grid { grid-template-columns: 1fr; }
+  .hero-grid, .launch-strip, .product-detail-grid, .listing-layout { grid-template-columns: 1fr; }
+  .admin-tabs { width: 100%; border-radius: 1.2rem; }
+  .admin-tabs button { flex: 1; }
+  .admin-workspace { padding: .75rem; }
   .hero-grid { padding-top: 2rem; }
   nav button { padding: .55rem .7rem; }
   .tv-card { transform: none; box-shadow: 8px 8px 0 #ffd600; }

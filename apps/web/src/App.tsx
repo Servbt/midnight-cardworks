@@ -30,6 +30,7 @@ export default function App() {
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings'>('orders');
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -204,7 +205,7 @@ export default function App() {
         <button onClick={showShop}>Shop</button>
         <button onClick={() => setView('cart')}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
         <button onClick={() => setView('account')}>Account</button>
-        {isAdmin && <button onClick={() => setView('admin')}>Admin</button>}
+        {isAdmin && <button onClick={() => { setView('admin'); setAdminTab('orders'); }}>Admin</button>}
       </nav>
       <section className="hero-grid">
         <div>
@@ -255,7 +256,7 @@ export default function App() {
 
     {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'fulfilled' ? 'fulfilled' : receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
-    {view === 'admin' && isAdmin && <section className="panel"><h2>Admin dashboard</h2><p>Manage listings, upload product images, and review orders. Admin actions require your signed-in admin account.</p>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-grid"><div><h3>Create listing</h3>{productEditor(newProduct, true)}<h3>Listings</h3>{adminProducts.map((p) => productEditor(p))}</div><div><h3>Orders</h3>{orders.length === 0 ? <p>No orders yet.</p> : orders.map((o) => <div className="order-card" key={o.id}><p>{o.id}: {o.email}{o.customerName ? ` — ${o.customerName}` : ''}{o.shippingAddress ? ` — ${o.shippingAddress}` : ''} — {formatMoney(o.total)} — {o.status}</p>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</div>)}</div></div></section>}
+    {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('listings')}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div><strong>{o.id}: {o.email}</strong><p>{o.customerName ? `${o.customerName} — ` : ''}{o.shippingAddress ? `${o.shippingAddress} — ` : ''}{formatMoney(o.total)} — {o.status}</p></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="listing-layout"><div><h3>Create listing</h3>{productEditor(newProduct, true)}</div><div><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</div></div></section>}</section>}
 
     <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
   </main>;
