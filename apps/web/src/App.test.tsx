@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { redirectToCheckout } from './checkoutRedirect';
 
-const mockAuth = vi.hoisted(() => ({ isAdmin: false, token: 'admin-token' }));
+const mockAuth = vi.hoisted(() => ({ isAdmin: false, isSignedIn: false, token: 'admin-token' }));
 
 vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
   AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
-  useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token })
+  useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token }),
+  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn })
 }));
 
 const products = [
@@ -20,6 +21,7 @@ const products = [
 
 beforeEach(() => {
   mockAuth.isAdmin = false;
+  mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
@@ -87,6 +89,15 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByText('No signal on this channel.')).toBeInTheDocument();
     expect(screen.getByText('Clear search')).toBeInTheDocument();
+  });
+
+  it('hides the hero create account CTA when a customer is already signed in', async () => {
+    mockAuth.isSignedIn = true;
+    render(<App />);
+
+    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enter the shop' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create account' })).not.toBeInTheDocument();
   });
 
   it('lets customers send a contact message to the shop owner', async () => {

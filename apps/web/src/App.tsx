@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
-import { AccountPanel, useAdminAccess } from './auth';
+import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
@@ -42,6 +42,7 @@ export default function App() {
   const [contactWebsite, setContactWebsite] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const { isAdmin, getAdminToken } = useAdminAccess();
+  const { isSignedIn } = useCustomerSession();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => {
@@ -233,7 +234,7 @@ export default function App() {
           <p className="eyebrow">Launch-ready custom cardwork</p>
           <h1>Step through the screen into a sharper card shop.</h1>
           <p>Browse premium custom proxies, token packs, display cards, and commander-ready upgrades with a bold neon mystery aesthetic.</p>
-          <div className="cta-row"><button onClick={showShop}>Enter the shop</button><button className="ghost" onClick={() => setView('account')}>Create account</button></div>
+          <div className="cta-row"><button onClick={showShop}>Enter the shop</button>{!isSignedIn && <button className="ghost" onClick={() => setView('account')}>Create account</button>}</div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
         <aside className="tv-card"><span>CHANNEL 04</span><h2>Featured drop</h2><p>Golden Hour Commander Proxy</p><small>Premium casual-play centerpieces with a midnight collector vibe.</small></aside>

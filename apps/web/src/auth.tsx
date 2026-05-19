@@ -31,6 +31,12 @@ export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
   </section>;
 }
 
+export function useCustomerSession() {
+  if (!publishableKey || publishableKey.includes('replace_me')) return { isSignedIn: false };
+  const { isSignedIn } = useUser();
+  return { isSignedIn: Boolean(isSignedIn) };
+}
+
 export function useAdminAccess() {
   const { getToken } = useAuth();
   const { isSignedIn, user } = useUser();
