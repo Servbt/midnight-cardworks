@@ -232,6 +232,25 @@ describe('storefront API', () => {
     expect(nonAdmin.json()).toEqual({ error: 'Admin access required' });
   });
 
+  it('serves product routes with SEO meta tags for shareable listing pages', async () => {
+    const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
+    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><html><head><title>Midnight Cardworks</title></head><body><div id="root"></div></body></html>');
+
+    try {
+      const app = buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
+      const productPage = await app.inject({ method: 'GET', url: '/products/golden-hour-commander-proxy' });
+
+      expect(productPage.statusCode).toBe(200);
+      expect(productPage.headers['content-type']).toContain('text/html');
+      expect(productPage.body).toContain('<title>Golden Hour Commander Proxy | Midnight Cardworks</title>');
+      expect(productPage.body).toContain('property="og:title" content="Golden Hour Commander Proxy"');
+      expect(productPage.body).toContain('property="og:url" content="/products/golden-hour-commander-proxy"');
+      expect(productPage.body).toContain('type="application/ld+json"');
+    } finally {
+      await rm(staticRoot, { recursive: true, force: true });
+    }
+  });
+
   it('serves the built React app and keeps API 404s as JSON in production mode', async () => {
     const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
     await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>Midnight Cardworks</title><div id="root"></div>');

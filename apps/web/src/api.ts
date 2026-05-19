@@ -12,6 +12,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 export async function fetchProducts(): Promise<Product[]> { const r = await fetch(`${API}/api/products`); return (await r.json()).products; }
+export async function fetchProduct(slug: string): Promise<Product> { const r = await fetch(`${API}/api/products/${slug}`); if(!r.ok) throw new Error('Product not found'); return (await r.json()).product; }
 export async function createCheckout(email:string, customerName:string, shippingAddress:string, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;total:number}> { const r = await fetch(`${API}/api/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddress, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
 export async function fetchOrder(orderId: string): Promise<Order> { const r = await fetch(`${API}/api/orders/${orderId}`); if(!r.ok) throw new Error('Order not found'); return (await r.json()).order; }
 export async function fetchAdminOrders(token?: string): Promise<Order[]> { const r = await fetch(`${API}/api/admin/orders`, { headers: token ? { authorization: `Bearer ${token}` } : undefined }); if(!r.ok) throw new Error('Admin access required'); return (await r.json()).orders; }

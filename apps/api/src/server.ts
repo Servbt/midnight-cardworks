@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -11,7 +12,7 @@ import { createInMemoryStore } from './store.js';
 import { getCompletedCheckoutOrderId, parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
-import type { Store } from './types.js';
+import type { Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
@@ -30,6 +31,40 @@ const productSchema = z.object({
 });
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
+
+const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const productUrl = (slug: string) => `/products/${slug}`;
+function productSeoHead(product: Product) {
+  const title = `${product.title} | Midnight Cardworks`;
+  const url = productUrl(product.slug);
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: product.description,
+    image: product.image,
+    category: product.category,
+    url,
+    offers: { '@type': 'Offer', priceCurrency: 'USD', price: (product.price / 100).toFixed(2), availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }
+  });
+  return [
+    `<title>${escapeHtml(title)}</title>`,
+    `<meta name="description" content="${escapeHtml(product.description)}">`,
+    `<link rel="canonical" href="${escapeHtml(url)}">`,
+    `<meta property="og:type" content="product">`,
+    `<meta property="og:title" content="${escapeHtml(product.title)}">`,
+    `<meta property="og:description" content="${escapeHtml(product.description)}">`,
+    `<meta property="og:image" content="${escapeHtml(product.image)}">`,
+    `<meta property="og:url" content="${escapeHtml(url)}">`,
+    `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`
+  ].join('');
+}
+async function productSeoHtml(staticRoot: string, product: Product) {
+  const html = await readFile(path.join(staticRoot, 'index.html'), 'utf8');
+  const withoutTitle = html.replace(/<title>.*?<\/title>/i, '');
+  const head = productSeoHead(product);
+  return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
+}
 
 type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; emailNotifier?: EmailNotifier };
 
@@ -117,8 +152,14 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     return { product: await store.upsertProduct({ ...parsed.data, id: parsed.data.id ?? existing?.id ?? `prod_${parsed.data.slug}` }) };
   });
   if (options.serveStaticRoot) {
+    const staticRoot = path.resolve(options.serveStaticRoot);
     app.setNotFoundHandler(async (request, reply) => {
       if (request.url.startsWith('/api/')) return reply.code(404).send({ error: 'Not found' });
+      const productMatch = request.url.split('?')[0].match(/^\/products\/([a-z0-9-]+)$/);
+      if (productMatch) {
+        const product = await store.getProduct(productMatch[1]);
+        if (product?.active) return reply.type('text/html').send(await productSeoHtml(staticRoot, product));
+      }
       return reply.sendFile('index.html');
     });
   }

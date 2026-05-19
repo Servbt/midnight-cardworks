@@ -29,6 +29,7 @@ beforeEach(() => {
       }
       return new Response(JSON.stringify({ products }), { status: 200 });
     }
+    if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [] } }), { status: 200 });
@@ -46,6 +47,25 @@ afterEach(() => {
 });
 
 describe('Midnight Cardworks storefront', () => {
+  it('opens a shareable product detail page and sets SEO metadata', async () => {
+    window.history.pushState({}, '', '/products/golden');
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.getByText('Premium commander centerpiece')).toBeInTheDocument();
+    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('/products/golden')).toBeInTheDocument();
+    expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
+  });
+
+  it('links product cards to their detail pages', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' })).toHaveAttribute('href', '/products/golden');
+  });
+
   it('shows launch polish with trust cues and product metadata', async () => {
     render(<App />);
 

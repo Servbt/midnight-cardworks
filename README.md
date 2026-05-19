@@ -6,6 +6,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 
 - Clerk customer accounts with production sign-in/sign-up wiring
 - Product catalog, search, category filters, product detail cards
+- Shareable product detail pages at `/products/:slug` with server-rendered SEO meta tags, Open Graph previews, canonical URLs, and product structured data
 - Launch-polished storefront with trust cues, inventory status, tags, sold-out handling, and empty search state
 - Persistent browser cart with quantity controls
 - Checkout flow collects receipt email, customer name, and shipping address before Stripe Checkout
@@ -31,6 +32,15 @@ npm run test
 npm run typecheck
 npm run build
 ```
+
+## Product SEO Pages
+
+Each active listing has a public route at `/products/:slug`.
+
+- Product cards link to their detail page for direct sharing.
+- Fastify injects product-specific `<title>`, meta description, canonical link, Open Graph product tags, and JSON-LD structured data into the served HTML for crawlers/social previews.
+- Inactive listings remain hidden from the public catalog and are not used for public SEO pages.
+- Keep product titles/descriptions specific and customer-readable in admin because they become SEO/share preview copy.
 
 ## Stripe Checkout
 

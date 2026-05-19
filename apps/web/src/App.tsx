@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProducts, fulfillAdminOrder, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt';
+type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -32,12 +32,24 @@ export default function App() {
   const [adminMessage, setAdminMessage] = useState('');
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productMessage, setProductMessage] = useState('');
   const { isAdmin, getAdminToken } = useAdminAccess();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('order');
+    const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
+    if (productMatch) {
+      setView('product');
+      setProductMessage('Loading listing...');
+      fetchProduct(productMatch[1]).then((product) => {
+        setSelectedProduct(product);
+        setProductMessage('');
+      }).catch(() => setProductMessage('Could not load that listing.'));
+      return;
+    }
     if (window.location.pathname === '/checkout/success' && orderId) {
       setView('receipt');
       setReceiptMessage('Checking payment status...');
@@ -63,6 +75,32 @@ export default function App() {
     return matchesQuery && (category === 'All' || p.category === category);
   }), [products, query, category]);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+
+  useEffect(() => {
+    if (view === 'product' && selectedProduct) {
+      document.title = `${selectedProduct.title} | Midnight Cardworks`;
+      let description = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+      if (!description) {
+        description = document.createElement('meta');
+        description.name = 'description';
+        document.head.appendChild(description);
+      }
+      description.content = selectedProduct.description;
+    } else if (view === 'shop') {
+      document.title = 'Midnight Cardworks';
+    }
+  }, [view, selectedProduct]);
+
+  function showProduct(product: Product) {
+    setSelectedProduct(product);
+    setView('product');
+    window.history.pushState({}, '', `/products/${product.slug}`);
+  }
+
+  function showShop() {
+    setView('shop');
+    window.history.pushState({}, '', '/');
+  }
 
   function addToCart(product: Product) {
     setCart((lines) => {
@@ -163,7 +201,7 @@ export default function App() {
     <header className="hero">
       <nav>
         <strong className="brand">Midnight Cardworks</strong>
-        <button onClick={() => setView('shop')}>Shop</button>
+        <button onClick={showShop}>Shop</button>
         <button onClick={() => setView('cart')}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
         <button onClick={() => setView('account')}>Account</button>
         {isAdmin && <button onClick={() => setView('admin')}>Admin</button>}
@@ -173,7 +211,7 @@ export default function App() {
           <p className="eyebrow">Launch-ready custom cardwork</p>
           <h1>Step through the screen into a sharper card shop.</h1>
           <p>Browse premium custom proxies, token packs, display cards, and commander-ready upgrades with a bold neon mystery aesthetic.</p>
-          <div className="cta-row"><button onClick={() => setView('shop')}>Enter the shop</button><button className="ghost" onClick={() => setView('account')}>Create account</button></div>
+          <div className="cta-row"><button onClick={showShop}>Enter the shop</button><button className="ghost" onClick={() => setView('account')}>Create account</button></div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
         <aside className="tv-card"><span>CHANNEL 04</span><h2>Featured drop</h2><p>Golden Hour Commander Proxy</p><small>Premium casual-play centerpieces with a midnight collector vibe.</small></aside>
@@ -189,8 +227,26 @@ export default function App() {
       </div>
       {visibleProducts.length === 0 ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or jump back to the full launch catalog.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear search</button></div> : <div className="product-grid">{visibleProducts.map((product) => <article className={`product-card ${product.inventory <= 0 ? 'sold-out' : ''}`} key={product.id}>
         <img src={product.image} alt="" />
-        <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong><button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button></div></div>
+        <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details</a><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong><button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button></div></div>
       </article>)}</div>}
+    </section>}
+
+    {view === 'product' && <section className="panel product-detail-panel">
+      {selectedProduct ? <>
+        <button className="ghost" onClick={showShop}>← Back to shop</button>
+        <div className="product-detail-grid">
+          <img src={selectedProduct.image} alt="" />
+          <div>
+            <p className="eyebrow">{selectedProduct.category}</p>
+            <h2>{selectedProduct.title}</h2>
+            <p>{selectedProduct.description}</p>
+            <p><strong>{formatMoney(selectedProduct.price)}</strong> · {selectedProduct.inventory > 0 ? `${selectedProduct.inventory} in stock` : 'Sold out'}</p>
+            <div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
+            <div className="seo-share-box"><strong>Shareable listing URL</strong><code>{`/products/${selectedProduct.slug}`}</code><p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p></div>
+            <button disabled={selectedProduct.inventory <= 0} onClick={() => addToCart(selectedProduct)}>{selectedProduct.inventory > 0 ? 'Add to cart' : `Sold out: ${selectedProduct.title}`}</button>
+          </div>
+        </div>
+      </> : <p>{productMessage || 'Loading listing...'}</p>}
     </section>}
 
     {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><div className="checkout-fields"><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><input aria-label="Full name for checkout" placeholder="full name for shipping" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /><textarea aria-label="Shipping address" placeholder="shipping address" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></div><button onClick={checkout}>Checkout securely</button></>}</section>}
