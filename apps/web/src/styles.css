@@ -89,6 +89,12 @@ textarea { min-height: 7rem; resize: vertical; }
 .success, .status-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
 .empty-state { text-align: center; padding: 2rem; }
 .empty-state h3 { color: #ffd600; font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 .5rem; }
+.contact-panel { display: grid; gap: 1rem; }
+.contact-panel h2 { color: #ffd600; font-size: clamp(2rem, 5vw, 4rem); line-height: .92; margin: .4rem 0 0; text-transform: uppercase; }
+.contact-form { display: grid; gap: .9rem; margin-top: .5rem; }
+.contact-form label { display: grid; gap: .45rem; color: #fff4a3; font-weight: 900; }
+.contact-form input, .contact-form textarea { width: 100%; }
+.honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 .admin-panel { display: grid; gap: 1.1rem; }
 .admin-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; flex-wrap: wrap; }
 .admin-header h2 { margin: .6rem 0 .2rem; font-size: clamp(2rem, 5vw, 4rem); text-transform: uppercase; color: #ffd600; }

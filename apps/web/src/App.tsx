@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, uploadProductImage, type Order, type Product } from './api';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product';
+type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -35,6 +35,12 @@ export default function App() {
   const [receiptMessage, setReceiptMessage] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [productMessage, setProductMessage] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactOrderNumber, setContactOrderNumber] = useState('');
+  const [contactBody, setContactBody] = useState('');
+  const [contactWebsite, setContactWebsite] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
   const { isAdmin, getAdminToken } = useAdminAccess();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
@@ -124,6 +130,20 @@ export default function App() {
     redirectToCheckout(checkout.checkoutUrl);
   }
 
+  async function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setContactMessage('Sending message...');
+    try {
+      await sendContactMessage({ name: contactName, email: contactEmail, orderNumber: contactOrderNumber || undefined, message: contactBody, website: contactWebsite });
+      setContactMessage('Message sent — I’ll get back to you soon.');
+      setContactBody('');
+      setContactOrderNumber('');
+      setContactWebsite('');
+    } catch {
+      setContactMessage('Could not send the message yet. Please check your email and try again.');
+    }
+  }
+
   async function handleImageUpload(product: Product, file: File | undefined) {
     if (!file) return;
     setAdminMessage(`Uploading image for ${product.title}...`);
@@ -205,6 +225,7 @@ export default function App() {
         <button onClick={showShop}>Shop</button>
         <button onClick={() => setView('cart')}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
         <button onClick={() => setView('account')}>Account</button>
+        <button onClick={() => setView('contact')}>Contact</button>
         {isAdmin && <button onClick={() => { setView('admin'); setAdminTab('orders'); }}>Admin</button>}
       </nav>
       <section className="hero-grid">
@@ -253,6 +274,21 @@ export default function App() {
     {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><span>{line.product.title}</span><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><div className="checkout-fields"><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><input aria-label="Full name for checkout" placeholder="full name for shipping" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /><textarea aria-label="Shipping address" placeholder="shipping address" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></div><button onClick={checkout}>Checkout securely</button></>}</section>}
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
+
+    {view === 'contact' && <section className="panel narrow contact-panel">
+      <p className="eyebrow">Support channel</p>
+      <h2>Contact Midnight Cardworks</h2>
+      <p>Questions about a listing, order, custom request, or fulfillment? Send a message and it will go straight to the shop inbox.</p>
+      {contactMessage && <p className="status-message">{contactMessage}</p>}
+      <form className="contact-form" onSubmit={(event) => void handleContactSubmit(event)}>
+        <label>Your name<input aria-label="Your name" required value={contactName} onChange={(e) => setContactName(e.target.value)} /></label>
+        <label>Your email<input aria-label="Your email" type="email" required value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} /></label>
+        <label>Order number optional<input aria-label="Order number optional" placeholder="ord_... if this is about an order" value={contactOrderNumber} onChange={(e) => setContactOrderNumber(e.target.value)} /></label>
+        <label className="honeypot">Website<input aria-label="Website" tabIndex={-1} autoComplete="off" value={contactWebsite} onChange={(e) => setContactWebsite(e.target.value)} /></label>
+        <label>How can we help?<textarea aria-label="How can we help?" required minLength={10} maxLength={3000} value={contactBody} onChange={(e) => setContactBody(e.target.value)} /></label>
+        <button type="submit">Send message</button>
+      </form>
+    </section>}
 
     {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'fulfilled' ? 'fulfilled' : receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 

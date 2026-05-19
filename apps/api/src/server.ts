@@ -16,6 +16,13 @@ import type { Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
+const contactSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(200),
+  orderNumber: z.string().trim().max(80).optional(),
+  message: z.string().trim().min(10).max(3000),
+  website: z.string().optional().default('')
+});
 const productSchema = z.object({
   id: z.string().min(1).optional(),
   slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -92,6 +99,13 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const product = await store.getProduct(slug);
     if (!product) return reply.code(404).send({ error: 'Product not found' });
     return { product };
+  });
+  app.post('/api/contact', async (request, reply) => {
+    const parsed = contactSchema.safeParse(request.body);
+    if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid contact details required' });
+    const { website: _website, ...message } = parsed.data;
+    await emailNotifier.sendContactMessage(message);
+    return { ok: true };
   });
   app.post('/api/checkout', async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body);

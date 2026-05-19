@@ -10,7 +10,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Launch-polished storefront with trust cues, inventory status, tags, sold-out handling, and empty search state
 - Persistent browser cart with quantity controls
 - Checkout flow collects receipt email, customer name, and shipping address before Stripe Checkout
-- Email notifications for paid orders and fulfilled orders via Resend
+- Email notifications for paid orders, fulfilled orders, and customer contact messages via Resend
 - Admin dashboard for listing management and order review, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
@@ -83,6 +83,8 @@ ORDER_NOTIFICATION_EMAIL=owner@example.com
 - Customer confirmation emails are sent after Stripe confirms payment via webhook.
 - Customer fulfillment emails are sent when an admin marks an order fulfilled.
 - `ORDER_NOTIFICATION_EMAIL` is optional and receives owner copies for newly paid orders.
+- The Contact page posts to `/api/contact` and sends customer questions to `ORDER_NOTIFICATION_EMAIL` with the customer's email as the reply-to address.
+- Contact messages include name, email, optional order number, message body, length validation, and a hidden honeypot field for basic spam filtering.
 
 ## Customer Accounts
 

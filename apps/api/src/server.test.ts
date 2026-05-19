@@ -14,12 +14,13 @@ const adminAuth = {
 };
 const adminHeaders = { authorization: 'Bearer admin-token' };
 function createEmailNotifierSpy() {
-  const sent: Array<{ type: string; order: { id: string; email: string; status: string } }> = [];
+  const sent: Array<{ type: string; order?: { id: string; email: string; status: string }; message?: { name: string; email: string; orderNumber?: string; message: string } }> = [];
   return {
     sent,
     notifier: {
       sendOrderPaid: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'paid', order }); },
-      sendOrderFulfilled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'fulfilled', order }); }
+      sendOrderFulfilled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'fulfilled', order }); },
+      sendContactMessage: async (message: { name: string; email: string; orderNumber?: string; message: string }) => { sent.push({ type: 'contact', message }); }
     }
   };
 }
@@ -135,6 +136,33 @@ describe('storefront API', () => {
 
     expect(fulfill.statusCode).toBe(200);
     expect(emailSpy.sent).toEqual([{ type: 'fulfilled', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'fulfilled' }) }]);
+  });
+
+  it('emails the shop owner when a customer submits a contact message', async () => {
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/contact',
+      payload: { name: 'Ari Buyer', email: 'buyer@example.com', orderNumber: 'ord_test', message: 'Can you make this as a foil token?' }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(emailSpy.sent).toEqual([{ type: 'contact', message: { name: 'Ari Buyer', email: 'buyer@example.com', orderNumber: 'ord_test', message: 'Can you make this as a foil token?' } }]);
+  });
+
+  it('rejects contact messages with invalid email or spam honeypot', async () => {
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+
+    const badEmail = await app.inject({ method: 'POST', url: '/api/contact', payload: { name: 'Ari', email: 'not-email', message: 'Hello there' } });
+    const bot = await app.inject({ method: 'POST', url: '/api/contact', payload: { name: 'Ari', email: 'buyer@example.com', message: 'Hello there', website: 'https://spam.example' } });
+
+    expect(badEmail.statusCode).toBe(400);
+    expect(bot.statusCode).toBe(400);
+    expect(emailSpy.sent).toEqual([]);
   });
 
   it('uploads and saves a product image for an admin listing', async () => {

@@ -1,8 +1,11 @@
 import type { Order } from './types.js';
 
+export type ContactMessage = { name: string; email: string; orderNumber?: string; message: string };
+
 export type EmailNotifier = {
   sendOrderPaid(order: Order): Promise<void>;
   sendOrderFulfilled(order: Order): Promise<void>;
+  sendContactMessage(message: ContactMessage): Promise<void>;
 };
 
 type ResendEmail = {
@@ -10,6 +13,7 @@ type ResendEmail = {
   to: string[];
   subject: string;
   text: string;
+  reply_to?: string;
 };
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -47,6 +51,25 @@ function buildFulfilledEmail(order: Order): ResendEmail | undefined {
   };
 }
 
+function buildContactEmail(message: ContactMessage): ResendEmail | undefined {
+  const from = process.env.EMAIL_FROM;
+  const to = process.env.ORDER_NOTIFICATION_EMAIL;
+  if (!from || !to) return undefined;
+  return {
+    from,
+    to: [to],
+    reply_to: message.email,
+    subject: `New Midnight Cardworks message from ${message.name}`,
+    text: [
+      `New customer message from ${message.name}`,
+      `Email: ${message.email}`,
+      message.orderNumber ? `Order: ${message.orderNumber}` : undefined,
+      '',
+      message.message
+    ].filter(Boolean).join('\n')
+  };
+}
+
 async function sendResend(email: ResendEmail) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return;
@@ -68,6 +91,11 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
     },
     async sendOrderFulfilled(order) {
       const email = buildFulfilledEmail(order);
+      if (!email) return;
+      await sendResend(email);
+    },
+    async sendContactMessage(message) {
+      const email = buildContactEmail(message);
       if (!email) return;
       await sendResend(email);
     }

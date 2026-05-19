@@ -35,6 +35,7 @@ beforeEach(() => {
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
     if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
@@ -86,6 +87,21 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByText('No signal on this channel.')).toBeInTheDocument();
     expect(screen.getByText('Clear search')).toBeInTheDocument();
+  });
+
+  it('lets customers send a contact message to the shop owner', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Your name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Your email'), 'buyer@example.com');
+    await userEvent.type(screen.getByLabelText('Order number optional'), 'ord_test');
+    await userEvent.type(screen.getByLabelText('How can we help?'), 'Can you make this as a foil token?');
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(await screen.findByText('Message sent — I’ll get back to you soon.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/contact'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('foil token') }));
   });
 
   it('renders a searchable product catalog', async () => {
