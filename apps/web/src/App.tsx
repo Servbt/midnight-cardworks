@@ -99,6 +99,7 @@ export default function App() {
     return matchesQuery && (category === 'All' || p.category === category);
   }), [products, query, category]);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
   useEffect(() => {
     if (view === 'product' && selectedProduct) {
@@ -308,7 +309,35 @@ export default function App() {
       </> : <p>{productMessage || 'Loading listing...'}</p>}
     </section>}
 
-    {view === 'cart' && <section className="panel narrow"><h2>Your cart</h2>{cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>{cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}<h3>Subtotal: {formatMoney(subtotal)}</h3><div className="checkout-fields"><input aria-label="Checkout email" placeholder="email for receipt" value={email} onChange={(e) => setEmail(e.target.value)} /><input aria-label="Full name for checkout" placeholder="full name for shipping" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /><textarea aria-label="Shipping address" placeholder="shipping address" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></div><button onClick={checkout}>Checkout securely</button></>}</section>}
+    {view === 'cart' && <section className="panel narrow cart-panel">
+      <h2>Your cart</h2>
+      {cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>
+        <div className="cart-items" aria-label="Cart items">
+          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}
+        </div>
+        <form className="checkout-form" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
+          <div className="checkout-intro">
+            <p className="eyebrow">Ready to order</p>
+            <h2>Checkout details</h2>
+            <p>Complete the details below before continuing to secure Stripe checkout.</p>
+          </div>
+          <fieldset>
+            <legend>Contact information</legend>
+            <label>Email address<input type="email" autoComplete="email" placeholder="buyer@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <label>Full name<input autoComplete="name" placeholder="Ari Buyer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Shipping address</legend>
+            <label>Street address and delivery notes<textarea autoComplete="shipping street-address" placeholder="Street, city, state, ZIP, and any delivery notes" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></label>
+          </fieldset>
+          <fieldset className="order-summary-box">
+            <legend>Order summary</legend>
+            <div className="summary-row"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
+            <div className="summary-row"><span>Secure checkout</span><span>Stripe</span></div>
+          </fieldset>
+          <button type="submit">Continue to secure checkout</button>
+        </form>
+      </>}</section>}
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
 

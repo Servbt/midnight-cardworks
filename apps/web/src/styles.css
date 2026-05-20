@@ -86,10 +86,25 @@ textarea { min-height: 7rem; resize: vertical; }
 .card-kicker > span:last-child { color: #fff4a3; font-size: .84rem; font-weight: 800; }
 .buy-row strong { font-size: 1.25rem; }
 .cart-line { padding: 1rem 0; border-bottom: 1px solid rgba(255,214,0,.2); }
+.quantity-field { display: grid; gap: .35rem; color: #fff4a3; font-weight: 900; font-size: .85rem; }
 .cart-line input { width: 90px; }
 .cart-item-link { color: #f8f5d7; text-decoration: none; display: flex; align-items: center; gap: .85rem; min-width: min(100%, 260px); font-weight: 900; }
 .cart-item-link:hover span, .cart-item-link:focus-visible span { color: #ffd600; text-decoration: underline; }
 .cart-item-link img { width: 64px; height: 82px; border-radius: .75rem; object-fit: cover; background: #111; border: 1px solid rgba(255,214,0,.25); }
+.cart-panel { display: grid; gap: 1.25rem; }
+.cart-items { border: 1px solid rgba(255,214,0,.18); border-radius: 1.2rem; padding: 0 1rem; background: rgba(0,0,0,.16); }
+.checkout-form { display: grid; gap: 1rem; margin-top: .5rem; }
+.checkout-intro { padding: 1rem; border-radius: 1.2rem; background: linear-gradient(135deg, rgba(255,214,0,.16), rgba(255,255,255,.045)); border: 1px solid rgba(255,214,0,.24); }
+.checkout-intro h2 { margin: .4rem 0 .2rem; color: #ffd600; font-size: clamp(1.8rem, 4vw, 3rem); text-transform: uppercase; }
+.checkout-intro p:last-child { margin-bottom: 0; color: #d9d2a8; }
+.checkout-form fieldset { display: grid; gap: .9rem; margin: 0; padding: 1rem; border: 1px solid rgba(255,214,0,.24); border-radius: 1.2rem; background: rgba(255,255,255,.045); }
+.checkout-form legend { padding: 0 .45rem; color: #ffd600; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.checkout-form label { display: grid; gap: .45rem; color: #fff4a3; font-weight: 900; }
+.checkout-form input, .checkout-form textarea { width: 100%; }
+.order-summary-box { background: rgba(255,214,0,.08) !important; }
+.summary-row { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: .35rem 0; color: #f8f5d7; }
+.summary-row + .summary-row { border-top: 1px solid rgba(255,214,0,.18); }
+.summary-row strong { color: #ffd600; }
 .success, .status-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
 .empty-state { text-align: center; padding: 2rem; }
 .empty-state h3 { color: #ffd600; font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 .5rem; }

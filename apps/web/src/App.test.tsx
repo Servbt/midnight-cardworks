@@ -209,14 +209,30 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/products/golden');
   });
 
+  it('organizes checkout details into contact, shipping, and order summary sections', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+
+    expect(screen.getByRole('heading', { name: 'Checkout details' })).toBeInTheDocument();
+    expect(screen.getByText('Complete the details below before continuing to secure Stripe checkout.')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Contact information' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Shipping address' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Order summary' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Full name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Street address and delivery notes')).toBeInTheDocument();
+    expect(screen.getByText('1 item in cart')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
+  });
+
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
     expect(screen.getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
-    await userEvent.type(screen.getByLabelText('Checkout email'), 'buyer@example.com');
-    await userEvent.type(screen.getByLabelText('Full name for checkout'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Shipping address'), '123 Midnight Lane');
-    await userEvent.click(screen.getByRole('button', { name: 'Checkout securely' }));
+    await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
+    await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
     expect(await screen.findByText(/Order ord_test reserved/)).toBeInTheDocument();
     expect(redirectToCheckout).toHaveBeenCalledWith('https://checkout.stripe.test/session');
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/checkout'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('123 Midnight Lane') }));
