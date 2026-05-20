@@ -63,7 +63,17 @@ describe('Midnight Cardworks storefront', () => {
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
   });
 
-  it('links product cards to their detail pages', async () => {
+  it('opens product detail pages when the whole listing card is clicked', async () => {
+    render(<App />);
+
+    const listingCard = await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
+    await userEvent.click(listingCard);
+
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/products/golden');
+  });
+
+  it('keeps explicit product detail links for accessibility and sharing', async () => {
     render(<App />);
 
     expect(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' })).toHaveAttribute('href', '/products/golden');
