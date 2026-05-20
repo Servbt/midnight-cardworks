@@ -46,26 +46,38 @@ export default function App() {
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const orderId = params.get('order');
-    const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
-    if (productMatch) {
-      setView('product');
-      setProductMessage('Loading listing...');
-      fetchProduct(productMatch[1]).then((product) => {
-        setSelectedProduct(product);
-        setProductMessage('');
-      }).catch(() => setProductMessage('Could not load that listing.'));
-      return;
+    function applyCurrentLocation() {
+      const params = new URLSearchParams(window.location.search);
+      const orderId = params.get('order');
+      const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
+      if (productMatch) {
+        setView('product');
+        setProductMessage('Loading listing...');
+        fetchProduct(productMatch[1]).then((product) => {
+          setSelectedProduct(product);
+          setProductMessage('');
+        }).catch(() => setProductMessage('Could not load that listing.'));
+        return;
+      }
+      if (window.location.pathname === '/checkout/success' && orderId) {
+        setView('receipt');
+        setReceiptMessage('Checking payment status...');
+        fetchOrder(orderId).then((order) => {
+          setReceiptOrder(order);
+          setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
+        }).catch(() => setReceiptMessage('Could not verify this order yet'));
+        return;
+      }
+      setSelectedProduct(null);
+      setProductMessage('');
+      setReceiptOrder(null);
+      setReceiptMessage('');
+      setView('shop');
     }
-    if (window.location.pathname === '/checkout/success' && orderId) {
-      setView('receipt');
-      setReceiptMessage('Checking payment status...');
-      fetchOrder(orderId).then((order) => {
-        setReceiptOrder(order);
-        setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
-      }).catch(() => setReceiptMessage('Could not verify this order yet'));
-    }
+
+    applyCurrentLocation();
+    window.addEventListener('popstate', applyCurrentLocation);
+    return () => window.removeEventListener('popstate', applyCurrentLocation);
   }, []);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;

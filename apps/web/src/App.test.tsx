@@ -79,6 +79,20 @@ describe('Midnight Cardworks storefront', () => {
     expect(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' })).toHaveAttribute('href', '/products/golden');
   });
 
+  it('returns from a listing detail to the shop when browser back navigation fires', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('shows launch polish with trust cues and product metadata', async () => {
     render(<App />);
 
