@@ -149,6 +149,54 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(productGrid as HTMLElement).queryByText('Golden Hour Commander Proxy')).not.toBeInTheDocument();
   });
 
+  it('returns from the cart to the shop when browser back navigation fires', async () => {
+    render(<App />);
+
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cart');
+
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
+  });
+
+  it('returns from the cart tab to the listing that opened it when browser back navigation fires', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
+    expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cart');
+
+    window.history.pushState({}, '', '/products/golden');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
+  });
+
+  it('returns from the cart to the listing that opened it when browser back navigation fires', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
+    expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cart');
+
+    window.history.pushState({}, '', '/products/golden');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
+  });
+
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
