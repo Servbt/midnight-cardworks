@@ -197,6 +197,18 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
+  it('shows listing images in the cart and opens detail pages from cart items', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+
+    expect(screen.getByRole('img', { name: 'Golden Hour Commander Proxy preview' })).toHaveAttribute('src', 'x');
+    await userEvent.click(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' }));
+
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/products/golden');
+  });
+
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);

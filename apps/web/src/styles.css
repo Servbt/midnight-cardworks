@@ -87,6 +87,9 @@ textarea { min-height: 7rem; resize: vertical; }
 .buy-row strong { font-size: 1.25rem; }
 .cart-line { padding: 1rem 0; border-bottom: 1px solid rgba(255,214,0,.2); }
 .cart-line input { width: 90px; }
+.cart-item-link { color: #f8f5d7; text-decoration: none; display: flex; align-items: center; gap: .85rem; min-width: min(100%, 260px); font-weight: 900; }
+.cart-item-link:hover span, .cart-item-link:focus-visible span { color: #ffd600; text-decoration: underline; }
+.cart-item-link img { width: 64px; height: 82px; border-radius: .75rem; object-fit: cover; background: #111; border: 1px solid rgba(255,214,0,.25); }
 .success, .status-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
 .empty-state { text-align: center; padding: 2rem; }
 .empty-state h3 { color: #ffd600; font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 .5rem; }
