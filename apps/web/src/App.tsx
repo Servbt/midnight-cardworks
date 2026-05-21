@@ -160,6 +160,10 @@ export default function App() {
     setCart((lines) => lines.flatMap((line) => line.product.id === productId ? (quantity > 0 ? [{ ...line, quantity }] : []) : [line]));
   }
 
+  function removeFromCart(productId: string) {
+    setCart((lines) => lines.filter((line) => line.product.id !== productId));
+  }
+
   async function checkout() {
     const checkout = await createCheckout(email || 'guest@example.com', customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
@@ -313,7 +317,7 @@ export default function App() {
       <h2>Your cart</h2>
       {cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>
         <div className="cart-items" aria-label="Cart items">
-          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong></div>)}
+          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div>)}
         </div>
         <form className="checkout-form" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
           <div className="checkout-intro">

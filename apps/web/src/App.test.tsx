@@ -209,6 +209,27 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/products/golden');
   });
 
+  it('removes individual items from the cart without changing the other lines', async () => {
+    render(<App />);
+    const addButtons = await screen.findAllByRole('button', { name: 'Add to cart' });
+    await userEvent.click(addButtons[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[1]);
+
+    expect(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Midnight Token Pack listing from cart' })).toBeInTheDocument();
+    expect(screen.getByText('2 items in cart')).toBeInTheDocument();
+    expect(screen.getByText('Subtotal: $21.98')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Golden Hour Commander Proxy from cart' }));
+
+    expect(screen.queryByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Midnight Token Pack listing from cart' })).toBeInTheDocument();
+    expect(screen.getByText('1 item in cart')).toBeInTheDocument();
+    expect(screen.getByText('Subtotal: $8.99')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
+  });
+
   it('organizes checkout details into contact, shipping, and order summary sections', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
