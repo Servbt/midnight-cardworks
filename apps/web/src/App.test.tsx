@@ -105,6 +105,28 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Sold out: Archive Showcase Proxy' })).toBeDisabled();
   });
 
+  it('only shows the hero on the landing shop page', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cart (0)' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
+    expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
+    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Shop' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cart (0)' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+  });
+
   it('shows a polished empty state when filters find no products', async () => {
     render(<App />);
     await screen.findByText('Golden Hour Commander Proxy');

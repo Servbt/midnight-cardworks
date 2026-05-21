@@ -315,16 +315,18 @@ export default function App() {
     </article>;
   }
 
+  const navigation = <nav className="site-nav">
+    <strong className="brand">Midnight Cardworks</strong>
+    <button onClick={showShop}>Shop</button>
+    <button onClick={showCart}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
+    <button onClick={() => setView('account')}>Account</button>
+    <button onClick={() => setView('contact')}>Contact</button>
+    {isAdmin && <button onClick={() => { setView('admin'); setAdminTab('orders'); }}>Admin</button>}
+  </nav>;
+
   return <main>
-    <header className="hero">
-      <nav>
-        <strong className="brand">Midnight Cardworks</strong>
-        <button onClick={showShop}>Shop</button>
-        <button onClick={showCart}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
-        <button onClick={() => setView('account')}>Account</button>
-        <button onClick={() => setView('contact')}>Contact</button>
-        {isAdmin && <button onClick={() => { setView('admin'); setAdminTab('orders'); }}>Admin</button>}
-      </nav>
+    {view === 'shop' ? <header className="hero">
+      {navigation}
       <section className="hero-grid">
         <div>
           <p className="eyebrow">Launch-ready custom cardwork</p>
@@ -335,7 +337,7 @@ export default function App() {
         </div>
         <aside className="tv-card"><span>CHANNEL 04</span><h2>Featured drop</h2><p>Golden Hour Commander Proxy</p><small>Premium casual-play centerpieces with a midnight collector vibe.</small></aside>
       </section>
-    </header>
+    </header> : <div className="page-nav">{navigation}</div>}
 
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
