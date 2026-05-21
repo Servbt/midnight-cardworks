@@ -149,31 +149,40 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(productGrid as HTMLElement).queryByText('Golden Hour Commander Proxy')).not.toBeInTheDocument();
   });
 
-  it('keeps shoppers on the current page and confirms when a listing is added to cart', async () => {
+  it('keeps shoppers on the current page and replaces the add button with confirmation', async () => {
     render(<App />);
 
     await screen.findByText('Golden Hour Commander Proxy');
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    const addButton = (await screen.findAllByRole('button', { name: 'Add to cart' }))[0];
+    const buyRow = addButton.closest('.buy-row') as HTMLElement;
+    await userEvent.click(addButton);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Added Golden Hour Commander Proxy to your cart.');
+    expect(within(buyRow).getByRole('status')).toHaveTextContent('Added to cart');
+    expect(within(buyRow).queryByRole('button', { name: 'Add to cart' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
-  it('keeps shoppers on product detail pages after adding to cart', async () => {
+  it('lets shoppers choose a quantity on product detail pages before adding to cart', async () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
+    await userEvent.clear(screen.getByLabelText('Quantity for Golden Hour Commander Proxy'));
+    await userEvent.type(screen.getByLabelText('Quantity for Golden Hour Commander Proxy'), '3');
+    await userEvent.click(screen.getByRole('button', { name: 'Add 3 to cart' }));
 
-    expect(screen.getByRole('status')).toHaveTextContent('Added Golden Hour Commander Proxy to your cart.');
-    expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Added 3 Golden Hour Commander Proxy to your cart.');
+    expect(screen.queryByRole('button', { name: 'Add 3 to cart' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cart (3)' })).toBeInTheDocument();
     expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (3)' }));
+    expect(screen.getByLabelText('Quantity for Golden Hour Commander Proxy')).toHaveValue(3);
   });
 
   it('returns from the cart to the shop when browser back navigation fires', async () => {
@@ -287,7 +296,8 @@ describe('Midnight Cardworks storefront', () => {
     const addButtons = await screen.findAllByRole('button', { name: 'Add to cart' });
     await userEvent.click(addButtons[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[1]);
+    const tokenListing = screen.getByRole('link', { name: 'Open listing for Midnight Token Pack' });
+    await userEvent.click(within(tokenListing).getByRole('button', { name: 'Add to cart' }));
     await userEvent.click(screen.getByRole('button', { name: 'Cart (2)' }));
 
     expect(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).toBeInTheDocument();

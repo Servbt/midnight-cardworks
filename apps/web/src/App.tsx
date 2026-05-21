@@ -19,7 +19,8 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [cartMessage, setCartMessage] = useState('');
+  const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
+  const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('shop');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
@@ -57,6 +58,7 @@ export default function App() {
         setProductMessage('Loading listing...');
         fetchProduct(productMatch[1]).then((product) => {
           setSelectedProduct(product);
+          setDetailQuantity('1');
           rememberRecentlyViewed(product);
           setProductMessage('');
         }).catch(() => setProductMessage('Could not load that listing.'));
@@ -121,6 +123,7 @@ export default function App() {
 
   function showProduct(product: Product) {
     setSelectedProduct(product);
+    setDetailQuantity('1');
     rememberRecentlyViewed(product);
     setView('product');
     window.history.pushState({}, '', `/products/${product.slug}`);
@@ -176,13 +179,36 @@ export default function App() {
     </article>)}</div>
   </section> : null;
 
-  function addToCart(product: Product) {
+  function normalizeProductQuantity(product: Product, quantity: number | string) {
+    const numericQuantity = Number(quantity);
+    if (!Number.isFinite(numericQuantity)) return 1;
+    return Math.max(1, Math.min(product.inventory, numericQuantity));
+  }
+
+  function addToCart(product: Product, quantity: number | string = 1) {
+    const safeQuantity = normalizeProductQuantity(product, quantity);
     setCart((lines) => {
       const existing = lines.find((line) => line.product.id === product.id);
-      if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line);
-      return [...lines, { product, quantity: 1 }];
+      if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + safeQuantity } : line);
+      return [...lines, { product, quantity: safeQuantity }];
     });
-    setCartMessage(`Added ${product.title} to your cart.`);
+    setAddedProductIds((ids) => ids.includes(product.id) ? ids : [...ids, product.id]);
+  }
+
+  function productAddedMessage(product: Product, quantity = 1) {
+    return quantity > 1 ? `Added ${quantity} ${product.title} to your cart.` : 'Added to cart';
+  }
+
+  function isProductAdded(product: Product) {
+    return addedProductIds.includes(product.id);
+  }
+
+  function updateDetailQuantity(product: Product, quantity: string) {
+    if (quantity === '') {
+      setDetailQuantity('');
+      return;
+    }
+    setDetailQuantity(String(normalizeProductQuantity(product, quantity)));
   }
 
   function updateQuantity(productId: string, quantity: number) {
@@ -311,8 +337,6 @@ export default function App() {
       </section>
     </header>
 
-    {cartMessage && <p className="cart-message" role="status">{cartMessage}</p>}
-
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
       <div className="section-heading"><div><p className="eyebrow">Now broadcasting</p><h2>Shop the current lineup</h2></div><p>Search by card role, style, or format and add launch-ready pieces to your cart.</p></div>
@@ -322,7 +346,7 @@ export default function App() {
       </div>
       {visibleProducts.length === 0 ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or jump back to the full launch catalog.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear search</button></div> : <div className="product-grid">{visibleProducts.map((product) => <article aria-label={`Open listing for ${product.title}`} className={`product-card ${product.inventory <= 0 ? 'sold-out' : ''}`} key={product.id} onClick={(event) => handleProductCardClick(product, event)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0}>
         <img src={product.image} alt="" />
-        <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details</a><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong><button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button></div></div>
+        <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details</a><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong>{isProductAdded(product) ? <p className="inline-cart-confirmation" role="status">{productAddedMessage(product)}</p> : <button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button>}</div></div>
       </article>)}</div>}
     </section>}
 
@@ -338,7 +362,8 @@ export default function App() {
             <p><strong>{formatMoney(selectedProduct.price)}</strong> · {selectedProduct.inventory > 0 ? `${selectedProduct.inventory} in stock` : 'Sold out'}</p>
             <div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
             <div className="seo-share-box"><strong>Shareable listing URL</strong><code>{`/products/${selectedProduct.slug}`}</code><p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p></div>
-            <button disabled={selectedProduct.inventory <= 0} onClick={() => addToCart(selectedProduct)}>{selectedProduct.inventory > 0 ? 'Add to cart' : `Sold out: ${selectedProduct.title}`}</button>
+            {selectedProduct.inventory > 0 && !isProductAdded(selectedProduct) && <label className="detail-quantity-field">Quantity for {selectedProduct.title}<input aria-label={`Quantity for ${selectedProduct.title}`} type="number" min="1" max={selectedProduct.inventory} value={detailQuantity} onChange={(e) => updateDetailQuantity(selectedProduct, e.target.value)} /></label>}
+            {isProductAdded(selectedProduct) ? <p className="inline-cart-confirmation detail-confirmation" role="status">{productAddedMessage(selectedProduct, normalizeProductQuantity(selectedProduct, detailQuantity))}</p> : <button disabled={selectedProduct.inventory <= 0} onClick={() => addToCart(selectedProduct, detailQuantity)}>{selectedProduct.inventory > 0 ? (normalizeProductQuantity(selectedProduct, detailQuantity) > 1 ? `Add ${normalizeProductQuantity(selectedProduct, detailQuantity)} to cart` : 'Add to cart') : `Sold out: ${selectedProduct.title}`}</button>}
           </div>
         </div>
       </> : <p>{productMessage || 'Loading listing...'}</p>}
