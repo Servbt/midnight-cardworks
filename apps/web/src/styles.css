@@ -42,7 +42,7 @@ button.ghost, nav button { background: rgba(255,255,255,.08); color: #fff4a3; bo
 nav { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; position: relative; z-index: 1; }
 .brand { margin-right: auto; color: #ffd600; letter-spacing: .1em; text-transform: uppercase; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 2rem; align-items: center; padding-top: 4rem; position: relative; z-index: 1; }
-h1 { font-size: clamp(2.6rem, 9vw, 6.9rem); line-height: .84; margin: 0; text-transform: uppercase; letter-spacing: -.06em; text-shadow: 6px 6px #111; max-width: 980px; }
+.hero h1 { font-size: clamp(2.6rem, 9vw, 6.9rem); line-height: .84; margin: 0; text-transform: uppercase; letter-spacing: -.06em; text-shadow: 6px 6px #111; max-width: 980px; }
 h2, h3 { letter-spacing: -.02em; }
 .hero p { max-width: 760px; color: #f2eec7; font-size: clamp(1rem, 2vw, 1.2rem); }
 .eyebrow, .badge { color: #0b0b10; background: #ffd600; display: inline-block; padding: .35rem .65rem; border-radius: 999px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; }
