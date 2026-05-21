@@ -147,6 +147,18 @@ export default function App() {
     if (window.location.pathname !== '/cart') window.history.pushState({}, '', '/cart');
   }
 
+  function continueShopping() {
+    setQuery('');
+    setCategory('All');
+    showShop();
+  }
+
+  function browseTokenPacks() {
+    setQuery('token');
+    setCategory('All');
+    showShop();
+  }
+
   function addToCart(product: Product) {
     setCart((lines) => {
       const existing = lines.find((line) => line.product.id === product.id);
@@ -315,7 +327,7 @@ export default function App() {
 
     {view === 'cart' && <section className="panel narrow cart-panel">
       <h2>Your cart</h2>
-      {cart.length === 0 ? <p>Your cart is waiting for its first social link.</p> : <>
+      {cart.length === 0 ? <div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div> : <>
         <div className="cart-items" aria-label="Cart items">
           {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div>)}
         </div>

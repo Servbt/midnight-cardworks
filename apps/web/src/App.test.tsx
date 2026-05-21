@@ -163,6 +163,27 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
+  it('shows a helpful empty cart state with clear shopping actions', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
+
+    expect(screen.getByRole('heading', { name: 'Your cart is empty — tune into the latest drops.' })).toBeInTheDocument();
+    expect(screen.getByText('Start with commander proxies, token packs, or display cards built for casual play.')).toBeInTheDocument();
+    expect(screen.getByText('Secure Stripe checkout')).toBeInTheDocument();
+    expect(screen.getByText('Made-to-order fulfillment')).toBeInTheDocument();
+    expect(screen.getByText('Casual-play clarity')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue shopping' }));
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search products')).toHaveValue('');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Browse token packs' }));
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search products')).toHaveValue('token');
+  });
+
   it('returns from the cart tab to the listing that opened it when browser back navigation fires', async () => {
     render(<App />);
 
