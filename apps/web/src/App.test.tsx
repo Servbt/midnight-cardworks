@@ -246,6 +246,20 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
 
+  it('shows checkout progress and the next step before leaving for Stripe', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+
+    const progress = screen.getByRole('list', { name: 'Checkout progress' });
+    expect(within(progress).getByText('1. Cart review')).toBeInTheDocument();
+    expect(within(progress).getByText('2. Checkout details')).toBeInTheDocument();
+    expect(within(progress).getByText('3. Secure payment')).toBeInTheDocument();
+    expect(within(progress).getByText('4. Confirmation')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 4: Checkout details')).toBeInTheDocument();
+    expect(screen.getByText('Next: secure Stripe payment')).toBeInTheDocument();
+    expect(screen.getByText('After payment, you’ll return here for confirmation and fulfillment tracking.')).toBeInTheDocument();
+  });
+
   it('keeps checkout totals and the submit action visible in a sticky cart bar', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);

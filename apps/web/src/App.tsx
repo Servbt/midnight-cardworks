@@ -322,8 +322,17 @@ export default function App() {
         <form className="checkout-form" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
           <div className="checkout-intro">
             <p className="eyebrow">Ready to order</p>
+            <ol className="checkout-progress" aria-label="Checkout progress">
+              <li className="complete">1. Cart review</li>
+              <li className="current" aria-current="step">2. Checkout details</li>
+              <li>3. Secure payment</li>
+              <li>4. Confirmation</li>
+            </ol>
             <h2>Checkout details</h2>
+            <p><strong>Step 2 of 4: Checkout details</strong></p>
             <p>Complete the details below before continuing to secure Stripe checkout.</p>
+            <p className="next-step">Next: secure Stripe payment</p>
+            <p>After payment, you’ll return here for confirmation and fulfillment tracking.</p>
           </div>
           <fieldset>
             <legend>Contact information</legend>
