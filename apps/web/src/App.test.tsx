@@ -187,6 +187,22 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('does not open listing details when the inline added confirmation is clicked again', async () => {
+    render(<App />);
+
+    await screen.findByText('Golden Hour Commander Proxy');
+    const addButton = (await screen.findAllByRole('button', { name: 'Add to cart' }))[0];
+    const buyRow = addButton.closest('.buy-row') as HTMLElement;
+    await userEvent.click(addButton);
+
+    await userEvent.click(within(buyRow).getByRole('status'));
+
+    expect(screen.getByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('lets shoppers choose a quantity on product detail pages before adding to cart', async () => {
     render(<App />);
 
