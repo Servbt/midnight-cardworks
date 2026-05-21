@@ -149,10 +149,37 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(productGrid as HTMLElement).queryByText('Golden Hour Commander Proxy')).not.toBeInTheDocument();
   });
 
+  it('keeps shoppers on the current page and confirms when a listing is added to cart', async () => {
+    render(<App />);
+
+    await screen.findByText('Golden Hour Commander Proxy');
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Added Golden Hour Commander Proxy to your cart.');
+    expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('keeps shoppers on product detail pages after adding to cart', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Added Golden Hour Commander Proxy to your cart.');
+    expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
+    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/products/golden');
+  });
+
   it('returns from the cart to the shop when browser back navigation fires', async () => {
     render(<App />);
 
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cart');
 
@@ -230,6 +257,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
     expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cart');
 
@@ -244,6 +272,7 @@ describe('Midnight Cardworks storefront', () => {
   it('shows listing images in the cart and opens detail pages from cart items', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     expect(screen.getByRole('img', { name: 'Golden Hour Commander Proxy preview' })).toHaveAttribute('src', 'x');
     await userEvent.click(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' }));
@@ -259,6 +288,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(addButtons[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (2)' }));
 
     expect(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Midnight Token Pack listing from cart' })).toBeInTheDocument();
@@ -277,6 +307,7 @@ describe('Midnight Cardworks storefront', () => {
   it('organizes checkout details into contact, shipping, and order summary sections', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     expect(screen.getByRole('heading', { name: 'Checkout details' })).toBeInTheDocument();
     expect(screen.getByText('Complete the details below before continuing to secure Stripe checkout.')).toBeInTheDocument();
@@ -293,6 +324,7 @@ describe('Midnight Cardworks storefront', () => {
   it('shows checkout progress and the next step before leaving for Stripe', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     const progress = screen.getByRole('list', { name: 'Checkout progress' });
     expect(within(progress).getByText('1. Cart review')).toBeInTheDocument();
@@ -307,6 +339,7 @@ describe('Midnight Cardworks storefront', () => {
   it('keeps checkout totals and the submit action visible in a sticky cart bar', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     const stickyBar = screen.getByRole('region', { name: 'Sticky checkout summary' });
     expect(within(stickyBar).getByText('Subtotal')).toBeInTheDocument();
@@ -317,6 +350,7 @@ describe('Midnight Cardworks storefront', () => {
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
     expect(screen.getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');

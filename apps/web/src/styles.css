@@ -130,7 +130,8 @@ textarea { min-height: 7rem; resize: vertical; }
 .sticky-checkout-bar span { color: #d9d2a8; font-size: .82rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
 .sticky-checkout-bar strong { color: #ffd600; font-size: 1.2rem; }
 .sticky-checkout-bar button { white-space: nowrap; }
-.success, .status-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
+.success, .status-message, .cart-message { color: #111; background: #ffd600; padding: 1rem; border-radius: 1rem; font-weight: 800; }
+.cart-message { margin: 1rem clamp(1rem, 4vw, 4rem) 0; box-shadow: 0 10px 30px rgba(0,0,0,.28); }
 .empty-state { text-align: center; padding: 2rem; }
 .empty-state h3 { color: #ffd600; font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 .5rem; }
 .contact-panel { display: grid; gap: 1rem; }

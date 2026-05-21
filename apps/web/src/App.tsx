@@ -19,6 +19,7 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [cartMessage, setCartMessage] = useState('');
   const [view, setView] = useState<View>('shop');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
@@ -181,7 +182,7 @@ export default function App() {
       if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + 1 } : line);
       return [...lines, { product, quantity: 1 }];
     });
-    showCart();
+    setCartMessage(`Added ${product.title} to your cart.`);
   }
 
   function updateQuantity(productId: string, quantity: number) {
@@ -309,6 +310,8 @@ export default function App() {
         <aside className="tv-card"><span>CHANNEL 04</span><h2>Featured drop</h2><p>Golden Hour Commander Proxy</p><small>Premium casual-play centerpieces with a midnight collector vibe.</small></aside>
       </section>
     </header>
+
+    {cartMessage && <p className="cart-message" role="status">{cartMessage}</p>}
 
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
