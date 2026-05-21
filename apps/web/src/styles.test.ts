@@ -9,4 +9,10 @@ describe('global CSS isolation', () => {
     expect(styles).toContain('.hero h1 {');
     expect(styles).not.toMatch(/(^|\n)h1\s*\{[^}]*text-shadow/s);
   });
+
+  it('makes the cart checkout summary sticky for mobile shoppers', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+
+    expect(styles).toMatch(/\.sticky-checkout-bar\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*1rem/s);
+  });
 });

@@ -335,7 +335,10 @@ export default function App() {
             <div className="summary-row"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
             <div className="summary-row"><span>Secure checkout</span><span>Stripe</span></div>
           </fieldset>
-          <button type="submit">Continue to secure checkout</button>
+          <div className="sticky-checkout-bar" role="region" aria-label="Sticky checkout summary">
+            <div><span>Subtotal</span><strong>{formatMoney(subtotal)}</strong></div>
+            <button type="submit">Continue to secure checkout</button>
+          </div>
         </form>
       </>}</section>}
 

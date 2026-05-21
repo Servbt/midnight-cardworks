@@ -225,6 +225,16 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
 
+  it('keeps checkout totals and the submit action visible in a sticky cart bar', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+
+    const stickyBar = screen.getByRole('region', { name: 'Sticky checkout summary' });
+    expect(within(stickyBar).getByText('Subtotal')).toBeInTheDocument();
+    expect(within(stickyBar).getByText('$12.99')).toBeInTheDocument();
+    expect(within(stickyBar).getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
+  });
+
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
