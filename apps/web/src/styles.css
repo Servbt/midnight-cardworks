@@ -99,6 +99,15 @@ textarea { min-height: 7rem; resize: vertical; }
 .empty-cart-state h3 { margin: 0; color: #ffd600; font-size: clamp(1.8rem, 5vw, 3.2rem); line-height: .95; text-transform: uppercase; }
 .empty-cart-actions, .empty-cart-cues { display: flex; gap: .7rem; flex-wrap: wrap; }
 .empty-cart-cues span { border: 1px solid rgba(255,214,0,.3); border-radius: 999px; padding: .5rem .7rem; color: #fff4a3; background: rgba(0,0,0,.22); font-size: .84rem; font-weight: 900; }
+.recently-viewed { display: grid; gap: 1rem; padding: 1rem; border: 1px solid rgba(255,214,0,.24); border-radius: 1.2rem; background: rgba(255,255,255,.045); }
+.recently-viewed h3 { margin: .45rem 0 .2rem; color: #ffd600; font-size: clamp(1.5rem, 4vw, 2.4rem); text-transform: uppercase; }
+.recently-viewed p { margin: 0; color: #d9d2a8; }
+.recently-viewed-list { display: grid; gap: .75rem; }
+.recently-viewed-list article { display: grid; grid-template-columns: 54px 1fr auto; gap: .8rem; align-items: center; padding: .75rem; border: 1px solid rgba(255,214,0,.18); border-radius: 1rem; background: rgba(0,0,0,.18); }
+.recently-viewed-list img { width: 54px; height: 68px; border-radius: .65rem; object-fit: cover; background: #111; border: 1px solid rgba(255,214,0,.24); }
+.recently-viewed-list div { display: grid; gap: .18rem; }
+.recently-viewed-list strong { color: #f8f5d7; }
+.recently-viewed-list span { color: #fff4a3; font-size: .84rem; font-weight: 800; }
 .checkout-form { display: grid; gap: 1rem; margin-top: .5rem; }
 .checkout-intro { padding: 1rem; border-radius: 1.2rem; background: linear-gradient(135deg, rgba(255,214,0,.16), rgba(255,255,255,.045)); border: 1px solid rgba(255,214,0,.24); }
 .checkout-intro h2 { margin: .4rem 0 .2rem; color: #ffd600; font-size: clamp(1.8rem, 4vw, 3rem); text-transform: uppercase; }

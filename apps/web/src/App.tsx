@@ -34,6 +34,7 @@ export default function App() {
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [productMessage, setProductMessage] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -55,6 +56,7 @@ export default function App() {
         setProductMessage('Loading listing...');
         fetchProduct(productMatch[1]).then((product) => {
           setSelectedProduct(product);
+          rememberRecentlyViewed(product);
           setProductMessage('');
         }).catch(() => setProductMessage('Could not load that listing.'));
         return;
@@ -118,8 +120,13 @@ export default function App() {
 
   function showProduct(product: Product) {
     setSelectedProduct(product);
+    rememberRecentlyViewed(product);
     setView('product');
     window.history.pushState({}, '', `/products/${product.slug}`);
+  }
+
+  function rememberRecentlyViewed(product: Product) {
+    setRecentlyViewed((items) => [product, ...items.filter((item) => item.id !== product.id)].slice(0, 3));
   }
 
   function isInteractiveCardTarget(target: EventTarget | null) {
@@ -158,6 +165,15 @@ export default function App() {
     setCategory('All');
     showShop();
   }
+
+  const recentlyViewedSection = recentlyViewed.length > 0 ? <section className="recently-viewed" aria-label="Recently viewed listings">
+    <div><p className="eyebrow">Keep browsing</p><h3>Recently viewed</h3><p>Continue browsing where you left off.</p></div>
+    <div className="recently-viewed-list">{recentlyViewed.map((product) => <article key={product.id}>
+      <img src={product.image} alt="" />
+      <div><strong>{product.title}</strong><span>{formatMoney(product.price)} · {product.category}</span></div>
+      <button className="ghost" type="button" onClick={() => showProduct(product)} aria-label={`Continue browsing ${product.title}`}>View again</button>
+    </article>)}</div>
+  </section> : null;
 
   function addToCart(product: Product) {
     setCart((lines) => {
@@ -327,7 +343,7 @@ export default function App() {
 
     {view === 'cart' && <section className="panel narrow cart-panel">
       <h2>Your cart</h2>
-      {cart.length === 0 ? <div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div> : <>
+      {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
         <div className="cart-items" aria-label="Cart items">
           {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div>)}
         </div>
@@ -365,7 +381,7 @@ export default function App() {
             <button type="submit">Continue to secure checkout</button>
           </div>
         </form>
-      </>}</section>}
+      {recentlyViewedSection}</>}</section>}
 
     {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
 

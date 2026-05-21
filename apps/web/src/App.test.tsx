@@ -184,6 +184,29 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByLabelText('Search products')).toHaveValue('token');
   });
 
+  it('shows recently viewed listings in the cart so shoppers can continue browsing', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Midnight Token Pack' }));
+    expect(await screen.findByRole('heading', { name: 'Midnight Token Pack' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
+
+    const recentlyViewed = screen.getByRole('region', { name: 'Recently viewed listings' });
+    expect(within(recentlyViewed).getByRole('heading', { name: 'Recently viewed' })).toBeInTheDocument();
+    expect(within(recentlyViewed).getByText('Continue browsing where you left off.')).toBeInTheDocument();
+    expect(within(recentlyViewed).getByRole('button', { name: 'Continue browsing Midnight Token Pack' })).toBeInTheDocument();
+    expect(within(recentlyViewed).getByRole('button', { name: 'Continue browsing Golden Hour Commander Proxy' })).toBeInTheDocument();
+
+    await userEvent.click(within(recentlyViewed).getByRole('button', { name: 'Continue browsing Golden Hour Commander Proxy' }));
+
+    expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/products/golden');
+  });
+
   it('returns from the cart tab to the listing that opened it when browser back navigation fires', async () => {
     render(<App />);
 
