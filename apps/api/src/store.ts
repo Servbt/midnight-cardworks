@@ -18,6 +18,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       return updated;
     },
     async listOrders() { return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
+    async listOrdersByEmail(email) { return [...orders].filter((order) => order.email.toLowerCase() === email.toLowerCase()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async getOrder(orderId) { return orders.find((order) => order.id === orderId); },
     async createOrder(input) {
       const productList = [...products.values()];

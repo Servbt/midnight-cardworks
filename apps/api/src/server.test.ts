@@ -92,6 +92,19 @@ describe('storefront API', () => {
     expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', total: 1299, status: 'paid' });
   });
 
+  it('lists customer order history by email for signed-in accounts', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store);
+    await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'other@example.com', items: [{ productId: 'p2', quantity: 1 }] } });
+
+    const history = await app.inject({ method: 'GET', url: '/api/orders?email=buyer%40example.com' });
+
+    expect(history.statusCode).toBe(200);
+    expect(history.json().orders).toHaveLength(1);
+    expect(history.json().orders[0]).toMatchObject({ email: 'buyer@example.com', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] });
+  });
+
   it('lets admins mark paid orders fulfilled', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store, { adminAuth });

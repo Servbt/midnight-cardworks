@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
+import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
@@ -32,6 +32,8 @@ export default function App() {
   const [shippingAddress, setShippingAddress] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
@@ -48,7 +50,7 @@ export default function App() {
   const [contactWebsite, setContactWebsite] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const { isAdmin, getAdminToken } = useAdminAccess();
-  const { isSignedIn } = useCustomerSession();
+  const { isSignedIn, email: sessionEmail } = useCustomerSession();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => {
@@ -100,6 +102,17 @@ export default function App() {
       setOrders(adminOrders);
     }).catch(() => { setAdminProducts([]); setOrders([]); });
   }, [view, checkoutMessage, isAdmin]);
+  useEffect(() => {
+    if (view !== 'account' || !isSignedIn || !sessionEmail) return;
+    setCustomerOrdersMessage('Loading order history...');
+    fetchCustomerOrders(sessionEmail).then((orderHistory) => {
+      setCustomerOrders(orderHistory);
+      setCustomerOrdersMessage(orderHistory.length === 0 ? 'No orders saved to this account yet.' : '');
+    }).catch(() => {
+      setCustomerOrders([]);
+      setCustomerOrdersMessage('Could not load order history yet.');
+    });
+  }, [view, isSignedIn, sessionEmail]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
   const visibleProducts = useMemo(() => products.filter((p) => {
@@ -207,6 +220,19 @@ export default function App() {
 
   function productAddedMessage(product: Product, quantity = 1) {
     return quantity > 1 ? `Added ${quantity} ${product.title} to your cart.` : 'Added to cart';
+  }
+
+  function orderStatusLabel(status: string) {
+    return status === 'paid' ? 'Paid' : status === 'fulfilled' ? 'Fulfilled' : 'Pending payment';
+  }
+
+  function orderItemSummary(order: Order) {
+    return order.items.map((item) => `${item.quantity} × ${item.title} — ${formatMoney(item.price * item.quantity)}`);
+  }
+
+  function contactSupportAboutOrder(orderId: string) {
+    setContactOrderNumber(orderId);
+    setView('contact');
   }
 
   function isProductAdded(product: Product) {
@@ -448,6 +474,14 @@ export default function App() {
             <div className="summary-row"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
             <div className="summary-row"><span>Secure checkout</span><span>Stripe</span></div>
           </fieldset>
+          <section className="checkout-review-box" role="region" aria-label="Review before payment">
+            <h2>Review before payment</h2>
+            <ul>{cart.map((line) => <li key={`review-${line.product.id}`}>{line.quantity} × {line.product.title}</li>)}</ul>
+            <p>Contact: {email || 'Add an email address'}</p>
+            <p>Ship to: {shippingAddress || 'Add a shipping address'}</p>
+            <p><strong>Subtotal: {formatMoney(subtotal)}</strong></p>
+            <p>You’ll review and pay securely on Stripe next.</p>
+          </section>
           <div className="sticky-checkout-bar" role="region" aria-label="Sticky checkout summary">
             <div><span>Subtotal</span><strong>{formatMoney(subtotal)}</strong></div>
             <button type="submit">Continue to secure checkout</button>
@@ -455,7 +489,7 @@ export default function App() {
         </form>
       {recentlyViewedSection}</>}</section>}
 
-    {view === 'account' && <AccountPanel checkoutMessage={checkoutMessage} />}
+    {view === 'account' && <><AccountPanel checkoutMessage={checkoutMessage} />{isSignedIn && <section className="panel narrow account-order-history" role="region" aria-label="Order history"><h2>Order history</h2>{customerOrdersMessage && <p>{customerOrdersMessage}</p>}{customerOrders.length > 0 && <div className="order-list">{customerOrders.map((order) => <article className="order-card" key={`customer-${order.id}`}><div><strong>{order.id}</strong><span className="status-badge">{order.status}</span></div><ul>{order.items.map((item) => <li key={`${order.id}-${item.title}`}>{item.quantity} × {item.title}</li>)}</ul><p>{formatMoney(order.total)}</p></article>)}</div>}</section>}</>}
 
     {view === 'contact' && <section className="panel narrow contact-panel">
       <p className="eyebrow">Support channel</p>
@@ -472,9 +506,9 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>{receiptMessage || 'Checking payment status...'}</h2>{receiptOrder ? <div><p className="status-message">Order {receiptOrder.id} — {receiptOrder.status === 'fulfilled' ? 'fulfilled' : receiptOrder.status === 'paid' ? 'paid and confirmed' : 'waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{receiptOrder.items.map((item) => <li key={`${item.title}-${item.quantity}`}>{item.quantity} × {item.title} — {formatMoney(item.price * item.quantity)}</li>)}</ul><p>We saved this order in the admin dashboard for fulfillment.</p><button onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
-    {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('listings')}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div><strong>{o.id}: {o.email}</strong><p>{o.customerName ? `${o.customerName} — ` : ''}{o.shippingAddress ? `${o.shippingAddress} — ` : ''}{formatMoney(o.total)} — {o.status}</p></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="listing-layout"><div><h3>Create listing</h3>{productEditor(newProduct, true)}</div><div><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</div></div></section>}</section>}
+    {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('listings')}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="listing-layout"><div><h3>Create listing</h3>{productEditor(newProduct, true)}</div><div><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</div></div></section>}</section>}
 
     <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
   </main>;

@@ -117,6 +117,11 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
   });
+  app.get('/api/orders', async (request, reply) => {
+    const email = String((request.query as { email?: string }).email ?? '').trim();
+    if (!z.string().email().safeParse(email).success) return reply.code(400).send({ error: 'Valid email required' });
+    return { orders: await store.listOrdersByEmail(email) };
+  });
   app.get('/api/orders/:orderId', async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const order = await store.getOrder(orderId);

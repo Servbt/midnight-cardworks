@@ -32,9 +32,9 @@ export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
 }
 
 export function useCustomerSession() {
-  if (!publishableKey || publishableKey.includes('replace_me')) return { isSignedIn: false };
-  const { isSignedIn } = useUser();
-  return { isSignedIn: Boolean(isSignedIn) };
+  if (!publishableKey || publishableKey.includes('replace_me')) return { isSignedIn: false, email: undefined as string | undefined };
+  const { isSignedIn, user } = useUser();
+  return { isSignedIn: Boolean(isSignedIn), email: user?.primaryEmailAddress?.emailAddress };
 }
 
 export function useAdminAccess() {

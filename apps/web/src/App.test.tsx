@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { redirectToCheckout } from './checkoutRedirect';
 
-const mockAuth = vi.hoisted(() => ({ isAdmin: false, isSignedIn: false, token: 'admin-token' }));
+const mockAuth = vi.hoisted(() => ({ isAdmin: false, isSignedIn: false, token: 'admin-token', email: 'buyer@example.com' }));
 
 vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
   AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
   useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token }),
-  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn })
+  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email })
 }));
 
 const products = [
@@ -23,6 +23,7 @@ beforeEach(() => {
   mockAuth.isAdmin = false;
   mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
+  mockAuth.email = 'buyer@example.com';
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
       if (init?.method === 'POST') {
@@ -34,11 +35,12 @@ beforeEach(() => {
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
-    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [] } }), { status: 200 });
+    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
     if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/orders?email=buyer%40example.com')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [] }] }), { status: 200 });
+    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
 });
@@ -341,14 +343,16 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Midnight Token Pack listing from cart' })).toBeInTheDocument();
     expect(screen.getByText('2 items in cart')).toBeInTheDocument();
-    expect(screen.getByText('Subtotal: $21.98')).toBeInTheDocument();
+    const initialSummary = screen.getByRole('group', { name: 'Order summary' });
+    expect(within(initialSummary).getByText('Subtotal: $21.98')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove Golden Hour Commander Proxy from cart' }));
 
     expect(screen.queryByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Midnight Token Pack listing from cart' })).toBeInTheDocument();
     expect(screen.getByText('1 item in cart')).toBeInTheDocument();
-    expect(screen.getByText('Subtotal: $8.99')).toBeInTheDocument();
+    const remainingSummary = screen.getByRole('group', { name: 'Order summary' });
+    expect(within(remainingSummary).getByText('Subtotal: $8.99')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
   });
 
@@ -365,14 +369,16 @@ describe('Midnight Cardworks storefront', () => {
     expect(quantityInput).toHaveValue(2);
     expect(screen.getByRole('button', { name: 'Cart (2)' })).toBeInTheDocument();
     expect(screen.getByText('2 items in cart')).toBeInTheDocument();
-    expect(screen.getByText('Subtotal: $25.98')).toBeInTheDocument();
+    const updatedSummary = screen.getByRole('group', { name: 'Order summary' });
+    expect(within(updatedSummary).getByText('Subtotal: $25.98')).toBeInTheDocument();
     expect(screen.getByText('Line total: $25.98')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Decrease quantity for Golden Hour Commander Proxy' }));
 
     expect(quantityInput).toHaveValue(1);
     expect(screen.getByRole('button', { name: 'Cart (1)' })).toBeInTheDocument();
-    expect(screen.getByText('Subtotal: $12.99')).toBeInTheDocument();
+    const finalSummary = screen.getByRole('group', { name: 'Order summary' });
+    expect(within(finalSummary).getByText('Subtotal: $12.99')).toBeInTheDocument();
   });
 
   it('lets shoppers undo removing a cart item', async () => {
@@ -432,6 +438,24 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
 
+  it('shows a final review before sending shoppers to Stripe', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
+    await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+
+    const review = screen.getByRole('region', { name: 'Review before payment' });
+    expect(within(review).getByRole('heading', { name: 'Review before payment' })).toBeInTheDocument();
+    expect(within(review).getByText('1 × Golden Hour Commander Proxy')).toBeInTheDocument();
+    expect(within(review).getByText('Contact: buyer@example.com')).toBeInTheDocument();
+    expect(within(review).getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
+    expect(within(review).getByText('Subtotal: $12.99')).toBeInTheDocument();
+    expect(within(review).getByText('You’ll review and pay securely on Stripe next.')).toBeInTheDocument();
+  });
+
   it('shows checkout progress and the next step before leaving for Stripe', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
@@ -462,7 +486,8 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
-    expect(screen.getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
+    const summary = screen.getByRole('group', { name: 'Order summary' });
+    expect(within(summary).getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
@@ -496,6 +521,13 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Admin' }));
     const panel = await screen.findByRole('tabpanel');
     expect(within(panel).getByText(/buyer@example.com/)).toHaveTextContent('ord_test: buyer@example.com');
+    expect(within(panel).getByText('Paid')).toBeInTheDocument();
+    expect(within(panel).getByText('Customer')).toBeInTheDocument();
+    expect(within(panel).getByText('Ari Buyer')).toBeInTheDocument();
+    expect(within(panel).getByText('Shipping')).toBeInTheDocument();
+    expect(within(panel).getByText('123 Midnight Lane')).toBeInTheDocument();
+    expect(within(panel).getByText('Items')).toBeInTheDocument();
+    expect(within(panel).getByText('1 × Golden Hour Commander Proxy — $12.99')).toBeInTheDocument();
   });
 
   it('lets admins mark paid orders fulfilled', async () => {
@@ -510,7 +542,10 @@ describe('Midnight Cardworks storefront', () => {
     expect(await screen.findByText(/Marked ord_test fulfilled/)).toBeInTheDocument();
     const fulfilledPanel = screen.getByRole('tabpanel');
     expect(within(fulfilledPanel).getByText(/buyer@example.com/)).toHaveTextContent('ord_test: buyer@example.com');
-    expect(within(fulfilledPanel).getByText(/Ari Buyer/)).toHaveTextContent('Ari Buyer — 123 Midnight Lane — $12.99 — fulfilled');
+    expect(within(fulfilledPanel).getByText('Fulfilled')).toBeInTheDocument();
+    expect(within(fulfilledPanel).getByText('Ari Buyer')).toBeInTheDocument();
+    expect(within(fulfilledPanel).getByText('123 Midnight Lane')).toBeInTheDocument();
+    expect(within(fulfilledPanel).getByText('1 × Golden Hour Commander Proxy — $12.99')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/fulfill'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
   });
 
@@ -583,11 +618,30 @@ describe('Midnight Cardworks storefront', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Payment verified')).toBeInTheDocument();
-    expect(screen.getByText(/Order ord_test/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Order received' })).toBeInTheDocument();
+    expect(screen.getByText('Payment verified')).toBeInTheDocument();
+    expect(screen.getByText('Order number: ord_test')).toBeInTheDocument();
     expect(screen.getByText(/1 × Golden Hour Commander Proxy — \$12.99/)).toBeInTheDocument();
     expect(screen.getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
     expect(screen.getByText(/Total paid: \$12.99/)).toBeInTheDocument();
+    expect(screen.getByText('What happens next')).toBeInTheDocument();
+    expect(screen.getByText('We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
+  });
+
+  it('shows signed-in customers their order history in account', async () => {
+    mockAuth.isSignedIn = true;
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+
+    const history = await screen.findByRole('region', { name: 'Order history' });
+    expect(within(history).getByRole('heading', { name: 'Order history' })).toBeInTheDocument();
+    expect(within(history).getByText('ord_test')).toBeInTheDocument();
+    expect(within(history).getByText('paid')).toBeInTheDocument();
+    expect(within(history).getByText('1 × Golden Hour Commander Proxy')).toBeInTheDocument();
+    expect(within(history).getByText('$12.99')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders?email=buyer%40example.com'));
   });
 
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {
