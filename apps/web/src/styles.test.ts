@@ -15,4 +15,12 @@ describe('global CSS isolation', () => {
 
     expect(styles).toMatch(/\.sticky-checkout-bar\s*\{[^}]*position:\s*sticky[^}]*bottom:\s*1rem/s);
   });
+
+  it('stacks cart rows and controls for narrow mobile screens', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+
+    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line\s*\{[^}]*grid-template-columns:\s*1fr/s);
+    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
+    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line-total\s*\{[^}]*text-align:\s*left/s);
+  });
 });

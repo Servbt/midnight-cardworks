@@ -19,6 +19,9 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [removedCartLine, setRemovedCartLine] = useState<CartLine | null>(null);
+  const [cartNotice, setCartNotice] = useState('');
+  const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
   const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('shop');
@@ -193,9 +196,12 @@ export default function App() {
     const safeQuantity = normalizeProductQuantity(product, quantity);
     setCart((lines) => {
       const existing = lines.find((line) => line.product.id === product.id);
-      if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: line.quantity + safeQuantity } : line);
+      if (existing) return lines.map((line) => line.product.id === product.id ? { ...line, quantity: Math.min(product.inventory, line.quantity + safeQuantity) } : line);
       return [...lines, { product, quantity: safeQuantity }];
     });
+    setRemovedCartLine(null);
+    setCartNotice('');
+    setClearCartRequested(false);
     setAddedProductIds((ids) => ids.includes(product.id) ? ids : [...ids, product.id]);
   }
 
@@ -216,11 +222,42 @@ export default function App() {
   }
 
   function updateQuantity(productId: string, quantity: number) {
-    setCart((lines) => lines.flatMap((line) => line.product.id === productId ? (quantity > 0 ? [{ ...line, quantity }] : []) : [line]));
+    setCart((lines) => lines.map((line) => {
+      if (line.product.id !== productId) return line;
+      const nextQuantity = Math.max(1, Math.min(line.product.inventory, quantity));
+      return { ...line, quantity: nextQuantity };
+    }));
+    setCartNotice('');
+    setClearCartRequested(false);
   }
 
   function removeFromCart(productId: string) {
+    const removed = cart.find((line) => line.product.id === productId);
     setCart((lines) => lines.filter((line) => line.product.id !== productId));
+    setRemovedCartLine(removed ?? null);
+    setCartNotice(removed ? `Removed ${removed.product.title} from your cart.` : 'Removed item from your cart.');
+    setClearCartRequested(false);
+  }
+
+  function undoRemoveFromCart() {
+    if (!removedCartLine) return;
+    setCart((lines) => lines.some((line) => line.product.id === removedCartLine.product.id) ? lines : [...lines, removedCartLine]);
+    setRemovedCartLine(null);
+    setCartNotice('');
+  }
+
+  function requestClearCart() {
+    setRemovedCartLine(null);
+    setClearCartRequested(true);
+    setCartNotice(`Clear all ${itemCount} ${itemCount === 1 ? 'item' : 'items'} from your cart?`);
+  }
+
+  function confirmClearCart() {
+    const clearedCount = itemCount;
+    setCart([]);
+    setRemovedCartLine(null);
+    setClearCartRequested(false);
+    setCartNotice(`Cleared ${clearedCount} ${clearedCount === 1 ? 'item' : 'items'} from your cart.`);
   }
 
   async function checkout() {
@@ -376,10 +413,11 @@ export default function App() {
     </section>}
 
     {view === 'cart' && <section className="panel narrow cart-panel">
-      <h2>Your cart</h2>
+      <div className="cart-heading-row"><h2>Your cart</h2>{cart.length > 0 && <button className="ghost clear-cart-button" type="button" onClick={requestClearCart}>Clear cart</button>}</div>
+      {cartNotice && <div className="cart-status" role="status"><span>{cartNotice}</span>{removedCartLine && <button className="ghost" type="button" onClick={undoRemoveFromCart} aria-label={`Undo removing ${removedCartLine.product.title}`}>Undo</button>}{clearCartRequested && <div className="cart-status-actions"><button type="button" onClick={confirmClearCart}>Confirm clear cart</button><button className="ghost" type="button" onClick={() => { setClearCartRequested(false); setCartNotice(''); }}>Keep items</button></div>}</div>}
       {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
         <div className="cart-items" aria-label="Cart items">
-          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="0" value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><strong>{formatMoney(line.product.price * line.quantity)}</strong><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div>)}
+          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
         </div>
         <form className="checkout-form" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
           <div className="checkout-intro">
