@@ -527,7 +527,34 @@ export default function App() {
         </form>
       {recentlyViewedSection}</>}</section>}
 
-    {view === 'account' && <><AccountPanel checkoutMessage={checkoutMessage} />{isSignedIn && <section className="panel narrow account-order-history" role="region" aria-label="Order history"><h2>Order history</h2>{customerOrdersMessage && <p>{customerOrdersMessage}</p>}{customerOrders.length > 0 && <div className="order-list">{customerOrders.map((order) => <article className="order-card" key={`customer-${order.id}`}><div><strong>{order.id}</strong><span className="status-badge">{order.status}</span></div><ul>{order.items.map((item) => <li key={`${order.id}-${item.title}`}>{item.quantity} × {item.title}</li>)}</ul><p>{formatMoney(order.total)}</p></article>)}</div>}</section>}</>}
+    {view === 'account' && <>
+      <AccountPanel checkoutMessage={checkoutMessage} />
+      <section className="panel narrow saved-checkout-info account-saved-checkout-info" role="region" aria-label="Saved checkout info">
+        <h2>Saved checkout info</h2>
+        {savedCheckoutInfoExists ? <>
+          <p>Checkout info saved on this device only — not synced to your account.</p>
+          {email && <p>{email}</p>}
+          {customerName && <p>{customerName}</p>}
+          {shippingAddress && <p>{shippingAddress}</p>}
+          {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
+          <button className="ghost" type="button" onClick={clearSavedCheckoutInfo}>Clear saved checkout info from this device</button>
+        </> : <>
+          <p>No checkout info saved on this device yet.</p>
+          <p>Checkout details can be saved from the cart for faster checkout in this browser only.</p>
+          {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
+        </>}
+      </section>
+      {isSignedIn && <section className="panel narrow account-order-history" role="region" aria-label="Order history">
+        <div className="account-section-header"><div><h2>Order history</h2><p>Review recent orders and jump back into the shop when you’re ready.</p></div><button type="button" onClick={continueShopping}>Continue shopping</button></div>
+        {customerOrdersMessage && <p>{customerOrdersMessage}</p>}
+        {customerOrders.length > 0 && <div className="order-list">{customerOrders.map((order) => <article className="order-card" key={`customer-${order.id}`}>
+          <div className="order-card-header"><strong>{order.id}</strong><span className="status-badge">{order.status}</span></div>
+          <ul>{order.items.map((item) => <li key={`${order.id}-${item.title}`}>{item.quantity} × {item.title}</li>)}</ul>
+          <p>{formatMoney(order.total)}</p>
+          <button className="ghost" type="button" onClick={() => contactSupportAboutOrder(order.id)}>Contact support about {order.id}</button>
+        </article>)}</div>}
+      </section>}
+    </>}
 
     {view === 'contact' && <section className="panel narrow contact-panel">
       <p className="eyebrow">Support channel</p>

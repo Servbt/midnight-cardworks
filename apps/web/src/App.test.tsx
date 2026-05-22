@@ -685,6 +685,45 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders?email=buyer%40example.com'));
   });
 
+  it('shows account saved checkout info controls that stay device-local', async () => {
+    window.localStorage.setItem('midnight-cardworks.checkoutInfo', JSON.stringify({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane' }));
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+
+    const savedInfo = screen.getByRole('region', { name: 'Saved checkout info' });
+    expect(within(savedInfo).getByText('Checkout info saved on this device only — not synced to your account.')).toBeInTheDocument();
+    expect(within(savedInfo).getByText('buyer@example.com')).toBeInTheDocument();
+    await userEvent.click(within(savedInfo).getByRole('button', { name: 'Clear saved checkout info from this device' }));
+    expect(window.localStorage.getItem('midnight-cardworks.checkoutInfo')).toBeNull();
+    expect(within(savedInfo).getByRole('status')).toHaveTextContent('Saved checkout info cleared from this device.');
+    expect(within(savedInfo).getByText('No checkout info saved on this device yet.')).toBeInTheDocument();
+  });
+
+  it('lets account customers contact support about an order', async () => {
+    mockAuth.isSignedIn = true;
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const history = await screen.findByRole('region', { name: 'Order history' });
+    await userEvent.click(within(history).getByRole('button', { name: 'Contact support about ord_test' }));
+
+    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Order number optional')).toHaveValue('ord_test');
+  });
+
+  it('offers a clear continue-shopping action from account order history', async () => {
+    mockAuth.isSignedIn = true;
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const history = await screen.findByRole('region', { name: 'Order history' });
+    await userEvent.click(within(history).getByRole('button', { name: 'Continue shopping' }));
+
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Account' }));

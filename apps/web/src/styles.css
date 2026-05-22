@@ -171,6 +171,10 @@ textarea { min-height: 7rem; resize: vertical; }
 .admin-workspace { border: 1px solid rgba(255,214,0,.22); border-radius: 1.4rem; padding: 1rem; background: rgba(255,255,255,.045); }
 .listing-layout { display: grid; grid-template-columns: minmax(260px, .75fr) minmax(0, 1.25fr); gap: 1rem; align-items: start; }
 .listing-layout > div { padding: 1rem; border-radius: 1rem; background: rgba(0,0,0,.18); }
+.account-section-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; flex-wrap: wrap; }
+.account-section-header h2 { margin: 0; }
+.account-section-header p { margin: .35rem 0 0; color: #d9d2a8; }
+.account-saved-checkout-info h2 { margin: 0; color: #ffd600; }
 .order-list { display: grid; gap: .8rem; }
 .order-card { display: grid; gap: .9rem; padding: 1rem; border: 1px solid rgba(255,214,0,.2); border-radius: 1rem; background: rgba(0,0,0,.18); }
 .order-card-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
