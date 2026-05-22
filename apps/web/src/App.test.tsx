@@ -47,6 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   window.history.replaceState({}, '', '/');
   vi.unstubAllGlobals();
 });
@@ -454,6 +455,46 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(review).getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
     expect(within(review).getByText('Subtotal: $12.99')).toBeInTheDocument();
     expect(within(review).getByText('You’ll review and pay securely on Stripe next.')).toBeInTheDocument();
+  });
+
+  it('saves checkout details locally and prefills them next time on this device', async () => {
+    const firstVisit = render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
+    await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Save my checkout info on this device' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Checkout info saved on this device.');
+    expect(window.localStorage.getItem('midnight-cardworks.checkoutInfo')).toContain('123 Midnight Lane');
+
+    firstVisit.unmount();
+    window.history.replaceState({}, '', '/');
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    expect(screen.getByLabelText('Email address')).toHaveValue('buyer@example.com');
+    expect(screen.getByLabelText('Full name')).toHaveValue('Ari Buyer');
+    expect(screen.getByLabelText('Street address and delivery notes')).toHaveValue('123 Midnight Lane');
+    expect(screen.getByText('Saved only in this browser. Not synced to your account.')).toBeInTheDocument();
+  });
+
+  it('clears locally saved checkout details from this device', async () => {
+    window.localStorage.setItem('midnight-cardworks.checkoutInfo', JSON.stringify({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane' }));
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear saved checkout info from this device' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Saved checkout info cleared from this device.');
+    expect(window.localStorage.getItem('midnight-cardworks.checkoutInfo')).toBeNull();
+    expect(screen.getByLabelText('Email address')).toHaveValue('');
+    expect(screen.getByLabelText('Full name')).toHaveValue('');
+    expect(screen.getByLabelText('Street address and delivery notes')).toHaveValue('');
   });
 
   it('shows checkout progress and the next step before leaving for Stripe', async () => {

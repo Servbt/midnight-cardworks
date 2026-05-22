@@ -15,6 +15,7 @@ const launchNotes = [
   { title: 'Casual-play clarity', copy: 'Every page keeps the unofficial, not-tournament-legal note visible.' }
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
+const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -30,6 +31,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
+  const [savedCheckoutInfoExists, setSavedCheckoutInfoExists] = useState(false);
+  const [savedCheckoutInfoMessage, setSavedCheckoutInfoMessage] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
@@ -53,6 +56,20 @@ export default function App() {
   const { isSignedIn, email: sessionEmail } = useCustomerSession();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
+  useEffect(() => {
+    try {
+      const savedInfo = window.localStorage.getItem(savedCheckoutInfoKey);
+      if (!savedInfo) return;
+      const parsed = JSON.parse(savedInfo) as { email?: string; customerName?: string; shippingAddress?: string };
+      setEmail(parsed.email ?? '');
+      setCustomerName(parsed.customerName ?? '');
+      setShippingAddress(parsed.shippingAddress ?? '');
+      setSavedCheckoutInfoExists(true);
+    } catch {
+      window.localStorage.removeItem(savedCheckoutInfoKey);
+      setSavedCheckoutInfoExists(false);
+    }
+  }, []);
   useEffect(() => {
     function applyCurrentLocation() {
       const params = new URLSearchParams(window.location.search);
@@ -286,6 +303,21 @@ export default function App() {
     setCartNotice(`Cleared ${clearedCount} ${clearedCount === 1 ? 'item' : 'items'} from your cart.`);
   }
 
+  function saveCheckoutInfoOnDevice() {
+    window.localStorage.setItem(savedCheckoutInfoKey, JSON.stringify({ email, customerName, shippingAddress }));
+    setSavedCheckoutInfoExists(true);
+    setSavedCheckoutInfoMessage('Checkout info saved on this device.');
+  }
+
+  function clearSavedCheckoutInfo() {
+    window.localStorage.removeItem(savedCheckoutInfoKey);
+    setEmail('');
+    setCustomerName('');
+    setShippingAddress('');
+    setSavedCheckoutInfoExists(false);
+    setSavedCheckoutInfoMessage('Saved checkout info cleared from this device.');
+  }
+
   async function checkout() {
     const checkout = await createCheckout(email || 'guest@example.com', customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
@@ -469,6 +501,12 @@ export default function App() {
             <legend>Shipping address</legend>
             <label>Street address and delivery notes<textarea autoComplete="shipping street-address" placeholder="Street, city, state, ZIP, and any delivery notes" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></label>
           </fieldset>
+          <section className="saved-checkout-info" aria-label="Saved checkout info">
+            <label className="checkbox-row"><input aria-label="Save my checkout info on this device" type="checkbox" checked={savedCheckoutInfoExists} onChange={(e) => { if (e.target.checked) saveCheckoutInfoOnDevice(); }} /> Save my checkout info on this device</label>
+            <p>Saved only in this browser. Not synced to your account.</p>
+            {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
+            {savedCheckoutInfoExists && <button className="ghost" type="button" onClick={clearSavedCheckoutInfo}>Clear saved checkout info from this device</button>}
+          </section>
           <fieldset className="order-summary-box">
             <legend>Order summary</legend>
             <div className="summary-row"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>

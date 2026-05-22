@@ -130,6 +130,9 @@ textarea { min-height: 7rem; resize: vertical; }
 .checkout-form legend { padding: 0 .45rem; color: #ffd600; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
 .checkout-form label { display: grid; gap: .45rem; color: #fff4a3; font-weight: 900; }
 .checkout-form input, .checkout-form textarea { width: 100%; }
+.saved-checkout-info { display: grid; gap: .65rem; padding: 1rem; border: 1px solid rgba(255,214,0,.18); border-radius: 1.2rem; background: rgba(0,0,0,.18); }
+.saved-checkout-info p { margin: 0; color: #d9d2a8; }
+.saved-checkout-info .status-message { color: #111; }
 .order-summary-box { background: rgba(255,214,0,.08) !important; }
 .checkout-review-box { padding: 1rem; border: 1px solid rgba(255,214,0,.28); border-radius: 1rem; background: rgba(255,214,0,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
 .checkout-review-box h2 { margin-top: 0; }
