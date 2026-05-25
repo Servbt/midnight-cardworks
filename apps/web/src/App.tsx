@@ -34,6 +34,7 @@ export default function App() {
   const [savedCheckoutInfoExists, setSavedCheckoutInfoExists] = useState(false);
   const [savedCheckoutInfoMessage, setSavedCheckoutInfoMessage] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
+  const [checkoutValidationMessage, setCheckoutValidationMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
@@ -56,6 +57,9 @@ export default function App() {
   const { isSignedIn, email: sessionEmail } = useCustomerSession();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
+  useEffect(() => {
+    if (isSignedIn && sessionEmail && !email) setEmail(sessionEmail);
+  }, [isSignedIn, sessionEmail, email]);
   useEffect(() => {
     try {
       const savedInfo = window.localStorage.getItem(savedCheckoutInfoKey);
@@ -319,7 +323,12 @@ export default function App() {
   }
 
   async function checkout() {
-    const checkout = await createCheckout(email || 'guest@example.com', customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+    const checkoutEmail = email.trim();
+    if (!checkoutEmail) {
+      setCheckoutValidationMessage('Email address required — we’ll only use this for order updates or design/print issues.');
+      return;
+    }
+    const checkout = await createCheckout(checkoutEmail, customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
@@ -494,7 +503,9 @@ export default function App() {
           </div>
           <fieldset>
             <legend>Contact information</legend>
-            <label>Email address<input type="email" autoComplete="email" placeholder="buyer@example.com" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <label>Email address<input type="email" required autoComplete="email" placeholder="buyer@example.com" value={email} onInvalid={() => setCheckoutValidationMessage('Email address required — we’ll only use this for order updates or design/print issues.')} onChange={(e) => { setEmail(e.target.value); setCheckoutValidationMessage(''); }} /></label>
+            <p className="field-note">Required so we can send order updates and contact you if there’s a design or print issue.</p>
+            {checkoutValidationMessage && <p className="status-message" role="status">{checkoutValidationMessage}</p>}
             <label>Full name<input autoComplete="name" placeholder="Ari Buyer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
           </fieldset>
           <fieldset>

@@ -523,6 +523,31 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(stickyBar).getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
 
+  it('requires a customer email before creating a checkout order', async () => {
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    expect(screen.getByLabelText('Email address')).toBeRequired();
+    await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('Email address required — we’ll only use this for order updates or design/print issues.');
+    expect((fetch as any).mock.calls.some((call: unknown[]) => String(call[0]).includes('/api/checkout'))).toBe(false);
+    expect(redirectToCheckout).not.toHaveBeenCalled();
+  });
+
+  it('prefills checkout email from a signed-in customer account', async () => {
+    mockAuth.isSignedIn = true;
+    mockAuth.email = 'account-buyer@example.com';
+    render(<App />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
+
+    expect(screen.getByLabelText('Email address')).toHaveValue('account-buyer@example.com');
+  });
+
   it('adds an item to cart and creates checkout order', async () => {
     render(<App />);
     await userEvent.click((await screen.findAllByRole('button', { name: 'Add to cart' }))[0]);
