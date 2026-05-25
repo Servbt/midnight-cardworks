@@ -96,6 +96,21 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('uses the brand name as a home link from non-home pages', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+
+    const brandHomeLink = screen.getByRole('link', { name: 'Midnight Cardworks home' });
+    expect(brandHomeLink).toHaveAttribute('href', '/');
+    await userEvent.click(brandHomeLink);
+
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('shows launch polish with trust cues and product metadata', async () => {
     render(<App />);
 

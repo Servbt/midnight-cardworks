@@ -429,7 +429,7 @@ export default function App() {
   }
 
   const navigation = <nav className="site-nav">
-    <strong className="brand">Midnight Cardworks</strong>
+    <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showShop(); }}>Midnight Cardworks</a>
     <button onClick={showShop}>Shop</button>
     <button onClick={showCart}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
     <button onClick={() => setView('account')}>Account</button>
