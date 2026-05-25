@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { CartItemInput, Order, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
+import { calculateShippingCost } from './shipping.js';
 
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
   const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
@@ -28,7 +29,8 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
         return { productId: product.id, title: product.title, price: product.price, quantity: item.quantity };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, total: subtotal, status: 'pending_payment', createdAt: new Date().toISOString() };
+      const shippingCost = calculateShippingCost(subtotal);
+      const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', createdAt: new Date().toISOString() };
       orders.push(order);
       return order;
     },

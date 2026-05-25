@@ -11,20 +11,30 @@ export async function createCheckoutResponse(order: Order) {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       customer_email: order.email,
-      line_items: order.items.map((item) => ({
+      line_items: [
+        ...order.items.map((item) => ({
         quantity: item.quantity,
         price_data: {
           currency: 'usd',
           unit_amount: item.price,
           product_data: { name: item.title }
         }
-      })),
+        })),
+        ...(order.shippingCost > 0 ? [{
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: order.shippingCost,
+            product_data: { name: 'Flat-rate shipping' }
+          }
+        }] : [])
+      ],
       metadata: { orderId: order.id },
       success_url: `${appBaseUrl}/checkout/success?order=${order.id}`,
       cancel_url: `${appBaseUrl}/cart?order=${order.id}`
     });
-    return { orderId: order.id, checkoutUrl: session.url, status: order.status, total: order.total };
+    return { orderId: order.id, checkoutUrl: session.url, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };
   }
 
-  return { orderId: order.id, checkoutUrl: `/checkout/success?order=${order.id}`, status: order.status, total: order.total };
+  return { orderId: order.id, checkoutUrl: `/checkout/success?order=${order.id}`, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };
 }

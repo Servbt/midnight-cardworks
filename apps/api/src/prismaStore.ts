@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import type { PrismaClient } from '@prisma/client';
 import type { CheckoutInput, Order, OrderStatus, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
+import { calculateShippingCost } from './shipping.js';
 
 type PrismaProduct = Awaited<ReturnType<PrismaClient['product']['findFirstOrThrow']>>;
 type PrismaOrder = Awaited<ReturnType<PrismaClient['order']['findFirstOrThrow']>> & {
@@ -31,6 +32,7 @@ function toOrder(order: PrismaOrder): Order {
     customerName: order.customerName ?? undefined,
     shippingAddress: order.shippingAddress ?? undefined,
     subtotal: order.subtotal,
+    shippingCost: order.shippingCost,
     total: order.total,
     status: order.status as OrderStatus,
     createdAt: order.createdAt.toISOString(),
@@ -96,6 +98,7 @@ export function createPrismaStore(prisma: PrismaClient): Store {
         return { productId: product.id, title: product.title, price: product.price, quantity: item.quantity };
       });
       const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const shippingCost = calculateShippingCost(subtotal);
       const order = await prisma.order.create({
         data: {
           id: `ord_${nanoid(8)}`,
@@ -103,7 +106,8 @@ export function createPrismaStore(prisma: PrismaClient): Store {
           customerName: input.customerName,
           shippingAddress: input.shippingAddress,
           subtotal,
-          total: subtotal,
+          shippingCost,
+          total: subtotal + shippingCost,
           status: 'pending_payment',
           items: { create: orderItems }
         },

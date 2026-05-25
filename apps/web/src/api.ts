@@ -1,5 +1,5 @@
 export type Product = { id:string; slug:string; title:string; description:string; price:number; category:string; tags:string[]; image:string; inventory:number; active:boolean; featured?:boolean };
-export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; total:number; status:string; items:Array<{title:string;quantity:number;price:number}> };
+export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; subtotal?:number; shippingCost?:number; total:number; status:string; items:Array<{title:string;quantity:number;price:number}> };
 export type ContactPayload = { name:string; email:string; orderNumber?:string; message:string; website?:string };
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -14,7 +14,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 export async function fetchProducts(): Promise<Product[]> { const r = await fetch(`${API}/api/products`); return (await r.json()).products; }
 export async function fetchProduct(slug: string): Promise<Product> { const r = await fetch(`${API}/api/products/${slug}`); if(!r.ok) throw new Error('Product not found'); return (await r.json()).product; }
-export async function createCheckout(email:string, customerName:string, shippingAddress:string, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;total:number}> { const r = await fetch(`${API}/api/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddress, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
+export async function createCheckout(email:string, customerName:string, shippingAddress:string, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;subtotal:number;shippingCost:number;total:number}> { const r = await fetch(`${API}/api/checkout`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddress, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
 export async function fetchOrder(orderId: string): Promise<Order> { const r = await fetch(`${API}/api/orders/${orderId}`); if(!r.ok) throw new Error('Order not found'); return (await r.json()).order; }
 export async function fetchCustomerOrders(email: string): Promise<Order[]> { const r = await fetch(`${API}/api/orders?email=${encodeURIComponent(email)}`); if(!r.ok) throw new Error('Orders not found'); return (await r.json()).orders; }
 export async function sendContactMessage(payload: ContactPayload): Promise<void> { const r = await fetch(`${API}/api/contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Message send failed'); }

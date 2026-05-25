@@ -34,13 +34,13 @@ beforeEach(() => {
     }
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
-    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', total: 1299 }), { status: 201 });
-    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'fulfilled', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
+    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
-    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
-    if (String(url).includes('/api/orders?email=buyer%40example.com')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/orders?email=buyer%40example.com')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', total: 1299, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
 });
@@ -454,7 +454,25 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(review).getByText('Contact: buyer@example.com')).toBeInTheDocument();
     expect(within(review).getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
     expect(within(review).getByText('Subtotal: $12.99')).toBeInTheDocument();
+    expect(within(review).getByText('Shipping: $4.99')).toBeInTheDocument();
+    expect(within(review).getByText('Free shipping at $50.00 — add $37.01 more to qualify.')).toBeInTheDocument();
+    expect(within(review).getByText('Total: $17.98')).toBeInTheDocument();
     expect(within(review).getByText('You’ll review and pay securely on Stripe next.')).toBeInTheDocument();
+  });
+
+  it('shows free shipping once the cart reaches the threshold', async () => {
+    render(<App />);
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
+    await userEvent.clear(screen.getByLabelText('Quantity for Golden Hour Commander Proxy'));
+    await userEvent.type(screen.getByLabelText('Quantity for Golden Hour Commander Proxy'), '4');
+    await userEvent.click(screen.getByRole('button', { name: 'Add 4 to cart' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (4)' }));
+
+    const review = screen.getByRole('region', { name: 'Review before payment' });
+    expect(within(review).getByText('Subtotal: $51.96')).toBeInTheDocument();
+    expect(within(review).getByText('Shipping: Free')).toBeInTheDocument();
+    expect(within(review).getByText('Free shipping unlocked.')).toBeInTheDocument();
+    expect(within(review).getByText('Total: $51.96')).toBeInTheDocument();
   });
 
   it('saves checkout details locally and prefills them next time on this device', async () => {
@@ -518,8 +536,8 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     const stickyBar = screen.getByRole('region', { name: 'Sticky checkout summary' });
-    expect(within(stickyBar).getByText('Subtotal')).toBeInTheDocument();
-    expect(within(stickyBar).getByText('$12.99')).toBeInTheDocument();
+    expect(within(stickyBar).getByText('Total')).toBeInTheDocument();
+    expect(within(stickyBar).getByText('$17.98')).toBeInTheDocument();
     expect(within(stickyBar).getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
 
@@ -554,6 +572,8 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
     const summary = screen.getByRole('group', { name: 'Order summary' });
     expect(within(summary).getByText(/Subtotal:/)).toHaveTextContent('Subtotal: $12.99');
+    expect(within(summary).getByText(/Shipping:/)).toHaveTextContent('Shipping: $4.99');
+    expect(within(summary).getByText(/Total:/)).toHaveTextContent('Total: $17.98');
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
@@ -689,7 +709,8 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('Order number: ord_test')).toBeInTheDocument();
     expect(screen.getByText(/1 × Golden Hour Commander Proxy — \$12.99/)).toBeInTheDocument();
     expect(screen.getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
-    expect(screen.getByText(/Total paid: \$12.99/)).toBeInTheDocument();
+    expect(screen.getByText(/Shipping: \$4.99/)).toBeInTheDocument();
+    expect(screen.getByText(/Total paid: \$17.98/)).toBeInTheDocument();
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getByText('We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
@@ -706,7 +727,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(history).getByText('ord_test')).toBeInTheDocument();
     expect(within(history).getByText('paid')).toBeInTheDocument();
     expect(within(history).getByText('1 × Golden Hour Commander Proxy')).toBeInTheDocument();
-    expect(within(history).getByText('$12.99')).toBeInTheDocument();
+    expect(within(history).getByText('$17.98')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders?email=buyer%40example.com'));
   });
 

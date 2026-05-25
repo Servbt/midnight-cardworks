@@ -35,7 +35,7 @@ describe('storefront API', () => {
     expect(body.products[0]).toHaveProperty('price');
   });
 
-  it('creates a checkout order from cart items with customer and shipping details', async () => {
+  it('creates a checkout order from cart items with customer, shipping details, and separate shipping cost', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store);
     const res = await app.inject({
@@ -49,9 +49,23 @@ describe('storefront API', () => {
       }
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ status: 'pending_payment', total: 2598 });
+    expect(res.json()).toMatchObject({ status: 'pending_payment', subtotal: 2598, shippingCost: 499, total: 3097 });
     const order = await store.getOrder(res.json().orderId);
-    expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001' });
+    expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001', subtotal: 2598, shippingCost: 499, total: 3097 });
+  });
+
+  it('waives shipping when the cart subtotal reaches the free shipping threshold', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/checkout',
+      payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 4 }] }
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ subtotal: 5196, shippingCost: 0, total: 5196 });
   });
 
   it('exposes admin order review after checkout', async () => {
@@ -89,7 +103,7 @@ describe('storefront API', () => {
     const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
 
     expect(receipt.statusCode).toBe(200);
-    expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', total: 1299, status: 'paid' });
+    expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
   });
 
   it('lists customer order history by email for signed-in accounts', async () => {

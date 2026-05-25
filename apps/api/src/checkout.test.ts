@@ -16,9 +16,10 @@ const order: Order = {
   id: 'ord_test',
   email: 'guest@example.com',
   status: 'pending_payment',
-  total: 1299,
+  total: 1798,
   createdAt: '2026-05-18T00:00:00.000Z',
   subtotal: 1299,
+  shippingCost: 499,
   items: [{ productId: 'p1', title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }]
 };
 
