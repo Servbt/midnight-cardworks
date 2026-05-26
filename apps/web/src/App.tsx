@@ -442,19 +442,19 @@ export default function App() {
       {navigation}
       <section className="hero-grid">
         <div>
-          <p className="eyebrow">Launch-ready custom cardwork</p>
-          <h1>Step through the screen into a sharper card shop.</h1>
-          <p>Browse premium custom proxies, token packs, display cards, and commander-ready upgrades with a bold neon mystery aesthetic.</p>
+          <p className="eyebrow">Midnight Collector Studio</p>
+          <h1>Cards made for the midnight table.</h1>
+          <p>A darker, Apple-inspired storefront for premium custom proxies, token packs, and display cards — product first, calm checkout, collector-grade mood.</p>
           <div className="cta-row"><button onClick={showShop}>Enter the shop</button>{!isSignedIn && <button className="ghost" onClick={() => setView('account')}>Create account</button>}</div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
-        <aside className="tv-card"><span>CHANNEL 04</span><h2>Featured drop</h2><p>Golden Hour Commander Proxy</p><small>Premium casual-play centerpieces with a midnight collector vibe.</small></aside>
+        <aside className="product-stage" aria-label="Featured product concept"><div className="card-object" /><span>Golden Hour Commander Proxy</span><h2>From $12.99</h2><p>Premium casual-play centerpieces with a quiet midnight collector vibe.</p></aside>
       </section>
     </header> : <div className="page-nav">{navigation}</div>}
 
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
-      <div className="section-heading"><div><p className="eyebrow">Now broadcasting</p><h2>Shop the current lineup</h2></div><p>Search by card role, style, or format and add launch-ready pieces to your cart.</p></div>
+      <div className="section-heading"><div><p className="eyebrow">Less marketplace. More studio.</p><h2>Shop the current lineup</h2></div><p>Search by card role, style, or format and add launch-ready pieces to your cart.</p></div>
       <div className="toolbar">
         <input aria-label="Search products" placeholder="Search cards, tokens, commander..." value={query} onChange={(e) => setQuery(e.target.value)} />
         <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>

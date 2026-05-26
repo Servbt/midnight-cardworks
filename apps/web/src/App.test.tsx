@@ -111,10 +111,19 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('shows the dark Apple-inspired collector studio direction', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Cards made for the midnight table.' })).toBeInTheDocument();
+    expect(screen.getByText('Less marketplace. More studio.')).toBeInTheDocument();
+    expect(document.querySelector('.product-stage')).toBeTruthy();
+  });
+
   it('shows launch polish with trust cues and product metadata', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByText('Secure Stripe checkout')).toBeInTheDocument();
     expect(screen.getByText('Made-to-order fulfillment')).toBeInTheDocument();
     expect(screen.getByText('Casual-play clarity')).toBeInTheDocument();
@@ -126,23 +135,23 @@ describe('Midnight Cardworks storefront', () => {
   it('only shows the hero on the landing shop page', async () => {
     render(<App />);
 
-    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cart (0)' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Cart (0)' }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
-    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+    expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Shop' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+    expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cart (0)' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
     expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
-    expect(screen.queryByText('Launch-ready custom cardwork')).not.toBeInTheDocument();
+    expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
   });
 
   it('shows a polished empty state when filters find no products', async () => {
@@ -159,7 +168,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isSignedIn = true;
     render(<App />);
 
-    expect(await screen.findByText('Launch-ready custom cardwork')).toBeInTheDocument();
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enter the shop' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create account' })).not.toBeInTheDocument();
   });
