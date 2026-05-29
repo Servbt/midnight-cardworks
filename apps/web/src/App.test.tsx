@@ -361,6 +361,31 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/products/golden');
   });
 
+  it('presents a TCGplayer-inspired marketplace cart layout', async () => {
+    render(<App />);
+    const addButtons = await screen.findAllByRole('button', { name: 'Add to cart' });
+    await userEvent.click(addButtons[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }));
+    await userEvent.click(within(screen.getByRole('link', { name: 'Open listing for Midnight Token Pack' })).getByRole('button', { name: 'Add to cart' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cart (2)' }));
+
+    const cartLayout = screen.getByRole('region', { name: 'Cart marketplace layout' });
+    expect(within(cartLayout).getByText('Shopping Cart')).toBeInTheDocument();
+    expect(within(cartLayout).getByText('2 items')).toBeInTheDocument();
+
+    const itemsPanel = within(cartLayout).getByRole('region', { name: 'Items in your cart' });
+    expect(within(itemsPanel).getByRole('heading', { name: 'Items in your cart' })).toBeInTheDocument();
+    expect(within(itemsPanel).getByText('Item')).toBeInTheDocument();
+    expect(within(itemsPanel).getByText('Quantity')).toBeInTheDocument();
+    expect(within(itemsPanel).getByText('Price')).toBeInTheDocument();
+    expect(within(itemsPanel).getAllByText('Direct from studio')).toHaveLength(2);
+
+    const summaryPanel = within(cartLayout).getByRole('region', { name: 'Cart summary' });
+    expect(within(summaryPanel).getByRole('heading', { name: 'Cart Summary' })).toBeInTheDocument();
+    expect(within(summaryPanel).getByText('Subtotal (2 items)')).toBeInTheDocument();
+    expect(within(summaryPanel).getByText('Checkout securely with Stripe')).toBeInTheDocument();
+  });
+
   it('removes individual items from the cart without changing the other lines', async () => {
     render(<App />);
     const addButtons = await screen.findAllByRole('button', { name: 'Add to cart' });

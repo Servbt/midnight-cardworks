@@ -485,14 +485,18 @@ export default function App() {
       </> : <p>{productMessage || 'Loading listing...'}</p>}
     </section>}
 
-    {view === 'cart' && <section className="panel narrow cart-panel">
-      <div className="cart-heading-row"><h2>Your cart</h2>{cart.length > 0 && <button className="ghost clear-cart-button" type="button" onClick={requestClearCart}>Clear cart</button>}</div>
+    {view === 'cart' && <section className="panel cart-panel" role="region" aria-label="Cart marketplace layout">
+      <div className="cart-heading-row"><div><p className="eyebrow">Shopping Cart</p><h2>Your cart</h2>{cart.length > 0 && <span className="cart-item-count">{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}</div>{cart.length > 0 && <button className="ghost clear-cart-button" type="button" onClick={requestClearCart}>Clear cart</button>}</div>
       {cartNotice && <div className="cart-status" role="status"><span>{cartNotice}</span>{removedCartLine && <button className="ghost" type="button" onClick={undoRemoveFromCart} aria-label={`Undo removing ${removedCartLine.product.title}`}>Undo</button>}{clearCartRequested && <div className="cart-status-actions"><button type="button" onClick={confirmClearCart}>Confirm clear cart</button><button className="ghost" type="button" onClick={() => { setClearCartRequested(false); setCartNotice(''); }}>Keep items</button></div>}</div>}
-      {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
-        <div className="cart-items" aria-label="Cart items">
-          {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
-        </div>
-        <form className="checkout-form" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
+      {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><p>Sign in from your account page to reuse saved checkout info from a previous visit.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
+        <form className="checkout-form cart-marketplace-shell" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
+          <div className="cart-main-column">
+          <section className="cart-items-card" role="region" aria-label="Items in your cart">
+            <div className="cart-section-header"><div><h3>Items in your cart</h3><p>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</p></div><div className="cart-column-labels" aria-hidden="true"><span>Item</span><span>Quantity</span><span>Price</span></div></div>
+            <div className="cart-items" aria-label="Cart items">
+              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Direct from studio</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
+            </div>
+          </section>
           <div className="checkout-intro">
             <p className="eyebrow">Ready to order</p>
             <ol className="checkout-progress" aria-label="Checkout progress">
@@ -524,13 +528,17 @@ export default function App() {
             {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
             {savedCheckoutInfoExists && <button className="ghost" type="button" onClick={clearSavedCheckoutInfo}>Clear saved checkout info from this device</button>}
           </section>
+          </div>
+          <aside className="cart-summary-card" role="region" aria-label="Cart summary">
+            <h3>Cart Summary</h3>
           <fieldset className="order-summary-box">
             <legend>Order summary</legend>
-            <div className="summary-row"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
+            <div className="summary-row"><span>Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
             <div className="summary-row"><span>Shipping</span><strong>Shipping: {shippingCost === 0 ? 'Free' : formatMoney(shippingCost)}</strong></div>
             <div className="summary-row"><span>Total before Stripe</span><strong>Total: {formatMoney(orderTotal)}</strong></div>
             <div className="summary-row"><span>Secure checkout</span><span>Stripe</span></div>
           </fieldset>
+          <p className="cart-summary-note">Checkout securely with Stripe</p>
           <section className="checkout-review-box" role="region" aria-label="Review before payment">
             <h2>Review before payment</h2>
             <ul>{cart.map((line) => <li key={`review-${line.product.id}`}>{line.quantity} × {line.product.title}</li>)}</ul>
@@ -546,6 +554,7 @@ export default function App() {
             <div><span>Total</span><strong>{formatMoney(orderTotal)}</strong></div>
             <button type="submit">Continue to secure checkout</button>
           </div>
+          </aside>
         </form>
       {recentlyViewedSection}</>}</section>}
 
