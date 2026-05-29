@@ -489,8 +489,11 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('group', { name: 'Order summary' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
     expect(screen.getByLabelText('Full name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Complete shipping address')).toBeInTheDocument();
-    expect(screen.getByText('Include apartment, city, state, ZIP, and any delivery notes.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Street address')).toBeInTheDocument();
+    expect(screen.getByLabelText('Apartment number')).toBeInTheDocument();
+    expect(screen.getByLabelText('City')).toBeInTheDocument();
+    expect(screen.getByLabelText('ZIP code')).toBeInTheDocument();
+    expect(screen.getByText('Use separate fields so shipping labels and delivery review stay clear.')).toBeInTheDocument();
     expect(screen.getByText('1 item in cart')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
@@ -502,13 +505,16 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Street address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Apartment number'), 'Apt 4B');
+    await userEvent.type(screen.getByLabelText('City'), 'Austin');
+    await userEvent.type(screen.getByLabelText('ZIP code'), '78701');
 
     const review = screen.getByRole('region', { name: 'Review before payment' });
     expect(within(review).getByRole('heading', { name: 'Review before payment' })).toBeInTheDocument();
     expect(within(review).getByText('1 × Golden Hour Commander Proxy')).toBeInTheDocument();
     expect(within(review).getByText('Contact: buyer@example.com')).toBeInTheDocument();
-    expect(within(review).getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
+    expect(within(review).getByText('Ship to: 123 Midnight Lane, Apt 4B, Austin 78701')).toBeInTheDocument();
     expect(within(review).getByText('Subtotal: $12.99')).toBeInTheDocument();
     expect(within(review).getByText('Shipping: $4.99')).toBeInTheDocument();
     expect(within(review).getByText('Free shipping at $50.00 — add $37.01 more to qualify.')).toBeInTheDocument();
@@ -538,7 +544,10 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Street address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Apartment number'), 'Apt 4B');
+    await userEvent.type(screen.getByLabelText('City'), 'Austin');
+    await userEvent.type(screen.getByLabelText('ZIP code'), '78701');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Save my checkout info on this device' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Checkout info saved on this device.');
@@ -552,7 +561,10 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByLabelText('Email address')).toHaveValue('buyer@example.com');
     expect(screen.getByLabelText('Full name')).toHaveValue('Ari Buyer');
-    expect(screen.getByLabelText('Complete shipping address')).toHaveValue('123 Midnight Lane');
+    expect(screen.getByLabelText('Street address')).toHaveValue('123 Midnight Lane');
+    expect(screen.getByLabelText('Apartment number')).toHaveValue('Apt 4B');
+    expect(screen.getByLabelText('City')).toHaveValue('Austin');
+    expect(screen.getByLabelText('ZIP code')).toHaveValue('78701');
     expect(screen.getByText('Saved only in this browser. Not synced to your account.')).toBeInTheDocument();
   });
 
@@ -568,7 +580,10 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.localStorage.getItem('midnight-cardworks.checkoutInfo')).toBeNull();
     expect(screen.getByLabelText('Email address')).toHaveValue('');
     expect(screen.getByLabelText('Full name')).toHaveValue('');
-    expect(screen.getByLabelText('Complete shipping address')).toHaveValue('');
+    expect(screen.getByLabelText('Street address')).toHaveValue('');
+    expect(screen.getByLabelText('Apartment number')).toHaveValue('');
+    expect(screen.getByLabelText('City')).toHaveValue('');
+    expect(screen.getByLabelText('ZIP code')).toHaveValue('');
   });
 
   it('shows checkout progress and the next step before leaving for Stripe', async () => {
@@ -604,7 +619,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByLabelText('Email address')).toBeRequired();
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Street address'), '123 Midnight Lane');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Email address required — we’ll only use this for order updates or design/print issues.');
@@ -632,7 +647,10 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(summary).getByText(/Total:/)).toHaveTextContent('Total: $17.98');
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Street address'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Apartment number'), 'Apt 4B');
+    await userEvent.type(screen.getByLabelText('City'), 'Austin');
+    await userEvent.type(screen.getByLabelText('ZIP code'), '78701');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
     expect(await screen.findByText(/Order ord_test reserved/)).toBeInTheDocument();
     expect(redirectToCheckout).toHaveBeenCalledWith('https://checkout.stripe.test/session');

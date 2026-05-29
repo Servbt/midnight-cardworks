@@ -320,7 +320,9 @@ textarea { min-height: 7rem; resize: vertical; }
 .checkout-form legend { padding: 0 .45rem; color: white; font-weight: 700; letter-spacing: -.015em; }
 .checkout-form label, .contact-form label, .admin-listing label { display: grid; gap: .45rem; color: var(--muted); font-weight: 600; }
 .checkout-form input, .checkout-form textarea, .contact-form input, .contact-form textarea { width: 100%; }
-.delivery-fieldset textarea { min-height: 8.5rem; line-height: 1.45; }
+.shipping-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
+.shipping-address-grid label:first-child { grid-column: 1 / -1; }
+.optional-label { color: var(--dim); font-size: .82rem; font-weight: 600; }
 .field-note { margin: -.25rem 0 0; color: var(--dim); font-size: .9rem; }
 .order-summary-box { background: rgba(41,151,255,.08) !important; }
 .checkout-review-box h2 { margin-top: 0; }
@@ -403,6 +405,8 @@ footer { padding: 2rem; color: var(--dim); text-align: center; background: #000;
   nav button { padding: .55rem .7rem; }
   .section-heading { align-items: start; }
   .checkout-progress { grid-template-columns: 1fr 1fr; }
+  .shipping-address-grid { grid-template-columns: 1fr; }
+  .shipping-address-grid label:first-child { grid-column: auto; }
 }
 @media (max-width: 640px) {
   .narrow { margin: 1rem .65rem; border-radius: 1.25rem; }

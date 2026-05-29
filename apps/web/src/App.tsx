@@ -18,6 +18,13 @@ const launchNotes = [
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
+type ShippingAddressFields = { streetAddress: string; apartment: string; city: string; zipCode: string };
+const blankShippingAddressFields: ShippingAddressFields = { streetAddress: '', apartment: '', city: '', zipCode: '' };
+const formatShippingAddress = (fields: ShippingAddressFields) => [
+  fields.streetAddress.trim(),
+  fields.apartment.trim(),
+  [fields.city.trim(), fields.zipCode.trim()].filter(Boolean).join(' ')
+].filter(Boolean).join(', ');
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -32,7 +39,7 @@ export default function App() {
   const [category, setCategory] = useState('All');
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
-  const [shippingAddress, setShippingAddress] = useState('');
+  const [shippingAddressFields, setShippingAddressFields] = useState<ShippingAddressFields>(blankShippingAddressFields);
   const [savedCheckoutInfoExists, setSavedCheckoutInfoExists] = useState(false);
   const [savedCheckoutInfoMessage, setSavedCheckoutInfoMessage] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
@@ -66,10 +73,10 @@ export default function App() {
     try {
       const savedInfo = window.localStorage.getItem(savedCheckoutInfoKey);
       if (!savedInfo) return;
-      const parsed = JSON.parse(savedInfo) as { email?: string; customerName?: string; shippingAddress?: string };
+      const parsed = JSON.parse(savedInfo) as { email?: string; customerName?: string; shippingAddress?: string; shippingAddressFields?: Partial<ShippingAddressFields> };
       setEmail(parsed.email ?? '');
       setCustomerName(parsed.customerName ?? '');
-      setShippingAddress(parsed.shippingAddress ?? '');
+      setShippingAddressFields({ ...blankShippingAddressFields, ...(parsed.shippingAddressFields ?? { streetAddress: parsed.shippingAddress ?? '' }) });
       setSavedCheckoutInfoExists(true);
     } catch {
       window.localStorage.removeItem(savedCheckoutInfoKey);
@@ -147,6 +154,7 @@ export default function App() {
   const orderTotal = subtotal + shippingCost;
   const freeShippingRemaining = Math.max(0, freeShippingThresholdCents - subtotal);
   const itemCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const shippingAddress = useMemo(() => formatShippingAddress(shippingAddressFields), [shippingAddressFields]);
 
   useEffect(() => {
     if (view === 'product' && selectedProduct) {
@@ -313,7 +321,7 @@ export default function App() {
   }
 
   function saveCheckoutInfoOnDevice() {
-    window.localStorage.setItem(savedCheckoutInfoKey, JSON.stringify({ email, customerName, shippingAddress }));
+    window.localStorage.setItem(savedCheckoutInfoKey, JSON.stringify({ email, customerName, shippingAddress, shippingAddressFields }));
     setSavedCheckoutInfoExists(true);
     setSavedCheckoutInfoMessage('Checkout info saved on this device.');
   }
@@ -322,9 +330,13 @@ export default function App() {
     window.localStorage.removeItem(savedCheckoutInfoKey);
     setEmail('');
     setCustomerName('');
-    setShippingAddress('');
+    setShippingAddressFields(blankShippingAddressFields);
     setSavedCheckoutInfoExists(false);
     setSavedCheckoutInfoMessage('Saved checkout info cleared from this device.');
+  }
+
+  function updateShippingAddressField(field: keyof ShippingAddressFields, value: string) {
+    setShippingAddressFields((fields) => ({ ...fields, [field]: value }));
   }
 
   async function checkout() {
@@ -520,8 +532,13 @@ export default function App() {
           </fieldset>
           <fieldset className="delivery-fieldset">
             <legend>Delivery information</legend>
-            <label>Complete shipping address<textarea autoComplete="shipping street-address" placeholder="123 Midnight Lane, Apt 4B, Austin, TX 78701" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></label>
-            <p className="field-note">Include apartment, city, state, ZIP, and any delivery notes.</p>
+            <div className="shipping-address-grid">
+              <label>Street address<input autoComplete="shipping address-line1" placeholder="123 Midnight Lane" value={shippingAddressFields.streetAddress} onChange={(e) => updateShippingAddressField('streetAddress', e.target.value)} /></label>
+              <label>Apartment number <span className="optional-label">optional</span><input aria-label="Apartment number" autoComplete="shipping address-line2" placeholder="Apt 4B" value={shippingAddressFields.apartment} onChange={(e) => updateShippingAddressField('apartment', e.target.value)} /></label>
+              <label>City<input autoComplete="shipping address-level2" placeholder="Austin" value={shippingAddressFields.city} onChange={(e) => updateShippingAddressField('city', e.target.value)} /></label>
+              <label>ZIP code<input autoComplete="shipping postal-code" inputMode="numeric" placeholder="78701" value={shippingAddressFields.zipCode} onChange={(e) => updateShippingAddressField('zipCode', e.target.value)} /></label>
+            </div>
+            <p className="field-note">Use separate fields so shipping labels and delivery review stay clear.</p>
           </fieldset>
           <section className="saved-checkout-info" aria-label="Saved checkout info">
             <label className="checkbox-row"><input aria-label="Save my checkout info on this device" type="checkbox" checked={savedCheckoutInfoExists} onChange={(e) => { if (e.target.checked) saveCheckoutInfoOnDevice(); }} /> Save my checkout info on this device</label>
