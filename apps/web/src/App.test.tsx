@@ -378,7 +378,8 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(itemsPanel).getByText('Item')).toBeInTheDocument();
     expect(within(itemsPanel).getByText('Quantity')).toBeInTheDocument();
     expect(within(itemsPanel).getByText('Price')).toBeInTheDocument();
-    expect(within(itemsPanel).getAllByText('Direct from studio')).toHaveLength(2);
+    expect(within(itemsPanel).getAllByText('Fulfilled by Midnight Cardworks')).toHaveLength(2);
+    expect(within(itemsPanel).queryByText('Direct from studio')).not.toBeInTheDocument();
 
     const summaryPanel = within(cartLayout).getByRole('region', { name: 'Cart summary' });
     expect(within(summaryPanel).getByRole('heading', { name: 'Cart Summary' })).toBeInTheDocument();
@@ -482,13 +483,14 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cart (1)' }));
 
     expect(screen.getByRole('heading', { name: 'Checkout details' })).toBeInTheDocument();
-    expect(screen.getByText('Complete the details below before continuing to secure Stripe checkout.')).toBeInTheDocument();
+    expect(screen.getByText('Review items and enter your delivery details before secure Stripe payment.')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Contact information' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Shipping address' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Delivery information' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Order summary' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
     expect(screen.getByLabelText('Full name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Street address and delivery notes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Complete shipping address')).toBeInTheDocument();
+    expect(screen.getByText('Include apartment, city, state, ZIP, and any delivery notes.')).toBeInTheDocument();
     expect(screen.getByText('1 item in cart')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue to secure checkout' })).toBeInTheDocument();
   });
@@ -500,7 +502,7 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
 
     const review = screen.getByRole('region', { name: 'Review before payment' });
     expect(within(review).getByRole('heading', { name: 'Review before payment' })).toBeInTheDocument();
@@ -536,7 +538,7 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Save my checkout info on this device' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Checkout info saved on this device.');
@@ -550,7 +552,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByLabelText('Email address')).toHaveValue('buyer@example.com');
     expect(screen.getByLabelText('Full name')).toHaveValue('Ari Buyer');
-    expect(screen.getByLabelText('Street address and delivery notes')).toHaveValue('123 Midnight Lane');
+    expect(screen.getByLabelText('Complete shipping address')).toHaveValue('123 Midnight Lane');
     expect(screen.getByText('Saved only in this browser. Not synced to your account.')).toBeInTheDocument();
   });
 
@@ -566,7 +568,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.localStorage.getItem('midnight-cardworks.checkoutInfo')).toBeNull();
     expect(screen.getByLabelText('Email address')).toHaveValue('');
     expect(screen.getByLabelText('Full name')).toHaveValue('');
-    expect(screen.getByLabelText('Street address and delivery notes')).toHaveValue('');
+    expect(screen.getByLabelText('Complete shipping address')).toHaveValue('');
   });
 
   it('shows checkout progress and the next step before leaving for Stripe', async () => {
@@ -580,7 +582,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(progress).getByText('3. Secure payment')).toBeInTheDocument();
     expect(within(progress).getByText('4. Confirmation')).toBeInTheDocument();
     expect(screen.getByText('Step 2 of 4: Checkout details')).toBeInTheDocument();
-    expect(screen.getByText('Next: secure Stripe payment')).toBeInTheDocument();
+    expect(screen.getByText('Payment is processed securely by Stripe.')).toBeInTheDocument();
     expect(screen.getByText('After payment, you’ll return here for confirmation and fulfillment tracking.')).toBeInTheDocument();
   });
 
@@ -602,7 +604,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.getByLabelText('Email address')).toBeRequired();
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Email address required — we’ll only use this for order updates or design/print issues.');
@@ -630,7 +632,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(summary).getByText(/Total:/)).toHaveTextContent('Total: $17.98');
     await userEvent.type(screen.getByLabelText('Email address'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Full name'), 'Ari Buyer');
-    await userEvent.type(screen.getByLabelText('Street address and delivery notes'), '123 Midnight Lane');
+    await userEvent.type(screen.getByLabelText('Complete shipping address'), '123 Midnight Lane');
     await userEvent.click(screen.getByRole('button', { name: 'Continue to secure checkout' }));
     expect(await screen.findByText(/Order ord_test reserved/)).toBeInTheDocument();
     expect(redirectToCheckout).toHaveBeenCalledWith('https://checkout.stripe.test/session');

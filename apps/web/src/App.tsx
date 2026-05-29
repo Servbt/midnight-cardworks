@@ -494,7 +494,7 @@ export default function App() {
           <section className="cart-items-card" role="region" aria-label="Items in your cart">
             <div className="cart-section-header"><div><h3>Items in your cart</h3><p>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</p></div><div className="cart-column-labels" aria-hidden="true"><span>Item</span><span>Quantity</span><span>Price</span></div></div>
             <div className="cart-items" aria-label="Cart items">
-              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Direct from studio</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
+              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
             </div>
           </section>
           <div className="checkout-intro">
@@ -507,8 +507,8 @@ export default function App() {
             </ol>
             <h2>Checkout details</h2>
             <p><strong>Step 2 of 4: Checkout details</strong></p>
-            <p>Complete the details below before continuing to secure Stripe checkout.</p>
-            <p className="next-step">Next: secure Stripe payment</p>
+            <p>Review items and enter your delivery details before secure Stripe payment.</p>
+            <p className="next-step">Payment is processed securely by Stripe.</p>
             <p>After payment, you’ll return here for confirmation and fulfillment tracking.</p>
           </div>
           <fieldset>
@@ -518,9 +518,10 @@ export default function App() {
             {checkoutValidationMessage && <p className="status-message" role="status">{checkoutValidationMessage}</p>}
             <label>Full name<input autoComplete="name" placeholder="Ari Buyer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
           </fieldset>
-          <fieldset>
-            <legend>Shipping address</legend>
-            <label>Street address and delivery notes<textarea autoComplete="shipping street-address" placeholder="Street, city, state, ZIP, and any delivery notes" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></label>
+          <fieldset className="delivery-fieldset">
+            <legend>Delivery information</legend>
+            <label>Complete shipping address<textarea autoComplete="shipping street-address" placeholder="123 Midnight Lane, Apt 4B, Austin, TX 78701" value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} /></label>
+            <p className="field-note">Include apartment, city, state, ZIP, and any delivery notes.</p>
           </fieldset>
           <section className="saved-checkout-info" aria-label="Saved checkout info">
             <label className="checkbox-row"><input aria-label="Save my checkout info on this device" type="checkbox" checked={savedCheckoutInfoExists} onChange={(e) => { if (e.target.checked) saveCheckoutInfoOnDevice(); }} /> Save my checkout info on this device</label>
