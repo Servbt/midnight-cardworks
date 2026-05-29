@@ -184,7 +184,12 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.type(screen.getByLabelText('How can we help?'), 'Can you make this as a foil token?');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
-    expect(await screen.findByText('Message sent — I’ll get back to you soon.')).toBeInTheDocument();
+    const confirmation = await screen.findByRole('status', { name: 'Message sent confirmation' });
+    expect(within(confirmation).getByRole('heading', { name: 'Message received' })).toBeInTheDocument();
+    expect(within(confirmation).getByText('Thanks, Ari Buyer — your note is in the Midnight Cardworks inbox.')).toBeInTheDocument();
+    expect(within(confirmation).getByText('I’ll reply to buyer@example.com within 1–2 business days.')).toBeInTheDocument();
+    expect(within(confirmation).getByText('Need to add details? Send another message anytime.')).toBeInTheDocument();
+    expect(screen.getByLabelText('How can we help?')).toHaveValue('');
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/contact'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('foil token') }));
   });
 

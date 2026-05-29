@@ -345,7 +345,7 @@ export default function App() {
     setContactMessage('Sending message...');
     try {
       await sendContactMessage({ name: contactName, email: contactEmail, orderNumber: contactOrderNumber || undefined, message: contactBody, website: contactWebsite });
-      setContactMessage('Message sent — I’ll get back to you soon.');
+      setContactMessage('sent');
       setContactBody('');
       setContactOrderNumber('');
       setContactWebsite('');
@@ -582,8 +582,15 @@ export default function App() {
       <p className="eyebrow">Support channel</p>
       <h2>Contact Midnight Cardworks</h2>
       <p>Questions about a listing, order, custom request, or fulfillment? Send a message and it will go straight to the shop inbox.</p>
-      {contactMessage && <p className="status-message">{contactMessage}</p>}
-      <form className="contact-form" onSubmit={(event) => void handleContactSubmit(event)}>
+      {contactMessage === 'sent' && <div className="contact-success-card" role="status" aria-label="Message sent confirmation">
+        <span className="status-badge">Sent</span>
+        <h3>Message received</h3>
+        <p>Thanks, {contactName} — your note is in the Midnight Cardworks inbox.</p>
+        <p>I’ll reply to {contactEmail} within 1–2 business days.</p>
+        <p>Need to add details? Send another message anytime.</p>
+      </div>}
+      {contactMessage && contactMessage !== 'sent' && <p className="status-message" role="status">{contactMessage}</p>}
+      <form className="contact-form contact-form-card" onSubmit={(event) => void handleContactSubmit(event)}>
         <label>Your name<input aria-label="Your name" required value={contactName} onChange={(e) => setContactName(e.target.value)} /></label>
         <label>Your email<input aria-label="Your email" type="email" required value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} /></label>
         <label>Order number optional<input aria-label="Order number optional" placeholder="ord_... if this is about an order" value={contactOrderNumber} onChange={(e) => setContactOrderNumber(e.target.value)} /></label>
