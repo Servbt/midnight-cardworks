@@ -75,16 +75,14 @@ nav, .site-nav {
   font-size: .82rem;
   letter-spacing: -.01em;
 }
-.hero .site-nav, .page-nav {
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0 clamp(1rem, 4vw, 2.75rem);
   background: rgba(0,0,0,.78);
   backdrop-filter: saturate(180%) blur(22px);
   border-bottom: 1px solid rgba(255,255,255,.08);
-}
-.page-nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  padding: 0 clamp(1rem, 4vw, 2.75rem);
 }
 .brand {
   margin-right: auto;
@@ -223,7 +221,7 @@ input, select, textarea {
   background: #fff;
   color: var(--light-ink);
 }
-.panel:not(.storefront-panel) input, .panel:not(.storefront-panel) select, .panel:not(.storefront-panel) textarea, .page-nav + .panel input, .page-nav + .panel textarea { background: #151518; border-color: rgba(255,255,255,.12); color: var(--ink); }
+.panel:not(.storefront-panel) input, .panel:not(.storefront-panel) select, .panel:not(.storefront-panel) textarea, .top-nav + .panel input, .top-nav + .panel textarea { background: #151518; border-color: rgba(255,255,255,.12); color: var(--ink); }
 textarea { min-height: 7rem; resize: vertical; }
 .product-grid { width: min(1180px, 100%); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
 .product-card {

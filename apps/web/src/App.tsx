@@ -438,8 +438,9 @@ export default function App() {
   </nav>;
 
   return <main>
+    <div className="top-nav">{navigation}</div>
+
     {view === 'shop' ? <header className="hero">
-      {navigation}
       <section className="hero-grid">
         <div>
           <p className="eyebrow">Midnight Collector Studio</p>
@@ -450,7 +451,7 @@ export default function App() {
         </div>
         <aside className="product-stage" aria-label="Featured product concept"><div className="card-object" /><span>Golden Hour Commander Proxy</span><h2>From $12.99</h2><p>Premium casual-play centerpieces with a quiet midnight collector vibe.</p></aside>
       </section>
-    </header> : <div className="page-nav">{navigation}</div>}
+    </header> : null}
 
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>

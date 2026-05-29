@@ -10,6 +10,12 @@ describe('global CSS isolation', () => {
     expect(styles).not.toMatch(/(^|\n)h1\s*\{[^}]*text-shadow/s);
   });
 
+  it('keeps the main navbar sticky at the top of every storefront view', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+
+    expect(styles).toMatch(/\.top-nav\s*\{[^}]*position:\s*sticky[^}]*top:\s*0/s);
+  });
+
   it('makes the cart checkout summary sticky for mobile shoppers', () => {
     const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
 
