@@ -116,8 +116,23 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Cards made for the midnight table.' })).toBeInTheDocument();
+    expect(screen.getByText('Premium custom trading card proxies, token packs, and display cards with a dark fantasy collector feel — built for casual commander nights, gifts, and display binders.')).toBeInTheDocument();
     expect(screen.getByText('Less marketplace. More studio.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start an order' })).toBeInTheDocument();
     expect(document.querySelector('.product-stage')).toBeTruthy();
+  });
+
+  it('shows conversion-focused landing sections before the product grid', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('region', { name: 'Gallery preview' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'How it works' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Pricing and packages' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Frequently asked questions' })).toBeInTheDocument();
+    expect(screen.getByText('Examples that sell the studio feel first.')).toBeInTheDocument();
+    expect(screen.getByText('Send your idea')).toBeInTheDocument();
+    expect(screen.getByText('Single showcase proxy')).toBeInTheDocument();
+    expect(screen.getByText('Are these tournament legal?')).toBeInTheDocument();
   });
 
   it('shows launch polish with trust cues and product metadata', async () => {
@@ -197,7 +212,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
     expect(await screen.findByText('Golden Hour Commander Proxy')).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Search products'), 'token');
-    const productGrid = screen.getByText('Midnight Token Pack').closest('.product-grid');
+    const productGrid = screen.getByRole('link', { name: 'Open listing for Midnight Token Pack' }).closest('.product-grid');
     expect(productGrid).toBeTruthy();
     expect(within(productGrid as HTMLElement).getByText('Midnight Token Pack')).toBeInTheDocument();
     expect(within(productGrid as HTMLElement).queryByText('Golden Hour Commander Proxy')).not.toBeInTheDocument();

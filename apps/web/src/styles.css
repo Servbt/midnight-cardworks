@@ -200,7 +200,7 @@ nav, .site-nav {
   box-shadow: rgba(0,0,0,.06) 0 18px 60px;
 }
 .launch-strip strong { color: var(--light-ink); display: block; margin-bottom: .35rem; font-size: 1.05rem; }
-.launch-strip p, .section-heading p, .card-body p { color: rgba(29,29,31,.62); }
+.launch-strip p, .section-heading p, .card-body p, .landing-section p { color: rgba(29,29,31,.62); }
 .section-heading {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -212,6 +212,16 @@ nav, .site-nav {
 }
 .section-heading h2 { margin: .55rem 0 0; font-size: clamp(2.5rem, 6vw, 4.5rem); line-height: 1.02; letter-spacing: -.06em; }
 .section-heading > p { max-width: 420px; font-size: clamp(1.05rem, 2vw, 1.3rem); line-height: 1.28; }
+.landing-section { width: min(1180px, 100%); margin: 0 auto; display: grid; gap: 1.1rem; }
+.gallery-preview-grid, .landing-card-grid, .faq-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.gallery-preview-grid article, .landing-card-grid article, .faq-grid article { overflow: hidden; border-radius: 24px; background: #fff; box-shadow: rgba(0,0,0,.06) 0 18px 60px; }
+.gallery-preview-grid article { display: grid; grid-template-rows: 220px 1fr; }
+.gallery-preview-grid img { width: 100%; height: 100%; object-fit: cover; background: #111; }
+.gallery-preview-grid div, .landing-card-grid article, .faq-grid article { padding: 1.2rem; }
+.gallery-preview-grid h3, .landing-card-grid h3, .faq-grid h3 { margin: .65rem 0 .4rem; color: var(--light-ink); font-size: clamp(1.25rem, 2vw, 1.7rem); line-height: 1.05; letter-spacing: -.04em; }
+.gallery-preview-grid p, .landing-card-grid p, .faq-grid p { margin: 0; }
+.step-number, .price-pill { display: inline-flex; width: fit-content; border-radius: 999px; padding: .35rem .62rem; background: rgba(113,76,182,.1); color: #714cb6; font-size: .78rem; font-weight: 800; letter-spacing: .04em; }
+.price-pill { background: rgba(12,12,20,.08); color: var(--light-ink); }
 .toolbar { width: min(1180px, 100%); margin: 0 auto; display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; }
 input, select, textarea {
   width: min(100%, 360px);
@@ -393,7 +403,7 @@ footer { padding: 2rem; color: var(--dim); text-align: center; background: #000;
 @media (max-width: 860px) {
   .site-nav { justify-content: flex-start; padding: .5rem 1rem; }
   .brand { flex-basis: 100%; }
-  .launch-strip, .product-detail-grid, .listing-layout, .cart-marketplace-shell { grid-template-columns: 1fr; }
+  .launch-strip, .product-detail-grid, .listing-layout, .cart-marketplace-shell, .gallery-preview-grid, .landing-card-grid, .faq-grid { grid-template-columns: 1fr; }
   .cart-summary-card { position: static; }
   .order-detail-grid { grid-template-columns: 1fr; }
   .admin-tabs { width: 100%; border-radius: 1.2rem; }

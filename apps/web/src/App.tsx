@@ -17,6 +17,21 @@ const launchNotes = [
   { title: 'Casual-play clarity', copy: 'Every page keeps the unofficial, not-tournament-legal note visible.' }
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
+const howItWorksSteps = [
+  { title: 'Send your idea', copy: 'Start with a card name, commander theme, token need, or reference image.' },
+  { title: 'Approve the mockup', copy: 'Review the collector-style concept and request small tweaks before fulfillment.' },
+  { title: 'Receive the cards', copy: 'Checkout securely, then get print-ready files or finished cards depending on the listing.' }
+];
+const pricingPackages = [
+  { title: 'Single showcase proxy', price: 'From $12.99', copy: 'A premium custom centerpiece for casual commander nights or display binders.' },
+  { title: 'Token pack', price: 'From $8.99', copy: 'Matching tabletop tokens built as a cohesive, ready-to-play set.' },
+  { title: 'Display card', price: 'From $15.99', copy: 'Giftable, shelf-ready cards with a darker collector finish.' }
+];
+const homepageFaqs = [
+  { question: 'Are these tournament legal?', answer: 'No — Midnight Cardworks pieces are made for casual play, proxies, gifts, and display.' },
+  { question: 'Can I ask about a custom idea?', answer: 'Yes. Use the contact page with your theme, card count, and any reference notes.' },
+  { question: 'How do payments work?', answer: 'Orders go through secure Stripe checkout, and card data never touches the shop server.' }
+];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 type ShippingAddressFields = { streetAddress: string; apartment: string; city: string; zipCode: string };
 const blankShippingAddressFields: ShippingAddressFields = { streetAddress: '', apartment: '', city: '', zipCode: '' };
@@ -222,6 +237,10 @@ export default function App() {
     setQuery('token');
     setCategory('All');
     showShop();
+  }
+
+  function startOrder() {
+    setView('contact');
   }
 
   const recentlyViewedSection = recentlyViewed.length > 0 ? <section className="recently-viewed" aria-label="Recently viewed listings">
@@ -457,8 +476,8 @@ export default function App() {
         <div>
           <p className="eyebrow">Midnight Collector Studio</p>
           <h1>Cards made for the midnight table.</h1>
-          <p>A darker, Apple-inspired storefront for premium custom proxies, token packs, and display cards — product first, calm checkout, collector-grade mood.</p>
-          <div className="cta-row"><button onClick={showShop}>Enter the shop</button>{!isSignedIn && <button className="ghost" onClick={() => setView('account')}>Create account</button>}</div>
+          <p>Premium custom trading card proxies, token packs, and display cards with a dark fantasy collector feel — built for casual commander nights, gifts, and display binders.</p>
+          <div className="cta-row"><button onClick={showShop}>Enter the shop</button><button className="ghost" onClick={startOrder}>Start an order</button>{!isSignedIn && <button className="ghost" onClick={() => setView('account')}>Create account</button>}</div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
         <aside className="product-stage" aria-label="Featured product concept"><div className="card-object" /><span>Golden Hour Commander Proxy</span><h2>From $12.99</h2><p>Premium casual-play centerpieces with a quiet midnight collector vibe.</p></aside>
@@ -467,13 +486,29 @@ export default function App() {
 
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
+      <section className="landing-section gallery-preview" aria-label="Gallery preview">
+        <div className="section-heading"><div><p className="eyebrow">Gallery preview</p><h2>Examples that sell the studio feel first.</h2></div><p>Start with the visual proof: commander proxies, token packs, and display cards with a midnight fantasy finish.</p></div>
+        <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => <article key={`preview-${product.id}`}><img src={product.image} alt={`${product.title} card preview`} /><div><span className="badge">{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div></article>)}</div>
+      </section>
+      <section className="landing-section how-it-works-section" aria-label="How it works">
+        <div className="section-heading"><div><p className="eyebrow">How it works</p><h2>Order without guessing what happens next.</h2></div><p>Simple steps for custom ideas and ready-to-buy launch pieces.</p></div>
+        <div className="landing-card-grid">{howItWorksSteps.map((step, index) => <article key={step.title}><span className="step-number">0{index + 1}</span><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div>
+      </section>
+      <section className="landing-section pricing-section" aria-label="Pricing and packages">
+        <div className="section-heading"><div><p className="eyebrow">Pricing</p><h2>Clear starting points before checkout.</h2></div><p>Rough package anchors reduce buyer hesitation while custom requests can still be quoted.</p></div>
+        <div className="landing-card-grid">{pricingPackages.map((item) => <article key={item.title}><span className="price-pill">{item.price}</span><h3>{item.title}</h3><p>{item.copy}</p></article>)}</div>
+      </section>
+      <section className="landing-section faq-section" aria-label="Frequently asked questions">
+        <div className="section-heading"><div><p className="eyebrow">FAQ</p><h2>Trust cues before someone orders.</h2></div><button type="button" onClick={startOrder}>Ask a question</button></div>
+        <div className="faq-grid">{homepageFaqs.map((item) => <article key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></article>)}</div>
+      </section>
       <div className="section-heading"><div><p className="eyebrow">Less marketplace. More studio.</p><h2>Shop the current lineup</h2></div><p>Search by card role, style, or format and add launch-ready pieces to your cart.</p></div>
       <div className="toolbar">
         <input aria-label="Search products" placeholder="Search cards, tokens, commander..." value={query} onChange={(e) => setQuery(e.target.value)} />
         <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
       </div>
       {visibleProducts.length === 0 ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or jump back to the full launch catalog.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear search</button></div> : <div className="product-grid">{visibleProducts.map((product) => <article aria-label={`Open listing for ${product.title}`} className={`product-card ${product.inventory <= 0 ? 'sold-out' : ''}`} key={product.id} onClick={(event) => handleProductCardClick(product, event)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0}>
-        <img src={product.image} alt="" />
+        <img src={product.image} alt={`${product.title} card preview`} />
         <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details</a><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong>{isProductAdded(product) ? <p className="inline-cart-confirmation" role="status" onClick={stopConfirmationNavigation} onKeyDown={stopConfirmationNavigation}>{productAddedMessage(product)}</p> : <button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button>}</div></div>
       </article>)}</div>}
     </section>}
