@@ -25,8 +25,8 @@ describe('global CSS isolation', () => {
   it('stacks cart rows and controls for narrow mobile screens', () => {
     const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
 
-    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line\s*\{[^}]*grid-template-columns:\s*1fr/s);
-    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
-    expect(styles).toMatch(/@media \(max-width:\s*640px\)[\s\S]*\.cart-line-total\s*\{[^}]*text-align:\s*left/s);
+    expect(styles).toMatch(/@media \(max-width:\s*860px\)[\s\S]*\.cart-line\s*\{[^}]*grid-template-columns:\s*1fr/s);
+    expect(styles).toMatch(/@media \(max-width:\s*860px\)[\s\S]*\.cart-line-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
+    expect(styles).toMatch(/@media \(max-width:\s*860px\)[\s\S]*\.cart-line-total\s*\{[^}]*text-align:\s*left/s);
   });
 });
