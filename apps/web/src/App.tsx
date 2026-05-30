@@ -527,8 +527,14 @@ export default function App() {
     {view === 'shop' && <section className="panel storefront-panel">
       <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
       <section className="landing-section gallery-preview" aria-label="Gallery preview">
-        <div className="section-heading"><div><p className="eyebrow">Gallery preview</p><h2>Examples that sell the studio feel first.</h2></div><p>Start with the visual proof: commander proxies, token packs, and display cards with a midnight fantasy finish.</p></div>
-        <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => <article key={`preview-${product.id}`}><img src={product.image} alt={`${product.title} card preview`} /><div><span className="badge">{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div></article>)}</div>
+        <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>Commander proxies, token packs, and display cards — all with a dark collector finish.</p></div>
+        <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => {
+          const catClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : 'badge badge-display';
+          return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
+            <div className="card-img-frame"><img src={product.image} alt={`${product.title} card preview`} loading="lazy" /></div>
+            <div className="card-info"><span className={catClass}>{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div>
+          </article>;
+        })}</div>
       </section>
       <section className="landing-section how-it-works-section" aria-label="How it works">
         <div className="section-heading"><div><p className="eyebrow">How it works</p><h2>Order without guessing what happens next.</h2></div><p>Simple steps for custom ideas and ready-to-buy launch pieces.</p></div>
@@ -803,6 +809,29 @@ export default function App() {
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('listings')}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="listing-layout"><div><h3>Create listing</h3>{productEditor(newProduct, true)}</div><div><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</div></div></section>}</section>}
 
-    <footer>Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</footer>
+    <footer>
+      <div className="footer-inner">
+        <div className="footer-brand">
+          <span className="footer-wordmark">Midnight Cardworks</span>
+          <p className="footer-tagline">Dark collector studio. Custom proxies, token packs, and display cards made for commander nights and display binders.</p>
+        </div>
+        <nav className="footer-links" aria-label="Footer navigation">
+          <div>
+            <h4>Shop</h4>
+            <button className="text-btn" onClick={showShop}>All products</button>
+            <button className="text-btn" onClick={() => { setCategory('Commander'); showShop(); }}>Commander proxies</button>
+            <button className="text-btn" onClick={() => { setCategory('Tokens'); showShop(); }}>Token packs</button>
+            <button className="text-btn" onClick={() => { setCategory('Display'); showShop(); }}>Display cards</button>
+          </div>
+          <div>
+            <h4>Studio</h4>
+            <button className="text-btn" onClick={startOrder}>Start a commission</button>
+            <button className="text-btn" onClick={() => setView('contact')}>Contact</button>
+            <button className="text-btn" onClick={() => setView('account')}>Account</button>
+          </div>
+        </nav>
+      </div>
+      <p className="footer-legal">Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</p>
+    </footer>
   </main>;
 }

@@ -118,7 +118,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('heading', { name: /cards made for the midnight table/i })).toBeInTheDocument();
     expect(screen.getByText('Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.')).toBeInTheDocument();
     
-    expect(screen.getByRole('button', { name: 'Start a commission' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Start a commission' })[0]).toBeInTheDocument();
     
   });
 
@@ -129,7 +129,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('region', { name: 'How it works' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Pricing and packages' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Frequently asked questions' })).toBeInTheDocument();
-    expect(screen.getByText('Examples that sell the studio feel first.')).toBeInTheDocument();
+    expect(screen.getByText('Examples from the collection.')).toBeInTheDocument();
     expect(screen.getByText('Send your idea')).toBeInTheDocument();
     expect(screen.getByText('Single showcase proxy')).toBeInTheDocument();
     expect(screen.getByText('Are these tournament legal?')).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cart, 0/i })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Contact' })[0]);
     expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
     expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
   });
@@ -190,7 +190,7 @@ describe('Midnight Cardworks storefront', () => {
   it('lets customers send a contact message to the shop owner', async () => {
     render(<App />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Contact' })[0]);
     expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Your name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Your email'), 'buyer@example.com');
@@ -808,7 +808,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isSignedIn = true;
     render(<App />);
 
-    await userEvent.click(screen.getByRole('button', { name: /account/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
 
     const history = await screen.findByRole('region', { name: 'Order history' });
     expect(within(history).getByRole('heading', { name: 'Order history' })).toBeInTheDocument();
@@ -823,7 +823,7 @@ describe('Midnight Cardworks storefront', () => {
     window.localStorage.setItem('midnight-cardworks.checkoutInfo', JSON.stringify({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane' }));
     render(<App />);
 
-    await userEvent.click(screen.getByRole('button', { name: /account/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
 
     const savedInfo = screen.getByRole('region', { name: 'Saved checkout info' });
     expect(within(savedInfo).getByText('Checkout info saved on this device only — not synced to your account.')).toBeInTheDocument();
@@ -838,7 +838,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isSignedIn = true;
     render(<App />);
 
-    await userEvent.click(screen.getByRole('button', { name: /account/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
     const history = await screen.findByRole('region', { name: 'Order history' });
     await userEvent.click(within(history).getByRole('button', { name: 'Contact support about ord_test' }));
 
@@ -850,7 +850,7 @@ describe('Midnight Cardworks storefront', () => {
     mockAuth.isSignedIn = true;
     render(<App />);
 
-    await userEvent.click(screen.getByRole('button', { name: /account/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
     const history = await screen.findByRole('region', { name: 'Order history' });
     await userEvent.click(within(history).getByRole('button', { name: 'Continue shopping' }));
 
@@ -860,7 +860,7 @@ describe('Midnight Cardworks storefront', () => {
 
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {
     render(<App />);
-    await userEvent.click(screen.getByRole('button', { name: /account/i }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
     expect(screen.getByRole('button', { name: 'Sign in with Clerk' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument();
   });
