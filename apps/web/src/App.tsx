@@ -459,29 +459,69 @@ export default function App() {
     </article>;
   }
 
-  const navigation = <nav className="site-nav">
-    <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showShop(); }}>Midnight Cardworks</a>
-    <button onClick={showShop}>Shop</button>
-    <button onClick={showCart}>Cart ({cart.reduce((s, l) => s + l.quantity, 0)})</button>
-    <button onClick={() => setView('account')}>Account</button>
-    <button onClick={() => setView('contact')}>Contact</button>
-    {isAdmin && <button onClick={() => { setView('admin'); setAdminTab('orders'); }}>Admin</button>}
-  </nav>;
+  const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
+
+  const navigation = <div className="top-nav" role="banner">
+    <div className="nav-primary">
+      <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showShop(); }}>Midnight Cardworks</a>
+      <div className="nav-search">
+        <span className="nav-search-icon" aria-hidden="true">⌕</span>
+        <input
+          aria-label="Search products"
+          placeholder="Search cards, tokens, commander..."
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); if (view !== 'shop') showShop(); }}
+        />
+      </div>
+      <div className="nav-actions">
+        <button className="nav-icon-btn" aria-label={`Account`} onClick={() => setView('account')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        </button>
+        <button className="nav-icon-btn" aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`} onClick={showCart}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          {cartCount > 0 && <span className="nav-cart-count" aria-hidden="true">{cartCount}</span>}
+        </button>
+        {isAdmin && <button className="nav-icon-btn" aria-label="Admin dashboard" onClick={() => { setView('admin'); setAdminTab('orders'); }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>}
+      </div>
+    </div>
+    <nav className="nav-secondary" aria-label="Shop categories">
+      <button className={`nav-tab${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => { setCategory('All'); showShop(); }}>All</button>
+      {categories.filter((c) => c !== 'All').map((c) => (
+        <button key={c} className={`nav-tab${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => { setCategory(c); showShop(); }}>{c}</button>
+      ))}
+      <button className={`nav-tab${view === 'contact' ? ' active' : ''}`} onClick={() => setView('contact')}>Contact</button>
+    </nav>
+  </div>;
 
   return <main>
-    <div className="top-nav">{navigation}</div>
+    {navigation}
 
     {view === 'shop' ? <header className="hero">
-      <section className="hero-grid">
-        <div>
-          <p className="eyebrow">Midnight Collector Studio</p>
+      <div className="hero-grid">
+        <div className="hero-copy">
+          <span className="eyebrow">Midnight Collector Studio</span>
           <h1>Cards made for the midnight table.</h1>
-          <p>Premium custom trading card proxies, token packs, and display cards with a dark fantasy collector feel — built for casual commander nights, gifts, and display binders.</p>
-          <div className="cta-row"><button onClick={showShop}>Enter the shop</button><button className="ghost" onClick={startOrder}>Start an order</button>{!isSignedIn && <button className="ghost" onClick={() => setView('account')}>Create account</button>}</div>
+          <p className="hero-sub">Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.</p>
+          <div className="cta-row">
+            <button onClick={showShop}>Shop the collection</button>
+            <button className="ghost" onClick={startOrder}>Start a commission</button>
+          </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
-        <aside className="product-stage" aria-label="Featured product concept"><div className="card-object" /><span>Golden Hour Commander Proxy</span><h2>From $12.99</h2><p>Premium casual-play centerpieces with a quiet midnight collector vibe.</p></aside>
-      </section>
+        <div className="hero-art" aria-hidden="true">
+          <div className="hero-card-glow" />
+          <div className="hero-card">
+            <div className="hero-card-inner">
+              <span className="hero-card-label">Featured</span>
+              <span className="hero-card-title">Golden Hour<br />Commander Proxy</span>
+              <span className="hero-card-price">From $12.99</span>
+            </div>
+          </div>
+          <p className="hero-art-caption">Made-to-order · Casual play · Dark collector finish</p>
+        </div>
+      </div>
     </header> : null}
 
     {view === 'shop' && <section className="panel storefront-panel">
