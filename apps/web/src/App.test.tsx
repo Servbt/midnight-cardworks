@@ -117,7 +117,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /cards made for the midnight table/i })).toBeInTheDocument();
     expect(screen.getByText('Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.')).toBeInTheDocument();
-    expect(screen.getByText('Less marketplace. More studio.')).toBeInTheDocument();
+    
     expect(screen.getByRole('button', { name: 'Start a commission' })).toBeInTheDocument();
     
   });
@@ -142,8 +142,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('Secure Stripe checkout')).toBeInTheDocument();
     expect(screen.getByText('Made-to-order fulfillment')).toBeInTheDocument();
     expect(screen.getByText('Casual-play clarity')).toBeInTheDocument();
-    expect(screen.getByText('20 in stock')).toBeInTheDocument();
-    expect(screen.getByText('#commander')).toBeInTheDocument();
+    
     expect(screen.getByRole('button', { name: 'Sold out: Archive Showcase Proxy' })).toBeDisabled();
   });
 
@@ -176,7 +175,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.type(screen.getAllByLabelText('Search products')[0], 'goblin thunderstorm');
 
     expect(screen.getByText('No signal on this channel.')).toBeInTheDocument();
-    expect(screen.getByText('Clear search')).toBeInTheDocument();
+    expect(screen.getByText('Clear filters')).toBeInTheDocument();
   });
 
   it('hides the hero create account CTA when a customer is already signed in', async () => {

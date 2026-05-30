@@ -539,34 +539,131 @@ export default function App() {
         <div className="landing-card-grid">{pricingPackages.map((item) => <article key={item.title}><span className="price-pill">{item.price}</span><h3>{item.title}</h3><p>{item.copy}</p></article>)}</div>
       </section>
       <section className="landing-section faq-section" aria-label="Frequently asked questions">
-        <div className="section-heading"><div><p className="eyebrow">FAQ</p><h2>Trust cues before someone orders.</h2></div><button type="button" onClick={startOrder}>Ask a question</button></div>
-        <div className="faq-grid">{homepageFaqs.map((item) => <article key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></article>)}</div>
+        <div className="section-heading"><div><span className="eyebrow">FAQ</span><h2>Trust cues before someone orders.</h2></div><button type="button" onClick={startOrder}>Ask a question</button></div>
+        <div className="faq-grid">{homepageFaqs.map((item) => <details key={item.question} className="faq-item"><summary>{item.question}</summary><p>{item.answer}</p></details>)}</div>
       </section>
-      <div className="section-heading"><div><p className="eyebrow">Less marketplace. More studio.</p><h2>Shop the current lineup</h2></div><p>Search by card role, style, or format and add launch-ready pieces to your cart.</p></div>
-      <div className="toolbar">
-        <input aria-label="Search products" placeholder="Search cards, tokens, commander..." value={query} onChange={(e) => setQuery(e.target.value)} />
-        <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
+      <h2 className="shop-section-heading">Shop the current lineup</h2>
+      <div className="shop-layout">
+        <aside className="shop-sidebar" aria-label="Shop filters">
+          <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => { setQuery(''); setCategory('All'); }}>Clear</button>}</div>
+          <div className="filter-section">
+            <button className="filter-section-toggle" type="button" aria-expanded="true">Category<span className="filter-chevron open">▾</span></button>
+            <div className="filter-options">
+              {categories.map((c) => (
+                <label key={c} className="filter-option">
+                  <input type="checkbox" checked={category === c} onChange={() => setCategory(c)} />
+                  {c}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="filter-section">
+            <button className="filter-section-toggle" type="button" aria-expanded="true">Search<span className="filter-chevron open">▾</span></button>
+            <div className="filter-options" style={{ paddingTop: '.35rem' }}>
+              <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
+            </div>
+          </div>
+          <div className="sidebar-cta">
+            <button type="button" onClick={startOrder}>Request custom card</button>
+          </div>
+        </aside>
+        <div className="shop-results">
+          <div className="results-bar">
+            <span className="results-count">{visibleProducts.length} {visibleProducts.length === 1 ? 'item' : 'items'}</span>
+            <div className="results-controls">
+              <span style={{ fontSize: '.8rem', color: 'var(--text-3)', fontWeight: 600 }}>Sort</span>
+              <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)} style={{ display: 'none' }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
+            </div>
+          </div>
+          {visibleProducts.length === 0
+            ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear filters</button></div>
+            : <div className="product-grid">{visibleProducts.map((product) => {
+                const categoryBadgeClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : product.category === 'Display' ? 'badge badge-display' : 'badge';
+                return <article
+                  aria-label={`Open listing for ${product.title}`}
+                  className={`product-card${product.inventory <= 0 ? ' sold-out' : ''}`}
+                  key={product.id}
+                  onClick={(event) => handleProductCardClick(product, event)}
+                  onKeyDown={(event) => handleProductCardKeyDown(product, event)}
+                  role="link"
+                  tabIndex={0}
+                >
+                  <div className="product-card__img-wrap">
+                    <img src={product.image} alt={`${product.title} card preview`} loading="lazy" />
+                    <div className="product-card__badges">
+                      {product.inventory <= 0 && <span className="badge badge-sold">Sold out</span>}
+                      {product.inventory > 0 && product.inventory <= 5 && <span className="badge badge-new">Low stock</span>}
+                      <span className={categoryBadgeClass}>{product.category}</span>
+                    </div>
+                    {isProductAdded(product)
+                      ? <p className="inline-cart-confirmation" role="status" onClick={stopConfirmationNavigation} onKeyDown={stopConfirmationNavigation}>{productAddedMessage(product)}</p>
+                      : <button className="product-card__cart-btn" disabled={product.inventory <= 0} onClick={() => addToCart(product)} type="button">
+                          {product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}
+                        </button>
+                    }
+                  </div>
+                  <div className="product-card__info">
+                    <span className="product-card__name">{product.title}</span>
+                    <span className="product-card__meta">{product.category}{product.tags.length > 0 ? ` · #${product.tags[0]}` : ''}</span>
+                    <div>
+                      <span className="product-card__price-label">From</span>
+                      <span className="product-card__price">{formatMoney(product.price)}</span>
+                    </div>
+                    <a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details →</a>
+                  </div>
+                </article>;
+              })}</div>
+          }
+        </div>
       </div>
-      {visibleProducts.length === 0 ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or jump back to the full launch catalog.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear search</button></div> : <div className="product-grid">{visibleProducts.map((product) => <article aria-label={`Open listing for ${product.title}`} className={`product-card ${product.inventory <= 0 ? 'sold-out' : ''}`} key={product.id} onClick={(event) => handleProductCardClick(product, event)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0}>
-        <img src={product.image} alt={`${product.title} card preview`} />
-        <div className="card-body"><div className="card-kicker"><span className="badge">{product.category}</span><span>{product.inventory > 0 ? `${product.inventory} in stock` : 'Sold out'}</span></div><h2>{product.title}</h2><p>{product.description}</p><a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details</a><div className="tag-row">{product.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div><div className="buy-row"><strong>{formatMoney(product.price)}</strong>{isProductAdded(product) ? <p className="inline-cart-confirmation" role="status" onClick={stopConfirmationNavigation} onKeyDown={stopConfirmationNavigation}>{productAddedMessage(product)}</p> : <button disabled={product.inventory <= 0} onClick={() => addToCart(product)}>{product.inventory > 0 ? 'Add to cart' : `Sold out: ${product.title}`}</button>}</div></div>
-      </article>)}</div>}
     </section>}
 
     {view === 'product' && <section className="panel product-detail-panel">
       {selectedProduct ? <>
         <button className="ghost" onClick={showShop}>← Back to shop</button>
         <div className="product-detail-grid">
-          <img src={selectedProduct.image} alt="" />
-          <div>
-            <p className="eyebrow">{selectedProduct.category}</p>
+          <div className="product-detail-img-col">
+            <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
+            <table className="product-detail-meta-table">
+              <tbody>
+                <tr><td>Category</td><td>{selectedProduct.category}</td></tr>
+                <tr><td>Stock</td><td>{selectedProduct.inventory > 0 ? `${selectedProduct.inventory} available` : 'Sold out'}</td></tr>
+                {selectedProduct.tags.length > 0 && <tr><td>Tags</td><td>{selectedProduct.tags.map((t) => `#${t}`).join(' ')}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="product-detail-info">
+            <span className="eyebrow">{selectedProduct.category}</span>
             <h2>{selectedProduct.title}</h2>
-            <p>{selectedProduct.description}</p>
-            <p><strong>{formatMoney(selectedProduct.price)}</strong> · {selectedProduct.inventory > 0 ? `${selectedProduct.inventory} in stock` : 'Sold out'}</p>
+            <div className="product-detail-price-block">
+              <span className="product-detail-price-label">From</span>
+              <span className="product-detail-price">{formatMoney(selectedProduct.price)}</span>
+            </div>
+            <p className="product-detail-desc">{selectedProduct.description}</p>
             <div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
-            <div className="seo-share-box"><strong>Shareable listing URL</strong><code>{`/products/${selectedProduct.slug}`}</code><p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p></div>
-            {selectedProduct.inventory > 0 && !isProductAdded(selectedProduct) && <label className="detail-quantity-field">Quantity for {selectedProduct.title}<input aria-label={`Quantity for ${selectedProduct.title}`} type="number" min="1" max={selectedProduct.inventory} value={detailQuantity} onChange={(e) => updateDetailQuantity(selectedProduct, e.target.value)} /></label>}
-            {isProductAdded(selectedProduct) ? <p className="inline-cart-confirmation detail-confirmation" role="status" onClick={stopConfirmationNavigation} onKeyDown={stopConfirmationNavigation}>{productAddedMessage(selectedProduct, normalizeProductQuantity(selectedProduct, detailQuantity))}</p> : <button disabled={selectedProduct.inventory <= 0} onClick={() => addToCart(selectedProduct, detailQuantity)}>{selectedProduct.inventory > 0 ? (normalizeProductQuantity(selectedProduct, detailQuantity) > 1 ? `Add ${normalizeProductQuantity(selectedProduct, detailQuantity)} to cart` : 'Add to cart') : `Sold out: ${selectedProduct.title}`}</button>}
+            {selectedProduct.inventory > 0 && !isProductAdded(selectedProduct) && (
+              <label className="detail-quantity-field">Quantity for {selectedProduct.title}
+                <input aria-label={`Quantity for ${selectedProduct.title}`} type="number" min="1" max={selectedProduct.inventory} value={detailQuantity} onChange={(e) => updateDetailQuantity(selectedProduct, e.target.value)} />
+              </label>
+            )}
+            {isProductAdded(selectedProduct)
+              ? <p className="inline-cart-confirmation detail-confirmation" role="status" onClick={stopConfirmationNavigation} onKeyDown={stopConfirmationNavigation}>{productAddedMessage(selectedProduct, normalizeProductQuantity(selectedProduct, detailQuantity))}</p>
+              : <button className="product-detail-add-btn" disabled={selectedProduct.inventory <= 0} onClick={() => addToCart(selectedProduct, detailQuantity)}>
+                  {selectedProduct.inventory > 0
+                    ? (normalizeProductQuantity(selectedProduct, detailQuantity) > 1 ? `Add ${normalizeProductQuantity(selectedProduct, detailQuantity)} to cart` : 'Add to cart')
+                    : `Sold out: ${selectedProduct.title}`}
+                </button>
+            }
+            <div className="trust-strip">
+              <span>🔒 Secure Stripe checkout</span>
+              <span>✦ Made-to-order</span>
+              <span>⚠ Casual play only</span>
+            </div>
+            <div className="seo-share-box">
+              <strong>Shareable listing URL</strong>
+              <code>{`/products/${selectedProduct.slug}`}</code>
+              <p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p>
+            </div>
           </div>
         </div>
       </> : <p>{productMessage || 'Loading listing...'}</p>}
