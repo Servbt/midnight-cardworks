@@ -287,8 +287,10 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.type(screen.getByLabelText('Quantity for Golden Hour Commander Proxy'), '3');
     await userEvent.click(screen.getByRole('button', { name: 'Add 3 to cart' }));
 
-    expect(screen.getByRole('status')).toHaveTextContent('Added 3 Golden Hour Commander Proxy to your cart.');
-    expect(screen.queryByRole('button', { name: 'Add 3 to cart' })).not.toBeInTheDocument();
+    const confirmation = screen.getByRole('status');
+    const addAgainButton = screen.getByRole('button', { name: 'Add 3 to cart' });
+    expect(confirmation).toHaveTextContent('Added 3 Golden Hour Commander Proxy to your cart.');
+    expect(confirmation.compareDocumentPosition(addAgainButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: /cart, 3/i })).toBeInTheDocument();
     expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
@@ -719,6 +721,15 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('tab', { name: /Listings \(3\)/ })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByRole('heading', { name: 'Listing edits' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Order navigation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Current listings \(3\)/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Create listing' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tabpanel', { name: 'Current listings' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('New product slug')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Create listing' }));
+
+    expect(screen.getByRole('tab', { name: 'Create listing' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel', { name: 'Create listing' })).toBeInTheDocument();
     expect(screen.getByLabelText('New product slug')).toBeInTheDocument();
   });
 
@@ -814,6 +825,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
     await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Create listing' }));
 
     await userEvent.type(await screen.findByLabelText('New product slug'), 'moonlit-token');
     await userEvent.type(screen.getByLabelText('New product title'), 'Moonlit Token Pack');
