@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -24,6 +24,7 @@ beforeEach(() => {
   mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
   mockAuth.email = 'buyer@example.com';
+  vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
       if (init?.method === 'POST') {
@@ -74,12 +75,19 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
   it('keeps explicit product detail links for accessibility and sharing', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' })).toHaveAttribute('href', '/products/golden');
+    const detailLink = await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' });
+    expect(detailLink).toHaveAttribute('href', '/products/golden');
+
+    await userEvent.click(detailLink);
+
+    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
   it('returns from a listing detail to the shop when browser back navigation fires', async () => {
@@ -111,6 +119,37 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('scrolls to the top of the homepage when the brand home link is clicked', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Midnight Cardworks home' }));
+
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+  });
+
+  it('scrolls to the top of the selected section when shop category nav buttons are clicked', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    const categoryNav = screen.getByRole('navigation', { name: 'Shop categories' });
+    const scrollTo = vi.mocked(window.scrollTo);
+
+    await userEvent.click(within(categoryNav).getByRole('button', { name: 'Contact' }));
+
+    expect(await screen.findByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+
+    scrollTo.mockClear();
+    await userEvent.click(within(categoryNav).getByRole('button', { name: 'Commander' }));
+
+    expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
+    expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/shop');
+    expect(window.location.search).toBe('?category=Commander');
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+  });
+
   it('shows the dark Apple-inspired collector studio direction', async () => {
     render(<App />);
 
@@ -126,23 +165,13 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     expect(await screen.findByRole('region', { name: 'Gallery preview' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'How it works' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Pricing and packages' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Frequently asked questions' })).toBeInTheDocument();
     expect(screen.getByText('Examples from the collection.')).toBeInTheDocument();
-    expect(screen.getByText('Send your idea')).toBeInTheDocument();
-    expect(screen.getByText('Single showcase proxy')).toBeInTheDocument();
-    expect(screen.getByText('Are these tournament legal?')).toBeInTheDocument();
   });
 
-  it('shows launch polish with trust cues and product metadata', async () => {
+  it('shows launch polish with product metadata', async () => {
     render(<App />);
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
-    expect(screen.getByText('Secure Stripe checkout')).toBeInTheDocument();
-    expect(screen.getByText('Made-to-order fulfillment')).toBeInTheDocument();
-    expect(screen.getByText('Casual-play clarity')).toBeInTheDocument();
-    
     expect(screen.getByRole('button', { name: 'Sold out: Archive Showcase Proxy' })).toBeDisabled();
   });
 
@@ -674,8 +703,12 @@ describe('Midnight Cardworks storefront', () => {
   it('shows Etsy-style admin tabs for orders and listing edits', async () => {
     mockAuth.isAdmin = true;
     render(<App />);
-    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    const adminShortcut = screen.getByRole('button', { name: 'Admin dashboard' });
+    expect(adminShortcut).toHaveTextContent('Admin');
 
+    await userEvent.click(adminShortcut);
+
+    expect(window.location.pathname).toBe('/admin');
     expect(await screen.findByRole('tab', { name: /Orders \(1\)/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /Listings \(3\)/ })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('heading', { name: 'Order navigation' })).toBeInTheDocument();
@@ -732,6 +765,21 @@ describe('Midnight Cardworks storefront', () => {
     const file = new File(['image-bytes'], 'golden.jpg', { type: 'image/jpeg' });
 
     await userEvent.upload(upload, file);
+
+    expect(await screen.findByText('Updated image for Golden Hour Commander Proxy.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
+  });
+
+  it('uploads a product image when it is dropped onto the admin image dropzone', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
+    const dropzone = (await screen.findByText('Upload image for Golden Hour Commander Proxy')).closest('label');
+    const file = new File(['drop-image-bytes'], 'dropped-golden.png', { type: 'image/png' });
+
+    expect(dropzone).not.toBeNull();
+    fireEvent.drop(dropzone as HTMLElement, { dataTransfer: { files: [file] } });
 
     expect(await screen.findByText('Updated image for Golden Hour Commander Proxy.')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products/golden/image'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
@@ -855,7 +903,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(within(history).getByRole('button', { name: 'Continue shopping' }));
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/');
+    expect(window.location.pathname).toBe('/shop');
   });
 
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {

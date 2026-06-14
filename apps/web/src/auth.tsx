@@ -2,14 +2,15 @@ import { ClerkProvider, SignedIn, SignedOut, SignInButton, UserButton, useAuth, 
 import type { ReactNode } from 'react';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+const isClerkConfigured = Boolean(publishableKey && !publishableKey.includes('replace_me'));
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  if (!publishableKey || publishableKey.includes('replace_me')) return <>{children}</>;
-  return <ClerkProvider publishableKey={publishableKey}>{children}</ClerkProvider>;
+  if (!isClerkConfigured) return <>{children}</>;
+  return <ClerkProvider publishableKey={publishableKey!}>{children}</ClerkProvider>;
 }
 
 export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
-  if (!publishableKey || publishableKey.includes('replace_me')) {
+  if (!isClerkConfigured) {
     return <section className="panel narrow">
       <h2>Customer account</h2>
       <p>Clerk is wired in. Add <code>VITE_CLERK_PUBLISHABLE_KEY</code> to enable production sign in, signup, and account management.</p>
@@ -32,12 +33,13 @@ export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
 }
 
 export function useCustomerSession() {
-  if (!publishableKey || publishableKey.includes('replace_me')) return { isSignedIn: false, email: undefined as string | undefined };
+  if (!isClerkConfigured) return { isSignedIn: false, email: undefined as string | undefined };
   const { isSignedIn, user } = useUser();
   return { isSignedIn: Boolean(isSignedIn), email: user?.primaryEmailAddress?.emailAddress };
 }
 
 export function useAdminAccess() {
+  if (!isClerkConfigured) return { isAdmin: false, getAdminToken: async () => undefined as string | null | undefined };
   const { getToken } = useAuth();
   const { isSignedIn, user } = useUser();
   const adminEmails = new Set(

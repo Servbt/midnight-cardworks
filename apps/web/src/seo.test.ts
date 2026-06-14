@@ -11,8 +11,8 @@ describe('crawlable homepage shell', () => {
     expect(html).toContain('type="application/ld+json"');
     expect(html).toContain('Premium custom trading card proxies, token packs, and display cards.');
     expect(html).toContain('Gallery preview');
-    expect(html).toContain('How it works');
-    expect(html).toContain('Pricing and packages');
     expect(html).toContain('Secure Stripe checkout');
+    expect(html).not.toContain('How it works');
+    expect(html).not.toContain('Pricing and packages');
   });
 });

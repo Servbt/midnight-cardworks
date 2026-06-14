@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact';
+type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -17,21 +17,6 @@ const launchNotes = [
   { title: 'Casual-play clarity', copy: 'Every page keeps the unofficial, not-tournament-legal note visible.' }
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
-const howItWorksSteps = [
-  { title: 'Send your idea', copy: 'Start with a card name, commander theme, token need, or reference image.' },
-  { title: 'Approve the mockup', copy: 'Review the collector-style concept and request small tweaks before fulfillment.' },
-  { title: 'Receive the cards', copy: 'Checkout securely, then get print-ready files or finished cards depending on the listing.' }
-];
-const pricingPackages = [
-  { title: 'Single showcase proxy', price: 'From $12.99', copy: 'A premium custom centerpiece for casual commander nights or display binders.' },
-  { title: 'Token pack', price: 'From $8.99', copy: 'Matching tabletop tokens built as a cohesive, ready-to-play set.' },
-  { title: 'Display card', price: 'From $15.99', copy: 'Giftable, shelf-ready cards with a darker collector finish.' }
-];
-const homepageFaqs = [
-  { question: 'Are these tournament legal?', answer: 'No — Midnight Cardworks pieces are made for casual play, proxies, gifts, and display.' },
-  { question: 'Can I ask about a custom idea?', answer: 'Yes. Use the contact page with your theme, card count, and any reference notes.' },
-  { question: 'How do payments work?', answer: 'Orders go through secure Stripe checkout, and card data never touches the shop server.' }
-];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 type ShippingAddressFields = { streetAddress: string; apartment: string; city: string; zipCode: string };
 const blankShippingAddressFields: ShippingAddressFields = { streetAddress: '', apartment: '', city: '', zipCode: '' };
@@ -49,7 +34,7 @@ export default function App() {
   const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
   const [detailQuantity, setDetailQuantity] = useState('1');
-  const [view, setView] = useState<View>('shop');
+  const [view, setView] = useState<View>('home');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [email, setEmail] = useState('');
@@ -66,11 +51,13 @@ export default function App() {
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
   const [adminTab, setAdminTab] = useState<'orders' | 'listings'>('orders');
+  const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [productMessage, setProductMessage] = useState('');
+  const [productScrollSignal, setProductScrollSignal] = useState(0);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactOrderNumber, setContactOrderNumber] = useState('');
@@ -127,17 +114,28 @@ export default function App() {
         setView('cart');
         return;
       }
+      if (window.location.pathname === '/shop') {
+        setCategory(params.get('category') ?? 'All');
+        setQuery(params.get('q') ?? '');
+        setView('shop');
+        return;
+      }
+      if (window.location.pathname === '/admin') {
+        setView(isAdmin ? 'admin' : 'account');
+        setAdminTab('orders');
+        return;
+      }
       setSelectedProduct(null);
       setProductMessage('');
       setReceiptOrder(null);
       setReceiptMessage('');
-      setView('shop');
+      setView('home');
     }
 
     applyCurrentLocation();
     window.addEventListener('popstate', applyCurrentLocation);
     return () => window.removeEventListener('popstate', applyCurrentLocation);
-  }, []);
+  }, [isAdmin]);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
@@ -181,10 +179,15 @@ export default function App() {
         document.head.appendChild(description);
       }
       description.content = selectedProduct.description;
-    } else if (view === 'shop') {
+    } else if (view === 'home' || view === 'shop') {
       document.title = 'Midnight Cardworks';
     }
   }, [view, selectedProduct]);
+
+  useLayoutEffect(() => {
+    if (productScrollSignal === 0 || view !== 'product' || !selectedProduct) return;
+    scrollToPageTop({ behavior: 'auto' });
+  }, [productScrollSignal, selectedProduct, view]);
 
   function showProduct(product: Product) {
     setSelectedProduct(product);
@@ -192,6 +195,7 @@ export default function App() {
     rememberRecentlyViewed(product);
     setView('product');
     window.history.pushState({}, '', `/products/${product.slug}`);
+    setProductScrollSignal((signal) => signal + 1);
   }
 
   function rememberRecentlyViewed(product: Product) {
@@ -217,9 +221,40 @@ export default function App() {
     event.stopPropagation();
   }
 
-  function showShop() {
+  function scrollToPageTop(options: { behavior?: ScrollBehavior } = {}) {
+    window.scrollTo({ top: 0, left: 0, behavior: options.behavior ?? 'smooth' });
+  }
+
+  function shopPath(nextCategory = category, nextQuery = query) {
+    const params = new URLSearchParams();
+    if (nextCategory && nextCategory !== 'All') params.set('category', nextCategory);
+    if (nextQuery.trim()) params.set('q', nextQuery.trim());
+    const search = params.toString();
+    return `/shop${search ? `?${search}` : ''}`;
+  }
+
+  function showHome(options: { scrollToTop?: boolean } = {}) {
+    setView('home');
+    if (window.location.pathname === '/') window.history.replaceState({}, '', '/');
+    else window.history.pushState({}, '', '/');
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
+  function showShop(options: { scrollToTop?: boolean; category?: string; query?: string } = {}) {
+    const nextCategory = options.category ?? category;
+    const nextQuery = options.query ?? query;
+    if (options.category !== undefined) setCategory(nextCategory);
+    if (options.query !== undefined) setQuery(nextQuery);
     setView('shop');
-    window.history.pushState({}, '', '/');
+    const nextPath = shopPath(nextCategory, nextQuery);
+    if (`${window.location.pathname}${window.location.search}` === nextPath) window.history.replaceState({}, '', nextPath);
+    else window.history.pushState({}, '', nextPath);
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
+  function showContact(options: { scrollToTop?: boolean } = {}) {
+    setView('contact');
+    if (options.scrollToTop) scrollToPageTop();
   }
 
   function showCart() {
@@ -227,16 +262,20 @@ export default function App() {
     if (window.location.pathname !== '/cart') window.history.pushState({}, '', '/cart');
   }
 
+  function showAdmin() {
+    if (!isAdmin) return;
+    setView('admin');
+    setAdminTab('orders');
+    if (window.location.pathname !== '/admin') window.history.pushState({}, '', '/admin');
+    scrollToPageTop();
+  }
+
   function continueShopping() {
-    setQuery('');
-    setCategory('All');
-    showShop();
+    showShop({ category: 'All', query: '' });
   }
 
   function browseTokenPacks() {
-    setQuery('token');
-    setCategory('All');
-    showShop();
+    showShop({ category: 'All', query: 'token' });
   }
 
   function startOrder() {
@@ -400,6 +439,17 @@ export default function App() {
     }
   }
 
+  function handleImageDrop(product: Product, event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setImageDragSlug(null);
+    const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith('image/'));
+    if (!file) {
+      setAdminMessage(`Drop an image file for ${product.title}.`);
+      return;
+    }
+    void handleImageUpload(product, file);
+  }
+
   function updateAdminProduct(slug: string, patch: Partial<Product>) {
     setAdminProducts((items) => items.map((item) => item.slug === slug ? { ...item, ...patch } : item));
   }
@@ -441,6 +491,7 @@ export default function App() {
     const originalTitle = isNew ? 'new product' : products.find((item) => item.slug === product.slug)?.title || product.title || product.slug;
     const setProduct = (patch: Partial<Product>) => isNew ? setNewProduct((item) => ({ ...item, ...patch })) : updateAdminProduct(product.slug, patch);
     const saveLabel = isNew ? 'Create product listing' : `Save ${originalTitle}`;
+    const dropzoneClass = `image-dropzone${imageDragSlug === product.slug ? ' is-dragging' : ''}`;
     return <article className="admin-listing product-editor" key={isNew ? 'new-product' : product.id}>
       {!isNew && <img src={product.image} alt="" />}
       <div className="editor-grid">
@@ -453,7 +504,17 @@ export default function App() {
         <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
         <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
         <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
-        {!isNew && <label>Upload image for {originalTitle}<input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} /></label>}
+        {!isNew && <label
+          className={dropzoneClass}
+          onDragEnter={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+          onDragOver={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+          onDragLeave={(event) => { event.preventDefault(); setImageDragSlug(null); }}
+          onDrop={(event) => handleImageDrop(product, event)}
+        >
+          <span>Upload image for {originalTitle}</span>
+          <input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} />
+          <small>Drop image here or choose a file</small>
+        </label>}
         <button onClick={() => void handleProductSave(product)}>{saveLabel}</button>
       </div>
     </article>;
@@ -463,14 +524,14 @@ export default function App() {
 
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
-      <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showShop(); }}>Midnight Cardworks</a>
+      <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>Midnight Cardworks</a>
       <div className="nav-search">
         <span className="nav-search-icon" aria-hidden="true">⌕</span>
         <input
           aria-label="Search products"
           placeholder="Search cards, tokens, commander..."
           value={query}
-          onChange={(e) => { setQuery(e.target.value); if (view !== 'shop') showShop(); }}
+          onChange={(e) => { setQuery(e.target.value); if (view !== 'shop') showShop({ query: e.target.value }); }}
         />
       </div>
       <div className="nav-actions">
@@ -481,31 +542,32 @@ export default function App() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
           {cartCount > 0 && <span className="nav-cart-count" aria-hidden="true">{cartCount}</span>}
         </button>
-        {isAdmin && <button className="nav-icon-btn" aria-label="Admin dashboard" onClick={() => { setView('admin'); setAdminTab('orders'); }}>
+        {isAdmin && <button className="nav-icon-btn nav-admin-btn" aria-label="Admin dashboard" onClick={showAdmin}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>Admin</span>
         </button>}
       </div>
     </div>
     <nav className="nav-secondary" aria-label="Shop categories">
-      <button className={`nav-tab${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => { setCategory('All'); showShop(); }}>All</button>
+      <button className={`nav-tab${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => showShop({ category: 'All', scrollToTop: true })}>All</button>
       {categories.filter((c) => c !== 'All').map((c) => (
-        <button key={c} className={`nav-tab${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => { setCategory(c); showShop(); }}>{c}</button>
+        <button key={c} className={`nav-tab${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => showShop({ category: c, scrollToTop: true })}>{c}</button>
       ))}
-      <button className={`nav-tab${view === 'contact' ? ' active' : ''}`} onClick={() => setView('contact')}>Contact</button>
+      <button className={`nav-tab${view === 'contact' ? ' active' : ''}`} onClick={() => showContact({ scrollToTop: true })}>Contact</button>
     </nav>
   </div>;
 
   return <main>
     {navigation}
 
-    {view === 'shop' ? <header className="hero">
+    {view === 'home' ? <header className="hero">
       <div className="hero-grid">
         <div className="hero-copy">
           <span className="eyebrow">Midnight Collector Studio</span>
           <h1>Cards made for the midnight table.</h1>
           <p className="hero-sub">Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.</p>
           <div className="cta-row">
-            <button onClick={showShop}>Shop the collection</button>
+            <button onClick={() => showShop({ category: 'All', query: '' })}>Shop the collection</button>
             <button className="ghost" onClick={startOrder}>Start a commission</button>
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
@@ -524,8 +586,7 @@ export default function App() {
       </div>
     </header> : null}
 
-    {view === 'shop' && <section className="panel storefront-panel">
-      <div className="launch-strip">{launchNotes.map((note) => <article key={note.title}><strong>{note.title}</strong><p>{note.copy}</p></article>)}</div>
+    {view === 'home' && <section className="panel storefront-panel">
       <section className="landing-section gallery-preview" aria-label="Gallery preview">
         <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>Commander proxies, token packs, and display cards — all with a dark collector finish.</p></div>
         <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => {
@@ -536,28 +597,19 @@ export default function App() {
           </article>;
         })}</div>
       </section>
-      <section className="landing-section how-it-works-section" aria-label="How it works">
-        <div className="section-heading"><div><p className="eyebrow">How it works</p><h2>Order without guessing what happens next.</h2></div><p>Simple steps for custom ideas and ready-to-buy launch pieces.</p></div>
-        <div className="landing-card-grid">{howItWorksSteps.map((step, index) => <article key={step.title}><span className="step-number">0{index + 1}</span><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div>
-      </section>
-      <section className="landing-section pricing-section" aria-label="Pricing and packages">
-        <div className="section-heading"><div><p className="eyebrow">Pricing</p><h2>Clear starting points before checkout.</h2></div><p>Rough package anchors reduce buyer hesitation while custom requests can still be quoted.</p></div>
-        <div className="landing-card-grid">{pricingPackages.map((item) => <article key={item.title}><span className="price-pill">{item.price}</span><h3>{item.title}</h3><p>{item.copy}</p></article>)}</div>
-      </section>
-      <section className="landing-section faq-section" aria-label="Frequently asked questions">
-        <div className="section-heading"><div><span className="eyebrow">FAQ</span><h2>Trust cues before someone orders.</h2></div><button type="button" onClick={startOrder}>Ask a question</button></div>
-        <div className="faq-grid">{homepageFaqs.map((item) => <details key={item.question} className="faq-item"><summary>{item.question}</summary><p>{item.answer}</p></details>)}</div>
-      </section>
+    </section>}
+
+    {(view === 'home' || view === 'shop') && <section className="panel storefront-panel shop-lineup-page" aria-label="Shop the current lineup">
       <h2 className="shop-section-heading">Shop the current lineup</h2>
       <div className="shop-layout">
         <aside className="shop-sidebar" aria-label="Shop filters">
-          <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => { setQuery(''); setCategory('All'); }}>Clear</button>}</div>
+          <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => showShop({ category: 'All', query: '' })}>Clear</button>}</div>
           <div className="filter-section">
             <button className="filter-section-toggle" type="button" aria-expanded="true">Category<span className="filter-chevron open">▾</span></button>
             <div className="filter-options">
               {categories.map((c) => (
                 <label key={c} className="filter-option">
-                  <input type="checkbox" checked={category === c} onChange={() => setCategory(c)} />
+                  <input type="checkbox" checked={category === c} onChange={() => showShop({ category: c })} />
                   {c}
                 </label>
               ))}
@@ -566,7 +618,7 @@ export default function App() {
           <div className="filter-section">
             <button className="filter-section-toggle" type="button" aria-expanded="true">Search<span className="filter-chevron open">▾</span></button>
             <div className="filter-options" style={{ paddingTop: '.35rem' }}>
-              <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
+              <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => showShop({ query: e.target.value })} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
             </div>
           </div>
           <div className="sidebar-cta">
@@ -582,7 +634,7 @@ export default function App() {
             </div>
           </div>
           {visibleProducts.length === 0
-            ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => { setQuery(''); setCategory('All'); }}>Clear filters</button></div>
+            ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => showShop({ category: 'All', query: '' })}>Clear filters</button></div>
             : <div className="product-grid">{visibleProducts.map((product) => {
                 const categoryBadgeClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : product.category === 'Display' ? 'badge badge-display' : 'badge';
                 return <article
@@ -626,7 +678,7 @@ export default function App() {
 
     {view === 'product' && <section className="panel product-detail-panel">
       {selectedProduct ? <>
-        <button className="ghost" onClick={showShop}>← Back to shop</button>
+        <button className="ghost" onClick={() => showShop()}>← Back to shop</button>
         <div className="product-detail-grid">
           <div className="product-detail-img-col">
             <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
@@ -805,7 +857,7 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => setView('shop')}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('listings')}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="listing-layout"><div><h3>Create listing</h3>{productEditor(newProduct, true)}</div><div><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</div></div></section>}</section>}
 
@@ -818,10 +870,10 @@ export default function App() {
         <nav className="footer-links" aria-label="Footer navigation">
           <div>
             <h4>Shop</h4>
-            <button className="text-btn" onClick={showShop}>All products</button>
-            <button className="text-btn" onClick={() => { setCategory('Commander'); showShop(); }}>Commander proxies</button>
-            <button className="text-btn" onClick={() => { setCategory('Tokens'); showShop(); }}>Token packs</button>
-            <button className="text-btn" onClick={() => { setCategory('Display'); showShop(); }}>Display cards</button>
+            <button className="text-btn" onClick={() => showShop({ category: 'All', query: '' })}>All products</button>
+            <button className="text-btn" onClick={() => showShop({ category: 'Commander', query: '' })}>Commander proxies</button>
+            <button className="text-btn" onClick={() => showShop({ category: 'Tokens', query: '' })}>Token packs</button>
+            <button className="text-btn" onClick={() => showShop({ category: 'Display', query: '' })}>Display cards</button>
           </div>
           <div>
             <h4>Studio</h4>
