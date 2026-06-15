@@ -10,7 +10,7 @@ vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
   AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
   useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token }),
-  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email })
+  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email, getCustomerToken: async () => mockAuth.token })
 }));
 
 const products = [
@@ -39,7 +39,7 @@ beforeEach(() => {
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
     if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
-    if (String(url).includes('/api/orders?email=buyer%40example.com')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
@@ -902,7 +902,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(history).getByText('paid')).toBeInTheDocument();
     expect(within(history).getByText('1 × Golden Hour Commander Proxy')).toBeInTheDocument();
     expect(within(history).getByText('$17.98')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders?email=buyer%40example.com'));
+    expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/orders$/), expect.objectContaining({ headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
   });
 
   it('shows account saved checkout info controls that stay device-local', async () => {

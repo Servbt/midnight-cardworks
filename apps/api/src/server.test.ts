@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from './server.js';
 import { createInMemoryStore } from './store.js';
 
@@ -13,6 +13,24 @@ const adminAuth = {
   }
 };
 const adminHeaders = { authorization: 'Bearer admin-token' };
+const customerAuth = {
+  authorize: async (authorization: string | undefined) => {
+    if (!authorization) return { ok: false as const, status: 401 as const, error: 'Customer sign-in required' };
+    if (authorization === 'Bearer buyer-token') return { ok: true as const, email: 'buyer@example.com' };
+    return { ok: false as const, status: 401 as const, error: 'Invalid customer session' };
+  }
+};
+const customerHeaders = { authorization: 'Bearer buyer-token' };
+const shippingAddressFields = { streetAddress: '123 Midnight Lane', apartment: '', city: 'Los Angeles', zipCode: '90001' };
+function checkoutPayload(items: Array<{ productId: string; quantity: number }>, overrides: Record<string, unknown> = {}) {
+  return {
+    email: 'buyer@example.com',
+    customerName: 'Ari Buyer',
+    shippingAddressFields,
+    items,
+    ...overrides
+  };
+}
 function createEmailNotifierSpy() {
   const sent: Array<{ type: string; order?: { id: string; email: string; status: string }; message?: { name: string; email: string; orderNumber?: string; message: string } }> = [];
   return {
@@ -26,6 +44,8 @@ function createEmailNotifierSpy() {
 }
 
 describe('storefront API', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it('lists active products for the shop grid', async () => {
     const app = buildServer(createInMemoryStore());
     const res = await app.inject({ method: 'GET', url: '/api/products' });
@@ -41,17 +61,25 @@ describe('storefront API', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/checkout',
-      payload: {
-        email: 'buyer@example.com',
-        customerName: 'Ari Buyer',
-        shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001',
-        items: [{ productId: 'p1', quantity: 2 }]
-      }
+      payload: checkoutPayload([{ productId: 'p1', quantity: 2 }])
     });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ status: 'pending_payment', subtotal: 2598, shippingCost: 499, total: 3097 });
     const order = await store.getOrder(res.json().orderId);
-    expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001', subtotal: 2598, shippingCost: 499, total: 3097 });
+    expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane, Los Angeles 90001', subtotal: 2598, shippingCost: 499, total: 3097 });
+  });
+
+  it('rejects checkout orders without required shipping details', async () => {
+    const app = buildServer(createInMemoryStore());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/checkout',
+      payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Invalid checkout payload' });
   });
 
   it('uses active sale pricing when creating checkout orders', async () => {
@@ -62,7 +90,7 @@ describe('storefront API', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/checkout',
-      payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 2 }] }
+      payload: checkoutPayload([{ productId: 'p1', quantity: 2 }])
     });
 
     expect(res.statusCode).toBe(201);
@@ -78,7 +106,7 @@ describe('storefront API', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/checkout',
-      payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 4 }] }
+      payload: checkoutPayload([{ productId: 'p1', quantity: 4 }])
     });
 
     expect(res.statusCode).toBe(201);
@@ -88,7 +116,7 @@ describe('storefront API', () => {
   it('exposes admin order review after checkout', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store, { adminAuth });
-    await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p2', quantity: 1 }] } });
+    await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p2', quantity: 1 }]) });
     const res = await app.inject({ method: 'GET', url: '/api/admin/orders', headers: adminHeaders });
     expect(res.json().orders[0].email).toBe('buyer@example.com');
   });
@@ -96,7 +124,7 @@ describe('storefront API', () => {
   it('marks an order paid when Stripe confirms checkout completion', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store, { adminAuth });
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
 
     const webhook = await app.inject({
@@ -110,10 +138,25 @@ describe('storefront API', () => {
     expect(orders.json().orders[0]).toMatchObject({ id: orderId, status: 'paid' });
   });
 
+  it('rejects unsigned Stripe webhooks in production when the webhook secret is missing', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('STRIPE_WEBHOOK_SECRET', '');
+    const app = buildServer(createInMemoryStore(), { adminAuth });
+
+    const webhook = await app.inject({
+      method: 'POST',
+      url: '/api/stripe/webhook',
+      payload: { type: 'checkout.session.completed', data: { object: { metadata: { orderId: 'ord_test' } } } }
+    });
+
+    expect(webhook.statusCode).toBe(400);
+    expect(webhook.json()).toEqual({ error: 'Stripe webhook secret is required in production' });
+  });
+
   it('shows a checkout receipt with current order status', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store);
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
 
@@ -123,23 +166,32 @@ describe('storefront API', () => {
     expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
   });
 
-  it('lists customer order history by email for signed-in accounts', async () => {
+  it('lists customer order history for the signed-in account only', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store);
-    await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
-    await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'other@example.com', items: [{ productId: 'p2', quantity: 1 }] } });
+    const app = buildServer(store, { customerAuth });
+    await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p2', quantity: 1 }], { email: 'other@example.com' }) });
 
-    const history = await app.inject({ method: 'GET', url: '/api/orders?email=buyer%40example.com' });
+    const history = await app.inject({ method: 'GET', url: '/api/orders', headers: customerHeaders });
 
     expect(history.statusCode).toBe(200);
     expect(history.json().orders).toHaveLength(1);
     expect(history.json().orders[0]).toMatchObject({ email: 'buyer@example.com', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] });
   });
 
+  it('blocks anonymous customer order history access', async () => {
+    const app = buildServer(createInMemoryStore(), { customerAuth });
+
+    const history = await app.inject({ method: 'GET', url: '/api/orders?email=buyer%40example.com' });
+
+    expect(history.statusCode).toBe(401);
+    expect(history.json()).toEqual({ error: 'Customer sign-in required' });
+  });
+
   it('lets admins mark paid orders fulfilled', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store, { adminAuth });
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
 
@@ -155,7 +207,7 @@ describe('storefront API', () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', items: [{ productId: 'p1', quantity: 1 }] } });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
 
     const webhook = await app.inject({
@@ -172,7 +224,7 @@ describe('storefront API', () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 1 }] } });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
 

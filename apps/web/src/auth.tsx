@@ -33,9 +33,10 @@ export function AccountPanel({ checkoutMessage }: { checkoutMessage: string }) {
 }
 
 export function useCustomerSession() {
-  if (!isClerkConfigured) return { isSignedIn: false, email: undefined as string | undefined };
+  if (!isClerkConfigured) return { isSignedIn: false, email: undefined as string | undefined, getCustomerToken: async () => undefined as string | null | undefined };
+  const { getToken } = useAuth();
   const { isSignedIn, user } = useUser();
-  return { isSignedIn: Boolean(isSignedIn), email: user?.primaryEmailAddress?.emailAddress };
+  return { isSignedIn: Boolean(isSignedIn), email: user?.primaryEmailAddress?.emailAddress, getCustomerToken: getToken };
 }
 
 export function useAdminAccess() {

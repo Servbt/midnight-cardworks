@@ -70,7 +70,7 @@ export default function App() {
   const [contactWebsite, setContactWebsite] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const { isAdmin, getAdminToken } = useAdminAccess();
-  const { isSignedIn, email: sessionEmail } = useCustomerSession();
+  const { isSignedIn, email: sessionEmail, getCustomerToken } = useCustomerSession();
 
   useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
   useEffect(() => {
@@ -152,14 +152,21 @@ export default function App() {
   }, [view, checkoutMessage, isAdmin]);
   useEffect(() => {
     if (view !== 'account' || !isSignedIn || !sessionEmail) return;
+    let cancelled = false;
     setCustomerOrdersMessage('Loading order history...');
-    fetchCustomerOrders(sessionEmail).then((orderHistory) => {
+    getCustomerToken().then((token) => {
+      if (!token) throw new Error('Customer token required');
+      return fetchCustomerOrders(token);
+    }).then((orderHistory) => {
+      if (cancelled) return;
       setCustomerOrders(orderHistory);
       setCustomerOrdersMessage(orderHistory.length === 0 ? 'No orders saved to this account yet.' : '');
     }).catch(() => {
+      if (cancelled) return;
       setCustomerOrders([]);
       setCustomerOrdersMessage('Could not load order history yet.');
     });
+    return () => { cancelled = true; };
   }, [view, isSignedIn, sessionEmail]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
@@ -404,11 +411,31 @@ export default function App() {
 
   async function checkout() {
     const checkoutEmail = email.trim();
+    const checkoutCustomerName = customerName.trim();
+    const checkoutShippingAddressFields = {
+      streetAddress: shippingAddressFields.streetAddress.trim(),
+      apartment: shippingAddressFields.apartment.trim(),
+      city: shippingAddressFields.city.trim(),
+      zipCode: shippingAddressFields.zipCode.trim()
+    };
     if (!checkoutEmail) {
       setCheckoutValidationMessage('Email address required — we’ll only use this for order updates or design/print issues.');
       return;
     }
-    const checkout = await createCheckout(checkoutEmail, customerName, shippingAddress, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+    if (!checkoutCustomerName) {
+      setCheckoutValidationMessage('Full name is required for shipping.');
+      return;
+    }
+    const missingShipping = [
+      !checkoutShippingAddressFields.streetAddress ? 'street address' : '',
+      !checkoutShippingAddressFields.city ? 'city' : '',
+      !checkoutShippingAddressFields.zipCode ? 'ZIP code' : ''
+    ].filter(Boolean);
+    if (missingShipping.length > 0) {
+      setCheckoutValidationMessage(`Shipping ${missingShipping.join(', ')} required before payment.`);
+      return;
+    }
+    const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
@@ -833,15 +860,15 @@ export default function App() {
             <label>Email address<input type="email" required autoComplete="email" placeholder="buyer@example.com" value={email} onInvalid={() => setCheckoutValidationMessage('Email address required — we’ll only use this for order updates or design/print issues.')} onChange={(e) => { setEmail(e.target.value); setCheckoutValidationMessage(''); }} /></label>
             <p className="field-note">Required so we can send order updates and contact you if there’s a design or print issue.</p>
             {checkoutValidationMessage && <p className="status-message" role="status">{checkoutValidationMessage}</p>}
-            <label>Full name<input autoComplete="name" placeholder="Ari Buyer" value={customerName} onChange={(e) => setCustomerName(e.target.value)} /></label>
+            <label>Full name<input required autoComplete="name" placeholder="Ari Buyer" value={customerName} onChange={(e) => { setCustomerName(e.target.value); setCheckoutValidationMessage(''); }} /></label>
           </fieldset>
           <fieldset className="delivery-fieldset">
             <legend>Delivery information</legend>
             <div className="shipping-address-grid">
-              <label>Street address<input autoComplete="shipping address-line1" placeholder="123 Midnight Lane" value={shippingAddressFields.streetAddress} onChange={(e) => updateShippingAddressField('streetAddress', e.target.value)} /></label>
+              <label>Street address<input required autoComplete="shipping address-line1" placeholder="123 Midnight Lane" value={shippingAddressFields.streetAddress} onChange={(e) => { updateShippingAddressField('streetAddress', e.target.value); setCheckoutValidationMessage(''); }} /></label>
               <label>Apartment number <span className="optional-label">optional</span><input aria-label="Apartment number" autoComplete="shipping address-line2" placeholder="Apt 4B" value={shippingAddressFields.apartment} onChange={(e) => updateShippingAddressField('apartment', e.target.value)} /></label>
-              <label>City<input autoComplete="shipping address-level2" placeholder="Austin" value={shippingAddressFields.city} onChange={(e) => updateShippingAddressField('city', e.target.value)} /></label>
-              <label>ZIP code<input autoComplete="shipping postal-code" inputMode="numeric" placeholder="78701" value={shippingAddressFields.zipCode} onChange={(e) => updateShippingAddressField('zipCode', e.target.value)} /></label>
+              <label>City<input required autoComplete="shipping address-level2" placeholder="Austin" value={shippingAddressFields.city} onChange={(e) => { updateShippingAddressField('city', e.target.value); setCheckoutValidationMessage(''); }} /></label>
+              <label>ZIP code<input required autoComplete="shipping postal-code" inputMode="numeric" placeholder="78701" value={shippingAddressFields.zipCode} onChange={(e) => { updateShippingAddressField('zipCode', e.target.value); setCheckoutValidationMessage(''); }} /></label>
             </div>
             <p className="field-note">Use separate fields so shipping labels and delivery review stay clear.</p>
           </fieldset>

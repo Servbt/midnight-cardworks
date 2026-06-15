@@ -8,6 +8,7 @@ import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
 import { createCheckoutResponse } from './checkout.js';
 import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
+import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
 import { createInMemoryStore } from './store.js';
 import { getCompletedCheckoutOrderId, parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
@@ -16,7 +17,25 @@ import type { Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 import { effectiveProductPrice } from './pricing.js';
 
-const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
+const shippingAddressFieldsSchema = z.object({
+  streetAddress: z.string().trim().min(1).max(200),
+  apartment: z.string().trim().max(120).optional().default(''),
+  city: z.string().trim().min(1).max(120),
+  zipCode: z.string().trim().min(5).max(20)
+});
+const checkoutSchema = z.object({
+  email: z.string().trim().email(),
+  customerName: z.string().trim().min(1).max(120),
+  shippingAddressFields: shippingAddressFieldsSchema,
+  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1)
+}).transform(({ shippingAddressFields, ...checkout }) => ({
+  ...checkout,
+  shippingAddress: [
+    shippingAddressFields.streetAddress,
+    shippingAddressFields.apartment,
+    `${shippingAddressFields.city} ${shippingAddressFields.zipCode}`
+  ].filter(Boolean).join(', ')
+}));
 const contactSchema = z.object({
   name: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(200),
@@ -80,11 +99,12 @@ async function productSeoHtml(staticRoot: string, product: Product) {
   return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
 }
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; emailNotifier?: EmailNotifier };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier };
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
   const adminAuth = options.adminAuth ?? createAdminAuthFromEnv();
+  const customerAuth = options.customerAuth ?? createCustomerAuthFromEnv();
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
@@ -125,9 +145,9 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     }
   });
   app.get('/api/orders', async (request, reply) => {
-    const email = String((request.query as { email?: string }).email ?? '').trim();
-    if (!z.string().email().safeParse(email).success) return reply.code(400).send({ error: 'Valid email required' });
-    return { orders: await store.listOrdersByEmail(email) };
+    const result = await customerAuth.authorize(request.headers.authorization);
+    if (result.ok === false) return reply.code(result.status).send({ error: result.error });
+    return { orders: await store.listOrdersByEmail(result.email) };
   });
   app.get('/api/orders/:orderId', async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
