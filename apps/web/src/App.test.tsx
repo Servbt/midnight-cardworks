@@ -14,9 +14,9 @@ vi.mock('./auth', () => ({
 }));
 
 const products = [
-  { id: 'p1', slug: 'golden', title: 'Golden Hour Commander Proxy', description: 'Premium commander centerpiece', price: 1299, category: 'Commander', tags: ['commander'], image: 'x', inventory: 20, active: true },
-  { id: 'p2', slug: 'token', title: 'Midnight Token Pack', description: 'Token bundle', price: 899, category: 'Tokens', tags: ['tokens'], image: 'x', inventory: 35, active: true },
-  { id: 'p3', slug: 'sold-out', title: 'Archive Showcase Proxy', description: 'Display-only showcase card', price: 1599, category: 'Display', tags: ['display', 'archive'], image: 'x', inventory: 0, active: true }
+  { id: 'p1', slug: 'golden', title: 'Golden Hour Commander Proxy', description: 'Premium commander centerpiece', price: 1299, saleActive: false, salePrice: null, category: 'Commander', tags: ['commander'], image: 'x', inventory: 20, active: true },
+  { id: 'p2', slug: 'token', title: 'Midnight Token Pack', description: 'Token bundle', price: 899, saleActive: false, salePrice: null, category: 'Tokens', tags: ['tokens'], image: 'x', inventory: 35, active: true },
+  { id: 'p3', slug: 'sold-out', title: 'Archive Showcase Proxy', description: 'Display-only showcase card', price: 1599, saleActive: false, salePrice: null, category: 'Display', tags: ['display', 'archive'], image: 'x', inventory: 0, active: true }
 ];
 
 beforeEach(() => {
@@ -838,6 +838,32 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Saved Moonlit Token Pack.')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('moonlit-token') }));
+  });
+
+  it('lets admins apply and save sale pricing for selected listings', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Sales/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Sale manager' })).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Select Golden Hour Commander Proxy for sale changes'));
+    await userEvent.clear(screen.getByLabelText('Bulk sale percentage'));
+    await userEvent.type(screen.getByLabelText('Bulk sale percentage'), '20');
+    await userEvent.click(screen.getByRole('button', { name: 'Apply % to selected' }));
+
+    expect(screen.getByLabelText('Sale active for Golden Hour Commander Proxy')).toBeChecked();
+    expect(screen.getByLabelText('Sale price in dollars for Golden Hour Commander Proxy')).toHaveValue(10.39);
+    await userEvent.click(screen.getByRole('button', { name: 'Save selected sales' }));
+
+    expect(await screen.findByText('Saved sale settings for 1 listing.')).toBeInTheDocument();
+    expect(String((fetch as any).mock.calls.find((call: unknown[]) => String(call[0]).includes('/api/admin/products') && (call[1] as RequestInit | undefined)?.method === 'POST' && String((call[1] as RequestInit).body).includes('"saleActive":true'))?.[1]?.body)).toContain('"salePrice":1039');
+
+    await userEvent.click(screen.getByRole('button', { name: 'All' }));
+    const saleCard = await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
+    expect(within(saleCard).getByText('On sale')).toBeInTheDocument();
+    expect(within(saleCard).getByText('$12.99')).toBeInTheDocument();
+    expect(within(saleCard).getByText('$10.39')).toBeInTheDocument();
   });
 
   it('hides the admin dashboard from non-admin customers', async () => {

@@ -54,6 +54,23 @@ describe('storefront API', () => {
     expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane\nLos Angeles, CA 90001', subtotal: 2598, shippingCost: 499, total: 3097 });
   });
 
+  it('uses active sale pricing when creating checkout orders', async () => {
+    const product = { ...(await createInMemoryStore().getProduct('golden-hour-commander-proxy'))!, saleActive: true, salePrice: 999 };
+    const store = createInMemoryStore([product]);
+    const app = buildServer(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/checkout',
+      payload: { email: 'buyer@example.com', items: [{ productId: 'p1', quantity: 2 }] }
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ subtotal: 1998, shippingCost: 499, total: 2497 });
+    const order = await store.getOrder(res.json().orderId);
+    expect(order?.items[0]).toMatchObject({ title: 'Golden Hour Commander Proxy', quantity: 2, price: 999 });
+  });
+
   it('waives shipping when the cart subtotal reaches the free shipping threshold', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store);

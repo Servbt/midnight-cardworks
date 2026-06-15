@@ -1,4 +1,4 @@
-export type Product = { id: string; slug: string; title: string; description: string; price: number; category: string; tags: string[]; image: string; inventory: number; active: boolean; featured?: boolean; };
+export type Product = { id: string; slug: string; title: string; description: string; price: number; saleActive: boolean; salePrice: number | null; category: string; tags: string[]; image: string; inventory: number; active: boolean; featured?: boolean; };
 export type CartItemInput = { productId: string; quantity: number };
 export type OrderStatus = 'pending_payment' | 'paid' | 'fulfilled';
 export type Order = { id: string; email: string; customerName?: string; shippingAddress?: string; items: Array<{ productId: string; title: string; price: number; quantity: number }>; subtotal: number; shippingCost: number; total: number; status: OrderStatus; createdAt: string; };

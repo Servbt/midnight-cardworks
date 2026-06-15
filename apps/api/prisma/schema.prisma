@@ -19,6 +19,8 @@ model Product {
   title       String
   description String
   price       Int
+  saleActive  Boolean  @default(false)
+  salePrice   Int?
   category    String
   tags        String[]
   image       String

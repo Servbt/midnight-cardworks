@@ -1,0 +1,2 @@
+ALTER TABLE "Product" ADD COLUMN "saleActive" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN "salePrice" INTEGER;

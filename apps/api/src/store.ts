@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import type { CartItemInput, Order, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
+import { effectiveProductPrice } from './pricing.js';
 
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
   const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
@@ -26,7 +27,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       const items = input.items.map((item) => {
         const product = productList.find((p) => p.id === item.productId);
         if (!product) throw new Error(`Unknown product ${item.productId}`);
-        return { productId: product.id, title: product.title, price: product.price, quantity: item.quantity };
+        return { productId: product.id, title: product.title, price: effectiveProductPrice(product), quantity: item.quantity };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);

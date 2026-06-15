@@ -1,4 +1,4 @@
-export type Product = { id:string; slug:string; title:string; description:string; price:number; category:string; tags:string[]; image:string; inventory:number; active:boolean; featured?:boolean };
+export type Product = { id:string; slug:string; title:string; description:string; price:number; saleActive:boolean; salePrice:number|null; category:string; tags:string[]; image:string; inventory:number; active:boolean; featured?:boolean };
 export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; subtotal?:number; shippingCost?:number; total:number; status:string; items:Array<{title:string;quantity:number;price:number}> };
 export type ContactPayload = { name:string; email:string; orderNumber?:string; message:string; website?:string };
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';

@@ -8,9 +8,11 @@ type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'produc
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
+const isProductOnSale = (product: Product) => product.saleActive && product.salePrice !== null && product.salePrice > 0 && product.salePrice < product.price;
+const effectiveProductPrice = (product: Product) => isProductOnSale(product) ? product.salePrice! : product.price;
 const flatShippingCents = 499;
 const freeShippingThresholdCents = 5000;
-const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, active: true };
+const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, saleActive: false, salePrice: null, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, active: true };
 const launchNotes = [
   { title: 'Secure Stripe checkout', copy: 'Payments stay on Stripe so card data never touches the shop server.' },
   { title: 'Made-to-order fulfillment', copy: 'Each order is reviewed, packed, and marked fulfilled from the admin dashboard.' },
@@ -50,8 +52,10 @@ export default function App() {
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
-  const [adminTab, setAdminTab] = useState<'orders' | 'listings'>('orders');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales'>('orders');
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
+  const [saleSelection, setSaleSelection] = useState<string[]>([]);
+  const [bulkSalePercent, setBulkSalePercent] = useState('15');
   const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
@@ -163,7 +167,7 @@ export default function App() {
     const matchesQuery = [p.title, p.description, p.category, ...p.tags].join(' ').toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (category === 'All' || p.category === category);
   }), [products, query, category]);
-  const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
+  const subtotal = cart.reduce((sum, line) => sum + effectiveProductPrice(line.product) * line.quantity, 0);
   const shippingCost = subtotal >= freeShippingThresholdCents ? 0 : flatShippingCents;
   const orderTotal = subtotal + shippingCost;
   const freeShippingRemaining = Math.max(0, freeShippingThresholdCents - subtotal);
@@ -287,7 +291,7 @@ export default function App() {
     <div><p className="eyebrow">Keep browsing</p><h3>Recently viewed</h3><p>Continue browsing where you left off.</p></div>
     <div className="recently-viewed-list">{recentlyViewed.map((product) => <article key={product.id}>
       <img src={product.image} alt="" />
-      <div><strong>{product.title}</strong><span>{formatMoney(product.price)} · {product.category}</span></div>
+      <div><strong>{product.title}</strong><span>{formatMoney(effectiveProductPrice(product))} · {product.category}</span></div>
       <button className="ghost" type="button" onClick={() => showProduct(product)} aria-label={`Continue browsing ${product.title}`}>View again</button>
     </article>)}</div>
   </section> : null;
@@ -476,6 +480,74 @@ export default function App() {
     }
   }
 
+  function updateSaleSelection(slug: string, checked: boolean) {
+    setSaleSelection((items) => checked ? [...new Set([...items, slug])] : items.filter((item) => item !== slug));
+  }
+
+  function defaultSalePrice(product: Product) {
+    const percent = Number(bulkSalePercent);
+    const safePercent = Number.isFinite(percent) && percent > 0 && percent < 100 ? percent : 15;
+    return Math.max(1, Math.min(product.price - 1, Math.round(product.price * (1 - safePercent / 100))));
+  }
+
+  function patchSaleProducts(slugs: string[], patcher: (product: Product) => Partial<Product>) {
+    const targets = new Set(slugs);
+    setAdminProducts((items) => items.map((item) => targets.has(item.slug) ? { ...item, ...patcher(item) } : item));
+  }
+
+  function applyBulkSalePercent() {
+    const percent = Number(bulkSalePercent);
+    if (saleSelection.length === 0) {
+      setAdminMessage('Select one or more listings before applying a sale.');
+      return;
+    }
+    if (!Number.isFinite(percent) || percent <= 0 || percent >= 100) {
+      setAdminMessage('Enter a sale percentage between 1 and 99.');
+      return;
+    }
+    patchSaleProducts(saleSelection, (product) => ({ saleActive: true, salePrice: Math.max(1, Math.min(product.price - 1, Math.round(product.price * (1 - percent / 100)))) }));
+    setAdminMessage(`Applied ${percent}% sale pricing to ${saleSelection.length} selected ${saleSelection.length === 1 ? 'listing' : 'listings'}.`);
+  }
+
+  function enableSelectedSales() {
+    if (saleSelection.length === 0) {
+      setAdminMessage('Select one or more listings before enabling a sale.');
+      return;
+    }
+    patchSaleProducts(saleSelection, (product) => ({ saleActive: true, salePrice: product.salePrice && product.salePrice < product.price ? product.salePrice : defaultSalePrice(product) }));
+    setAdminMessage(`Enabled sale pricing for ${saleSelection.length} selected ${saleSelection.length === 1 ? 'listing' : 'listings'}.`);
+  }
+
+  function disableSelectedSales() {
+    if (saleSelection.length === 0) {
+      setAdminMessage('Select one or more listings before disabling a sale.');
+      return;
+    }
+    patchSaleProducts(saleSelection, () => ({ saleActive: false }));
+    setAdminMessage(`Disabled sale pricing for ${saleSelection.length} selected ${saleSelection.length === 1 ? 'listing' : 'listings'}.`);
+  }
+
+  async function handleSaleSave(productsToSave: Product[]) {
+    if (productsToSave.length === 0) {
+      setAdminMessage('Select one or more listings to save sale changes.');
+      return;
+    }
+    const invalid = productsToSave.find((product) => product.saleActive && (!product.salePrice || product.salePrice >= product.price));
+    if (invalid) {
+      setAdminMessage(`Sale price for ${invalid.title} must be lower than the regular price.`);
+      return;
+    }
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const savedProducts = await Promise.all(productsToSave.map((product) => saveAdminProduct(product, token)));
+      savedProducts.forEach(rememberSavedProduct);
+      setAdminMessage(`Saved sale settings for ${savedProducts.length} ${savedProducts.length === 1 ? 'listing' : 'listings'}.`);
+    } catch {
+      setAdminMessage('Could not save sale settings.');
+    }
+  }
+
   async function handleOrderFulfilled(order: Order) {
     try {
       const token = await getAdminToken();
@@ -522,6 +594,7 @@ export default function App() {
   }
 
   const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
+  const saleSelectedProducts = adminProducts.filter((product) => saleSelection.includes(product.slug));
 
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
@@ -652,6 +725,7 @@ export default function App() {
                     <div className="product-card__badges">
                       {product.inventory <= 0 && <span className="badge badge-sold">Sold out</span>}
                       {product.inventory > 0 && product.inventory <= 5 && <span className="badge badge-new">Low stock</span>}
+                      {isProductOnSale(product) && <span className="badge badge-sale">On sale</span>}
                       <span className={categoryBadgeClass}>{product.category}</span>
                     </div>
                     {isProductAdded(product)
@@ -664,9 +738,10 @@ export default function App() {
                   <div className="product-card__info">
                     <span className="product-card__name">{product.title}</span>
                     <span className="product-card__meta">{product.category}{product.tags.length > 0 ? ` · #${product.tags[0]}` : ''}</span>
-                    <div>
+                    <div className={`price-stack${isProductOnSale(product) ? ' is-sale' : ''}`}>
                       <span className="product-card__price-label">From</span>
-                      <span className="product-card__price">{formatMoney(product.price)}</span>
+                      {isProductOnSale(product) && <span className="product-card__original-price">{formatMoney(product.price)}</span>}
+                      <span className="product-card__price">{formatMoney(effectiveProductPrice(product))}</span>
                     </div>
                     <a className="detail-link" href={`/products/${product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(product); }} aria-label={`View details for ${product.title}`}>View details →</a>
                   </div>
@@ -694,9 +769,10 @@ export default function App() {
           <div className="product-detail-info">
             <span className="eyebrow">{selectedProduct.category}</span>
             <h2>{selectedProduct.title}</h2>
-            <div className="product-detail-price-block">
+            <div className={`product-detail-price-block${isProductOnSale(selectedProduct) ? ' is-sale' : ''}`}>
               <span className="product-detail-price-label">From</span>
-              <span className="product-detail-price">{formatMoney(selectedProduct.price)}</span>
+              {isProductOnSale(selectedProduct) && <span className="product-detail-original-price">{formatMoney(selectedProduct.price)}</span>}
+              <span className="product-detail-price">{formatMoney(effectiveProductPrice(selectedProduct))}</span>
             </div>
             <p className="product-detail-desc">{selectedProduct.description}</p>
             <div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
@@ -735,7 +811,7 @@ export default function App() {
           <section className="cart-items-card" role="region" aria-label="Items in your cart">
             <div className="cart-section-header"><div><h3>Items in your cart</h3><p>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</p></div><div className="cart-column-labels" aria-hidden="true"><span>Item</span><span>Quantity</span><span>Price</span></div></div>
             <div className="cart-items" aria-label="Cart items">
-              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(line.product.price * line.quantity)}</strong></div>)}
+              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(effectiveProductPrice(line.product) * line.quantity)}</strong></div>)}
             </div>
           </section>
           <div className="checkout-intro">
@@ -858,7 +934,56 @@ export default function App() {
 
     {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
 
-    {view === 'admin' && isAdmin && <section className="panel admin-panel"><div className="admin-header"><div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders and listings from separate workspaces, similar to an Etsy-style shop manager.</p></div><div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span></div></div>{adminMessage && <p className="status-message">{adminMessage}</p>}<div className="admin-tabs" role="tablist" aria-label="Admin sections"><button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button><button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button></div>{adminTab === 'orders' ? <section className="admin-workspace order-workspace" role="tabpanel"><div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>{orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}</section> : <section className="admin-workspace listing-workspace" role="tabpanel"><div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div><div className="admin-tabs listing-subtabs" role="tablist" aria-label="Listing workspaces"><button role="tab" aria-selected={listingTab === 'current'} className={listingTab === 'current' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('current')}>Current listings ({adminProducts.length})</button><button role="tab" aria-selected={listingTab === 'create'} className={listingTab === 'create' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('create')}>Create listing</button></div>{listingTab === 'create' ? <section className="listing-tab-panel" role="tabpanel" aria-label="Create listing"><h3>Create listing</h3>{productEditor(newProduct, true)}</section> : <section className="listing-tab-panel" role="tabpanel" aria-label="Current listings"><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</section>}</section>}</section>}
+    {view === 'admin' && isAdmin && <section className="panel admin-panel">
+      <div className="admin-header">
+        <div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders, listings, and sale pricing from separate workspaces.</p></div>
+        <div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span><span>{adminProducts.filter(isProductOnSale).length} on sale</span></div>
+      </div>
+      {adminMessage && <p className="status-message">{adminMessage}</p>}
+      <div className="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button>
+        <button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button>
+        <button role="tab" aria-selected={adminTab === 'sales'} className={adminTab === 'sales' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('sales')}>Sales ({adminProducts.filter(isProductOnSale).length})</button>
+      </div>
+      {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
+        <div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>
+        {orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}
+      </section>}
+      {adminTab === 'listings' && <section className="admin-workspace listing-workspace" role="tabpanel" aria-label="Listings">
+        <div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div>
+        <div className="admin-tabs listing-subtabs" role="tablist" aria-label="Listing workspaces">
+          <button role="tab" aria-selected={listingTab === 'current'} className={listingTab === 'current' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('current')}>Current listings ({adminProducts.length})</button>
+          <button role="tab" aria-selected={listingTab === 'create'} className={listingTab === 'create' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('create')}>Create listing</button>
+        </div>
+        {listingTab === 'create' ? <section className="listing-tab-panel" role="tabpanel" aria-label="Create listing"><h3>Create listing</h3>{productEditor(newProduct, true)}</section> : <section className="listing-tab-panel" role="tabpanel" aria-label="Current listings"><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</section>}
+      </section>}
+      {adminTab === 'sales' && <section className="admin-workspace sale-workspace" role="tabpanel" aria-label="Sales">
+        <div className="section-heading"><div><h3>Sale manager</h3><p>Turn sale pricing on or off for one listing, selected listings, or the whole current lineup.</p></div></div>
+        <div className="sale-toolbar">
+          <span>{saleSelection.length} selected</span>
+          <button type="button" className="ghost" onClick={() => setSaleSelection(adminProducts.map((product) => product.slug))}>Select all</button>
+          <button type="button" className="ghost" onClick={() => setSaleSelection([])}>Clear selection</button>
+          <label>Bulk sale %<input aria-label="Bulk sale percentage" type="number" min="1" max="99" value={bulkSalePercent} onChange={(event) => setBulkSalePercent(event.target.value)} /></label>
+          <button type="button" onClick={applyBulkSalePercent}>Apply % to selected</button>
+          <button type="button" className="ghost" onClick={enableSelectedSales}>Enable selected</button>
+          <button type="button" className="ghost" onClick={disableSelectedSales}>Disable selected</button>
+          <button type="button" onClick={() => void handleSaleSave(saleSelectedProducts)}>Save selected sales</button>
+        </div>
+        <div className="sale-list">
+          {adminProducts.map((product) => <article className="sale-row" key={`sale-${product.slug}`}>
+            <label className="checkbox-row"><input aria-label={`Select ${product.title} for sale changes`} type="checkbox" checked={saleSelection.includes(product.slug)} onChange={(event) => updateSaleSelection(product.slug, event.target.checked)} /> Select</label>
+            <div className="sale-listing-summary">
+              <strong>{product.title}</strong>
+              <span>{formatMoney(product.price)} regular {isProductOnSale(product) ? `· ${formatMoney(effectiveProductPrice(product))} sale` : '· no active sale'}</span>
+            </div>
+            <label className="checkbox-row"><input aria-label={`Sale active for ${product.title}`} type="checkbox" checked={product.saleActive} onChange={(event) => updateAdminProduct(product.slug, { saleActive: event.target.checked, salePrice: event.target.checked && (!product.salePrice || product.salePrice >= product.price) ? defaultSalePrice(product) : product.salePrice })} /> Sale active</label>
+            <label>Sale price for {product.title}<input aria-label={`Sale price in dollars for ${product.title}`} type="number" step="0.01" min="0" value={product.salePrice === null ? '' : (product.salePrice / 100).toFixed(2)} onChange={(event) => updateAdminProduct(product.slug, { salePrice: event.target.value === '' ? null : moneyToCents(event.target.value) })} /></label>
+            <span className={`status-badge ${isProductOnSale(product) ? 'sale-status-active' : 'sale-status-inactive'}`}>{isProductOnSale(product) ? 'On sale' : 'No sale'}</span>
+            <button type="button" onClick={() => void handleSaleSave([product])}>Save sale for {product.title}</button>
+          </article>)}
+        </div>
+      </section>}
+    </section>}
 
     <footer>
       <div className="footer-inner">

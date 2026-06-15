@@ -14,6 +14,7 @@ import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
+import { effectiveProductPrice } from './pricing.js';
 
 const checkoutSchema = z.object({ email: z.string().email(), customerName: z.string().min(1).optional(), shippingAddress: z.string().min(1).optional(), items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1) });
 const contactSchema = z.object({
@@ -29,12 +30,18 @@ const productSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   price: z.number().int().nonnegative(),
+  saleActive: z.boolean().default(false),
+  salePrice: z.number().int().positive().nullable().optional().default(null),
   category: z.string().min(1),
   tags: z.array(z.string()).default([]),
   image: z.string().min(1),
   inventory: z.number().int().nonnegative(),
   active: z.boolean(),
   featured: z.boolean().optional()
+}).superRefine((product, context) => {
+  if (product.saleActive && (!product.salePrice || product.salePrice >= product.price)) {
+    context.addIssue({ code: 'custom', path: ['salePrice'], message: 'Sale price must be lower than the regular price' });
+  }
 });
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
@@ -52,7 +59,7 @@ function productSeoHead(product: Product) {
     image: product.image,
     category: product.category,
     url,
-    offers: { '@type': 'Offer', priceCurrency: 'USD', price: (product.price / 100).toFixed(2), availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }
+    offers: { '@type': 'Offer', priceCurrency: 'USD', price: (effectiveProductPrice(product) / 100).toFixed(2), availability: product.inventory > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }
   });
   return [
     `<title>${escapeHtml(title)}</title>`,

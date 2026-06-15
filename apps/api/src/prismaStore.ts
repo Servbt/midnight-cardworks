@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { CheckoutInput, Order, OrderStatus, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
+import { effectiveProductPrice } from './pricing.js';
 
 type PrismaProduct = Awaited<ReturnType<PrismaClient['product']['findFirstOrThrow']>>;
 type PrismaOrder = Awaited<ReturnType<PrismaClient['order']['findFirstOrThrow']>> & {
@@ -16,6 +17,8 @@ function toProduct(product: PrismaProduct): Product {
     title: product.title,
     description: product.description,
     price: product.price,
+    saleActive: product.saleActive,
+    salePrice: product.salePrice,
     category: product.category,
     tags: product.tags,
     image: product.image,
@@ -95,7 +98,7 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const orderItems = input.items.map((item) => {
         const product = products.find((candidate) => candidate.id === item.productId);
         if (!product) throw new Error(`Unknown product ${item.productId}`);
-        return { productId: product.id, title: product.title, price: product.price, quantity: item.quantity };
+        return { productId: product.id, title: product.title, price: effectiveProductPrice(toProduct(product)), quantity: item.quantity };
       });
       const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
