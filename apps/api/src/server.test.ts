@@ -203,6 +203,64 @@ describe('storefront API', () => {
     expect(receipt.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
   });
 
+  it('lets admins cancel pending payment orders without issuing a refund', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+
+    const cancel = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/cancel`, headers: adminHeaders, payload: { reason: 'Customer changed their mind before payment' } });
+
+    expect(cancel.statusCode).toBe(200);
+    expect(cancel.json().order).toMatchObject({ id: orderId, status: 'canceled', refundReason: 'Customer changed their mind before payment' });
+    expect(cancel.json().order.canceledAt).toBeTruthy();
+  });
+
+  it('lets admins issue a full refund for paid orders', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
+
+    const refund = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers: adminHeaders, payload: { reason: 'Customer requested cancellation' } });
+
+    expect(refund.statusCode).toBe(200);
+    expect(refund.json().order).toMatchObject({ id: orderId, status: 'refunded', refundedAmount: 1798, refundReason: 'Customer requested cancellation' });
+    expect(refund.json().refund).toMatchObject({ amount: 1798, status: 'succeeded' });
+  });
+
+  it('lets admins issue a partial refund for paid orders', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
+
+    const refund = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers: adminHeaders, payload: { amount: 499, reason: 'Shipping adjustment' } });
+
+    expect(refund.statusCode).toBe(200);
+    expect(refund.json().order).toMatchObject({ id: orderId, status: 'partially_refunded', refundedAmount: 499, refundReason: 'Shipping adjustment' });
+  });
+
+  it('updates refund state from Stripe refund webhooks', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
+
+    const webhook = await app.inject({
+      method: 'POST',
+      url: '/api/stripe/webhook',
+      payload: { type: 'refund.updated', data: { object: { id: 're_test_123', amount: 499, status: 'succeeded', metadata: { orderId, reason: 'Shipping adjustment' } } } }
+    });
+
+    expect(webhook.statusCode).toBe(200);
+    const order = await store.getOrder(orderId);
+    expect(order).toMatchObject({ status: 'partially_refunded', refundedAmount: 499, stripeRefundId: 're_test_123', refundReason: 'Shipping adjustment' });
+  });
+
   it('sends an order confirmation email when Stripe confirms checkout completion', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();

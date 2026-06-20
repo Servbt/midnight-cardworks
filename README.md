@@ -12,7 +12,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Checkout flow requires receipt email, customer name, and shipping address before Stripe Checkout
 - Email notifications for paid orders, fulfilled orders, and customer contact messages via Resend
 - Clerk-backed customer order history for signed-in accounts
-- Admin dashboard for listing management, sale pricing, and order review, restricted to allowlisted Clerk admin emails
+- Admin dashboard for listing management, sale pricing, order review, cancellations, and refunds, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
 - React/Vite frontend with Vitest coverage
 
@@ -54,6 +54,9 @@ The checkout endpoint is production-ready at the service seam:
 - The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`.
 - `/api/checkout` requires `customerName` and structured shipping fields; receipts and admin order review display the formatted shipping address.
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
+- Admins can cancel `pending_payment` orders before payment succeeds.
+- Admins can issue full or partial refunds for paid/fulfilled orders; refunds are created against the stored Stripe PaymentIntent.
+- Refund webhook events update order status to `refund_pending`, `partially_refunded`, `refunded`, or `refund_failed`.
 - When Resend is configured, paid orders send a customer confirmation email plus an optional shop-owner notification. Fulfilled orders send a customer fulfillment email.
 
 Required production env vars:
@@ -132,7 +135,7 @@ VITE_ADMIN_EMAILS=owner@example.com
 - `VITE_ADMIN_EMAILS` only controls whether the frontend shows the Admin button. It must match `ADMIN_EMAILS`, but it is not a security boundary.
 - Separate multiple admin emails with commas.
 
-Admin product management supports creating new listings, editing existing listing title/description/price/category/tags/inventory/image URL, toggling active/inactive status, and uploading listing images. The Sales tab can enable/disable sale pricing for one or multiple listings at once. Inactive listings remain visible in admin but are hidden from the public storefront.
+Admin product management supports creating new listings, editing existing listing title/description/price/category/tags/inventory/image URL, toggling active/inactive status, and uploading listing images. The Sales tab can enable/disable sale pricing for one or multiple listings at once. The Orders tab can cancel pending payment orders and issue full or partial Stripe refunds for paid orders. Inactive listings remain visible in admin but are hidden from the public storefront.
 
 ## Database Storage
 
@@ -226,5 +229,6 @@ Production behavior:
 3. Sign in with an allowlisted admin email and confirm `/admin` can manage orders, listings, images, and sale pricing.
 4. Complete a Stripe test checkout and confirm the webhook marks the order paid.
 5. Confirm Resend sends customer paid/fulfilled emails and owner notifications.
-6. Confirm Cloudinary uploads produce hosted product image URLs.
-7. Review real listings, prices, inventory, sale settings, fulfillment copy, and legal notes before accepting live orders.
+6. Confirm Stripe refund receipts are enabled in Stripe if you want Stripe to email customers when refunds are issued.
+7. Confirm Cloudinary uploads produce hosted product image URLs.
+8. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.

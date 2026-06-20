@@ -38,6 +38,13 @@ function toOrder(order: PrismaOrder): Order {
     shippingCost: order.shippingCost,
     total: order.total,
     status: order.status as OrderStatus,
+    stripeSessionId: order.stripeSessionId ?? undefined,
+    stripePaymentIntentId: order.stripePaymentIntentId ?? undefined,
+    stripeRefundId: order.stripeRefundId ?? undefined,
+    refundedAmount: order.refundedAmount,
+    refundReason: order.refundReason ?? undefined,
+    canceledAt: order.canceledAt?.toISOString(),
+    refundedAt: order.refundedAt?.toISOString(),
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
       productId: item.productId,
@@ -59,6 +66,15 @@ export async function seedPrismaProducts(prisma: PrismaClient, products: Product
 }
 
 export function createPrismaStore(prisma: PrismaClient): Store {
+  async function findOrder(orderId: string) {
+    return prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+  }
+
+  async function updateOrder(orderId: string, data: Record<string, unknown>) {
+    const order = await prisma.order.update({ where: { id: orderId }, data, include: { items: true } }).catch(() => undefined);
+    return order ? toOrder(order) : undefined;
+  }
+
   return {
     async listProducts() {
       const products = await prisma.product.findMany({ where: { active: true }, orderBy: { createdAt: 'asc' } });
@@ -89,7 +105,7 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       return orders.map(toOrder);
     },
     async getOrder(orderId) {
-      const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      const order = await findOrder(orderId);
       return order ? toOrder(order) : undefined;
     },
     async createOrder(input: CheckoutInput) {
@@ -112,19 +128,43 @@ export function createPrismaStore(prisma: PrismaClient): Store {
           shippingCost,
           total: subtotal + shippingCost,
           status: 'pending_payment',
+          refundedAmount: 0,
           items: { create: orderItems }
         },
         include: { items: true }
       });
       return toOrder(order);
     },
-    async markOrderPaid(orderId) {
-      const order = await prisma.order.update({ where: { id: orderId }, data: { status: 'paid' }, include: { items: true } }).catch(() => undefined);
-      return order ? toOrder(order) : undefined;
+    async recordCheckoutSession(orderId, stripeSessionId) {
+      return updateOrder(orderId, { stripeSessionId });
+    },
+    async markOrderPaid(orderId, payment = {}) {
+      return updateOrder(orderId, { status: 'paid', stripeSessionId: payment.stripeSessionId, stripePaymentIntentId: payment.stripePaymentIntentId });
     },
     async markOrderFulfilled(orderId) {
-      const order = await prisma.order.update({ where: { id: orderId }, data: { status: 'fulfilled' }, include: { items: true } }).catch(() => undefined);
-      return order ? toOrder(order) : undefined;
+      return updateOrder(orderId, { status: 'fulfilled' });
+    },
+    async cancelOrder(orderId, reason) {
+      return updateOrder(orderId, { status: 'canceled', refundReason: reason, canceledAt: new Date() });
+    },
+    async markOrderRefundPending(orderId, refund) {
+      return updateOrder(orderId, { status: 'refund_pending', stripeRefundId: refund.refundId, refundReason: refund.reason });
+    },
+    async markOrderRefunded(orderId, refund) {
+      const order = await findOrder(orderId);
+      if (!order) return undefined;
+      const alreadyApplied = refund.refundId && order.stripeRefundId === refund.refundId && (order.status === 'refunded' || order.status === 'partially_refunded');
+      const refundedAmount = alreadyApplied ? order.refundedAmount : Math.min(order.total, order.refundedAmount + refund.amount);
+      return updateOrder(orderId, {
+        status: refundedAmount >= order.total ? 'refunded' : 'partially_refunded',
+        refundedAmount,
+        stripeRefundId: refund.refundId ?? order.stripeRefundId,
+        refundReason: refund.reason ?? order.refundReason,
+        refundedAt: new Date()
+      });
+    },
+    async markOrderRefundFailed(orderId, refund) {
+      return updateOrder(orderId, { status: 'refund_failed', stripeRefundId: refund.refundId, refundReason: refund.reason });
     }
   };
 }

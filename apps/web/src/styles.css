@@ -1874,6 +1874,15 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .order-card strong { color: var(--text); }
 .order-card ul { margin: .35rem 0 0; padding-left: 1.25rem; color: var(--text-2); font-size: .85rem; }
 .order-card p { font-size: .85rem; }
+.order-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .65rem;
+  align-items: end;
+  padding-top: .35rem;
+  border-top: 1px solid var(--border);
+}
+.order-actions label { margin: 0; }
 
 .status-badge {
   display: inline-flex;

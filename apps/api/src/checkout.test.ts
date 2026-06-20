@@ -6,7 +6,7 @@ vi.mock('stripe', () => ({
   default: class MockStripe {
     checkout = {
       sessions: {
-        create: async () => ({ url: 'https://checkout.stripe.test/session' })
+        create: async () => ({ id: 'cs_test_123', url: 'https://checkout.stripe.test/session', payment_intent: 'pi_test_123' })
       }
     };
   }
@@ -17,6 +17,7 @@ const order: Order = {
   email: 'guest@example.com',
   status: 'pending_payment',
   total: 1798,
+  refundedAmount: 0,
   createdAt: '2026-05-18T00:00:00.000Z',
   subtotal: 1299,
   shippingCost: 499,
@@ -34,5 +35,7 @@ describe('createCheckoutResponse', () => {
 
     expect(response.checkoutUrl).toBe('https://checkout.stripe.test/session');
     expect(response.orderId).toBe('ord_test');
+    expect(response.stripeSessionId).toBe('cs_test_123');
+    expect(response.stripePaymentIntentId).toBe('pi_test_123');
   });
 });

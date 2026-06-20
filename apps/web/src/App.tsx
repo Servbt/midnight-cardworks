@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
@@ -56,6 +56,8 @@ export default function App() {
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
   const [saleSelection, setSaleSelection] = useState<string[]>([]);
   const [bulkSalePercent, setBulkSalePercent] = useState('15');
+  const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
+  const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
@@ -327,7 +329,25 @@ export default function App() {
   }
 
   function orderStatusLabel(status: string) {
-    return status === 'paid' ? 'Paid' : status === 'fulfilled' ? 'Fulfilled' : 'Pending payment';
+    const labels: Record<string, string> = {
+      pending_payment: 'Pending payment',
+      paid: 'Paid',
+      fulfilled: 'Fulfilled',
+      canceled: 'Canceled',
+      refund_pending: 'Refund pending',
+      partially_refunded: 'Partially refunded',
+      refunded: 'Refunded',
+      refund_failed: 'Refund failed'
+    };
+    return labels[status] ?? status;
+  }
+
+  function refundableAmount(order: Order) {
+    return Math.max(0, order.total - (order.refundedAmount ?? 0));
+  }
+
+  function canRefundOrder(order: Order) {
+    return ['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status) && refundableAmount(order) > 0;
   }
 
   function orderItemSummary(order: Order) {
@@ -575,16 +595,69 @@ export default function App() {
     }
   }
 
+  function rememberUpdatedOrder(updated: Order) {
+    setOrders((items) => items.map((item) => item.id === updated.id ? updated : item));
+    setRefundAmounts((amounts) => ({ ...amounts, [updated.id]: '' }));
+  }
+
   async function handleOrderFulfilled(order: Order) {
     try {
       const token = await getAdminToken();
       if (!token) throw new Error('Admin token required');
       const updated = await fulfillAdminOrder(order.id, token);
-      setOrders((items) => items.map((item) => item.id === updated.id ? updated : item));
+      rememberUpdatedOrder(updated);
       setAdminMessage(`Marked ${updated.id} fulfilled.`);
     } catch {
       setAdminMessage(`Could not fulfill ${order.id}.`);
     }
+  }
+
+  async function handleOrderCanceled(order: Order) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const updated = await cancelAdminOrder(order.id, refundReasons[order.id] ?? '', token);
+      rememberUpdatedOrder(updated);
+      setAdminMessage(`Canceled ${updated.id}.`);
+    } catch {
+      setAdminMessage(`Could not cancel ${order.id}.`);
+    }
+  }
+
+  async function handleOrderRefunded(order: Order, fullRefund = false) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const amountValue = refundAmounts[order.id]?.trim();
+      const amount = fullRefund || !amountValue ? refundableAmount(order) : moneyToCents(amountValue);
+      const updated = await refundAdminOrder(order.id, { amount, reason: refundReasons[order.id] ?? '' }, token);
+      rememberUpdatedOrder(updated);
+      setAdminMessage(`Refund updated for ${updated.id}.`);
+    } catch {
+      setAdminMessage(`Could not refund ${order.id}.`);
+    }
+  }
+
+  function renderOrderCard(order: Order) {
+    const remainingRefund = refundableAmount(order);
+    const canFulfill = order.status === 'paid' || order.status === 'refund_failed';
+    return <article className="order-card" key={order.id}>
+      <div className="order-card-header"><strong>{order.id}: {order.email}</strong><span className="status-badge">{orderStatusLabel(order.status)}</span></div>
+      <div className="order-detail-grid"><div><strong>Customer</strong><p>{order.customerName || order.email}</p></div><div><strong>Shipping</strong><p>{order.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(order.total)}</p></div></div>
+      <div><strong>Items</strong><ul>{orderItemSummary(order).map((item) => <li key={`${order.id}-${item}`}>{item}</li>)}</ul></div>
+      {(order.refundedAmount ?? 0) > 0 && <p>Refunded: {formatMoney(order.refundedAmount)}{order.stripeRefundId ? ` (${order.stripeRefundId})` : ''}</p>}
+      {order.refundReason && <p>Refund note: {order.refundReason}</p>}
+      <div className="order-actions">
+        {canFulfill && <button onClick={() => void handleOrderFulfilled(order)}>Mark {order.id} fulfilled</button>}
+        {order.status === 'pending_payment' && <button className="ghost" onClick={() => void handleOrderCanceled(order)}>Cancel pending order</button>}
+        {canRefundOrder(order) && <>
+          <label>Refund amount for {order.id}<input aria-label={`Refund amount for ${order.id}`} type="number" step="0.01" min="0.01" max={(remainingRefund / 100).toFixed(2)} placeholder={(remainingRefund / 100).toFixed(2)} value={refundAmounts[order.id] ?? ''} onChange={(event) => setRefundAmounts((amounts) => ({ ...amounts, [order.id]: event.target.value }))} /></label>
+          <label>Refund note for {order.id}<input aria-label={`Refund note for ${order.id}`} placeholder="Customer request, damaged item..." value={refundReasons[order.id] ?? ''} onChange={(event) => setRefundReasons((reasons) => ({ ...reasons, [order.id]: event.target.value }))} /></label>
+          <button className="ghost" onClick={() => void handleOrderRefunded(order)}>Refund entered amount</button>
+          <button onClick={() => void handleOrderRefunded(order, true)}>Full refund {formatMoney(remainingRefund)}</button>
+        </>}
+      </div>
+    </article>;
   }
 
   function productEditor(product: Product, isNew = false) {
@@ -974,7 +1047,7 @@ export default function App() {
       </div>
       {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
         <div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>
-        {orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map((o) => <article className="order-card" key={o.id}><div className="order-card-header"><strong>{o.id}: {o.email}</strong><span className="status-badge">{orderStatusLabel(o.status)}</span></div><div className="order-detail-grid"><div><strong>Customer</strong><p>{o.customerName || o.email}</p></div><div><strong>Shipping</strong><p>{o.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(o.total)}</p></div></div><div><strong>Items</strong><ul>{orderItemSummary(o).map((item) => <li key={`${o.id}-${item}`}>{item}</li>)}</ul></div>{o.status !== 'fulfilled' && <button onClick={() => void handleOrderFulfilled(o)}>Mark {o.id} fulfilled</button>}</article>)}</div>}
+        {orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map(renderOrderCard)}</div>}
       </section>}
       {adminTab === 'listings' && <section className="admin-workspace listing-workspace" role="tabpanel" aria-label="Listings">
         <div className="section-heading"><div><h3>Listing edits</h3><p>Create listings, update details, manage images, and control active storefront visibility.</p></div></div>

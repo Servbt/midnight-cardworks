@@ -36,12 +36,14 @@ beforeEach(() => {
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
-    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/admin/orders/ord_test/cancel')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'canceled', refundedAmount: 0, refundReason: 'Customer changed their mind', canceledAt: '2026-06-20T00:00:00.000Z', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/admin/orders/ord_test/refund')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'refunded', refundedAmount: 1798, stripeRefundId: 're_demo_ord_test', refundReason: 'Customer requested cancellation', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
-    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
-    if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
 });
@@ -765,6 +767,23 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(fulfilledPanel).getByText('123 Midnight Lane')).toBeInTheDocument();
     expect(within(fulfilledPanel).getByText('1 × Golden Hour Commander Proxy — $12.99')).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/fulfill'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
+  });
+
+
+  it('lets admins issue a full refund from the order card', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+
+    expect(await screen.findByText(/Ari Buyer/)).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Refund note for ord_test'), 'Customer requested cancellation');
+    await userEvent.click(screen.getByRole('button', { name: 'Full refund $17.98' }));
+
+    expect(await screen.findByText('Refund updated for ord_test.')).toBeInTheDocument();
+    const orderPanel = screen.getByRole('tabpanel');
+    expect(within(orderPanel).getByText('Refunded')).toBeInTheDocument();
+    expect(within(orderPanel).getByText(/Refunded: \$17.98/)).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/refund'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }), body: expect.stringContaining('Customer requested cancellation') }));
   });
 
   it('uploads a product image from the admin dashboard', async () => {

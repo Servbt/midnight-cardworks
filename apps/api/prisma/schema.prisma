@@ -11,6 +11,11 @@ enum OrderStatus {
   pending_payment
   paid
   fulfilled
+  canceled
+  refund_pending
+  partially_refunded
+  refunded
+  refund_failed
 }
 
 model Product {
@@ -40,10 +45,17 @@ model Order {
   shippingAddress String?
   subtotal        Int
   shippingCost    Int         @default(0)
-  total     Int
-  status    OrderStatus @default(pending_payment)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  total                 Int
+  status                OrderStatus @default(pending_payment)
+  stripeSessionId       String?
+  stripePaymentIntentId String?
+  stripeRefundId        String?
+  refundedAmount        Int         @default(0)
+  refundReason          String?
+  canceledAt            DateTime?
+  refundedAt            DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   items OrderItem[]
 }

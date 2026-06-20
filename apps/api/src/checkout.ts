@@ -1,12 +1,18 @@
 import type { Order } from './types.js';
 
+function stripeId(value: unknown) {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'id' in value && typeof (value as { id?: unknown }).id === 'string') return (value as { id: string }).id;
+  return undefined;
+}
+
 export async function createCheckoutResponse(order: Order) {
   const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
 
   if (stripeSecret && !stripeSecret.includes('replace_me')) {
     const stripeModule = await import('stripe');
-    const StripeClient = ((stripeModule as any).default ?? stripeModule) as { new (key: string): { checkout: { sessions: { create(input: unknown): Promise<{ url: string | null }> } } } };
+    const StripeClient = ((stripeModule as any).default ?? stripeModule) as { new (key: string): { checkout: { sessions: { create(input: unknown): Promise<{ id: string; url: string | null; payment_intent?: unknown }> } } } };
     const stripe = new StripeClient(stripeSecret);
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -33,7 +39,7 @@ export async function createCheckoutResponse(order: Order) {
       success_url: `${appBaseUrl}/checkout/success?order=${order.id}`,
       cancel_url: `${appBaseUrl}/cart?order=${order.id}`
     });
-    return { orderId: order.id, checkoutUrl: session.url, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };
+    return { orderId: order.id, checkoutUrl: session.url, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total, stripeSessionId: session.id, stripePaymentIntentId: stripeId(session.payment_intent) };
   }
 
   return { orderId: order.id, checkoutUrl: `/checkout/success?order=${order.id}`, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };

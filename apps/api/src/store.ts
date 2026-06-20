@@ -1,8 +1,25 @@
 import { nanoid } from 'nanoid';
-import type { CartItemInput, Order, Product, Store } from './types.js';
+import type { Order, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
 import { effectiveProductPrice } from './pricing.js';
+
+function now() {
+  return new Date().toISOString();
+}
+
+function applyRefund(order: Order, refund: { amount: number; refundId?: string; reason?: string }) {
+  if (refund.refundId && order.stripeRefundId === refund.refundId && (order.status === 'refunded' || order.status === 'partially_refunded')) {
+    return order;
+  }
+  const refundedAmount = Math.min(order.total, order.refundedAmount + refund.amount);
+  order.refundedAmount = refundedAmount;
+  order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
+  order.refundReason = refund.reason ?? order.refundReason;
+  order.status = refundedAmount >= order.total ? 'refunded' : 'partially_refunded';
+  order.refundedAt = now();
+  return order;
+}
 
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
   const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
@@ -31,20 +48,57 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
-      const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', createdAt: new Date().toISOString() };
+      const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
       orders.push(order);
       return order;
     },
-    async markOrderPaid(orderId) {
+    async recordCheckoutSession(orderId, stripeSessionId) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      order.stripeSessionId = stripeSessionId;
+      return order;
+    },
+    async markOrderPaid(orderId, payment = {}) {
       const order = orders.find((candidate) => candidate.id === orderId);
       if (!order) return undefined;
       order.status = 'paid';
+      order.stripeSessionId = payment.stripeSessionId ?? order.stripeSessionId;
+      order.stripePaymentIntentId = payment.stripePaymentIntentId ?? order.stripePaymentIntentId;
       return order;
     },
     async markOrderFulfilled(orderId) {
       const order = orders.find((candidate) => candidate.id === orderId);
       if (!order) return undefined;
       order.status = 'fulfilled';
+      return order;
+    },
+    async cancelOrder(orderId, reason) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      order.status = 'canceled';
+      order.refundReason = reason ?? order.refundReason;
+      order.canceledAt = now();
+      return order;
+    },
+    async markOrderRefundPending(orderId, refund) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      order.status = 'refund_pending';
+      order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
+      order.refundReason = refund.reason ?? order.refundReason;
+      return order;
+    },
+    async markOrderRefunded(orderId, refund) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      return applyRefund(order, refund);
+    },
+    async markOrderRefundFailed(orderId, refund) {
+      const order = orders.find((candidate) => candidate.id === orderId);
+      if (!order) return undefined;
+      order.status = 'refund_failed';
+      order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
+      order.refundReason = refund.reason ?? order.refundReason;
       return order;
     }
   };
