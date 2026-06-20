@@ -619,8 +619,8 @@ export default function App() {
       const updated = await cancelAdminOrder(order.id, refundReasons[order.id] ?? '', token);
       rememberUpdatedOrder(updated);
       setAdminMessage(`Canceled ${updated.id}.`);
-    } catch {
-      setAdminMessage(`Could not cancel ${order.id}.`);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : `Could not cancel ${order.id}.`);
     }
   }
 
@@ -633,8 +633,8 @@ export default function App() {
       const updated = await refundAdminOrder(order.id, { amount, reason: refundReasons[order.id] ?? '' }, token);
       rememberUpdatedOrder(updated);
       setAdminMessage(`Refund updated for ${updated.id}.`);
-    } catch {
-      setAdminMessage(`Could not refund ${order.id}.`);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : `Could not refund ${order.id}.`);
     }
   }
 

@@ -4,6 +4,15 @@ export type ContactPayload = { name:string; email:string; orderNumber?:string; m
 export type ShippingAddressFields = { streetAddress:string; apartment:string; city:string; zipCode:string };
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
+async function errorMessage(response: Response, fallback: string) {
+  try {
+    const body = await response.json() as { error?: string };
+    return body.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -23,8 +32,8 @@ export async function fetchAdminOrders(token?: string): Promise<Order[]> { const
 export async function fetchAdminProducts(token?: string): Promise<Product[]> { const r = await fetch(`${API}/api/admin/products`, { headers: token ? { authorization: `Bearer ${token}` } : undefined }); if(!r.ok) throw new Error('Admin access required'); return (await r.json()).products; }
 export async function saveAdminProduct(product: Product, token?: string): Promise<Product> { const { id, ...rest } = product; const payload = id ? product : rest; const r = await fetch(`${API}/api/admin/products`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Product save failed'); return (await r.json()).product; }
 export async function fulfillAdminOrder(orderId: string, token?: string): Promise<Order> { const r = await fetch(`${API}/api/admin/orders/${orderId}/fulfill`, { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : undefined }); if(!r.ok) throw new Error('Order fulfillment failed'); return (await r.json()).order; }
-export async function cancelAdminOrder(orderId: string, reason: string, token?: string): Promise<Order> { const r = await fetch(`${API}/api/admin/orders/${orderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ reason }) }); if(!r.ok) throw new Error('Order cancellation failed'); return (await r.json()).order; }
-export async function refundAdminOrder(orderId: string, payload: { amount?: number; reason?: string }, token?: string): Promise<Order> { const r = await fetch(`${API}/api/admin/orders/${orderId}/refund`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Order refund failed'); return (await r.json()).order; }
+export async function cancelAdminOrder(orderId: string, reason: string, token?: string): Promise<Order> { const r = await fetch(`${API}/api/admin/orders/${orderId}/cancel`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ reason }) }); if(!r.ok) throw new Error(await errorMessage(r, 'Order cancellation failed')); return (await r.json()).order; }
+export async function refundAdminOrder(orderId: string, payload: { amount?: number; reason?: string }, token?: string): Promise<Order> { const r = await fetch(`${API}/api/admin/orders/${orderId}/refund`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error(await errorMessage(r, 'Order refund failed')); return (await r.json()).order; }
 export async function uploadProductImage(slug: string, file: File, token?: string): Promise<Product> {
   const dataUrl = await readFileAsDataUrl(file);
   const r = await fetch(`${API}/api/admin/products/${slug}/image`, {
