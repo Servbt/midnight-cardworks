@@ -5,6 +5,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from './server.js';
 import { createInMemoryStore } from './store.js';
 
+const stripeMock = vi.hoisted(() => ({ paymentStatus: 'paid', sessionStatus: 'complete', paymentIntentId: 'pi_synced' }));
+
+vi.mock('stripe', () => ({
+  default: class MockStripe {
+    checkout = {
+      sessions: {
+        retrieve: vi.fn(async (id: string) => ({
+          id,
+          payment_status: stripeMock.paymentStatus,
+          status: stripeMock.sessionStatus,
+          payment_intent: stripeMock.paymentIntentId
+        }))
+      }
+    };
+  }
+}));
+
 const adminAuth = {
   authorize: async (authorization: string | undefined) => {
     if (!authorization) return { ok: false as const, status: 401 as const, error: 'Admin sign-in required' };
@@ -47,7 +64,12 @@ function createEmailNotifierSpy() {
 }
 
 describe('storefront API', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    stripeMock.paymentStatus = 'paid';
+    stripeMock.sessionStatus = 'complete';
+    stripeMock.paymentIntentId = 'pi_synced';
+  });
 
   it('lists active products for the shop grid', async () => {
     const app = buildServer(createInMemoryStore());
@@ -204,6 +226,40 @@ describe('storefront API', () => {
     expect(fulfill.statusCode).toBe(200);
     expect(fulfill.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
     expect(receipt.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
+  });
+
+  it('lets admins sync a paid Stripe Checkout Session for pending orders', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.recordCheckoutSession(orderId, 'cs_test_sync');
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_sync');
+
+    const sync = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/sync-payment`, headers: adminHeaders });
+
+    expect(sync.statusCode).toBe(200);
+    expect(sync.json().order).toMatchObject({ id: orderId, status: 'paid', stripeSessionId: 'cs_test_sync', stripePaymentIntentId: 'pi_synced' });
+    expect(sync.json().checkout).toMatchObject({ paid: true, paymentStatus: 'paid' });
+    expect(emailSpy.sent).toEqual([{ type: 'paid', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'paid' }) }]);
+  });
+
+  it('does not mark a pending order paid when Stripe still reports unpaid checkout', async () => {
+    stripeMock.paymentStatus = 'unpaid';
+    stripeMock.sessionStatus = 'open';
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.recordCheckoutSession(orderId, 'cs_test_sync');
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_sync');
+
+    const sync = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/sync-payment`, headers: adminHeaders });
+
+    expect(sync.statusCode).toBe(400);
+    expect(sync.json()).toEqual({ error: 'Stripe still reports this Checkout Session as unpaid' });
+    expect(await store.getOrder(orderId)).toMatchObject({ status: 'pending_payment' });
   });
 
   it('lets admins cancel pending payment orders without issuing a refund', async () => {

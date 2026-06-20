@@ -51,7 +51,7 @@ The checkout endpoint is production-ready at the service seam:
 - With `STRIPE_SECRET_KEY`, `/api/checkout` creates a real Stripe Checkout Session.
 - Stripe webhooks should point to `/api/stripe/webhook`.
 - Production webhooks require `STRIPE_WEBHOOK_SECRET`; unsigned production webhook payloads are rejected.
-- The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`.
+- The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`. If a paid checkout stays pending because a webhook was missed, admins can use `Sync Stripe payment` on the pending order to retrieve the Checkout Session, mark it paid, and send the confirmation email.
 - `/api/checkout` requires `customerName` and structured shipping fields; receipts and admin order review display the formatted shipping address.
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
 - Admins can cancel `pending_payment` orders before payment succeeds.
@@ -116,6 +116,7 @@ Protected API routes:
 
 ```text
 GET /api/admin/orders
+POST /api/admin/orders/:orderId/sync-payment
 POST /api/admin/orders/:orderId/fulfill
 GET /api/admin/products
 POST /api/admin/products

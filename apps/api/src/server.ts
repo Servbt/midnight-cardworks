@@ -7,6 +7,7 @@ import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
 import { createCheckoutResponse } from './checkout.js';
+import { retrieveCheckoutPaymentStatus } from './stripeCheckoutStatus.js';
 import { createOrderRefund } from './stripeRefunds.js';
 import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
@@ -211,6 +212,25 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   });
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
+  app.post('/api/admin/orders/:orderId/sync-payment', { preHandler: requireAdmin }, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string };
+    const order = await store.getOrder(orderId);
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
+    if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be synced' });
+    try {
+      const checkout = await retrieveCheckoutPaymentStatus(order);
+      if (!checkout.paid) {
+        return reply.code(400).send({ error: `Stripe still reports this Checkout Session as ${checkout.paymentStatus ?? checkout.sessionStatus ?? 'unpaid'}` });
+      }
+      const updated = await store.markOrderPaid(orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
+      if (!updated) return reply.code(404).send({ error: 'Order not found' });
+      await emailNotifier.sendOrderPaid(updated);
+      return { order: updated, checkout };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' });
+    }
+  });
+
   app.post('/api/admin/orders/:orderId/fulfill', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const order = await store.markOrderFulfilled(orderId);

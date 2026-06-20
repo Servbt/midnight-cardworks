@@ -5,6 +5,7 @@ import App from './App';
 import { redirectToCheckout } from './checkoutRedirect';
 
 const mockAuth = vi.hoisted(() => ({ isAdmin: false, isSignedIn: false, token: 'admin-token', email: 'buyer@example.com' }));
+let adminOrderStatus = 'paid';
 
 vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
@@ -24,6 +25,7 @@ beforeEach(() => {
   mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
   mockAuth.email = 'buyer@example.com';
+  adminOrderStatus = 'paid';
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
@@ -36,6 +38,7 @@ beforeEach(() => {
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
     if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
+    if (String(url).includes('/api/admin/orders/ord_test/sync-payment')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', stripeSessionId: 'cs_test_sync', stripePaymentIntentId: 'pi_synced', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/cancel')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'canceled', refundedAmount: 0, refundReason: 'Customer changed their mind', canceledAt: '2026-06-20T00:00:00.000Z', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/refund')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'refunded', refundedAmount: 1798, stripeRefundId: 're_demo_ord_test', refundReason: 'Customer requested cancellation', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
@@ -43,7 +46,7 @@ beforeEach(() => {
     if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
-    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
+    if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: adminOrderStatus, refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     return new Response('{}', { status: 404 });
   }));
 });
@@ -769,6 +772,22 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/fulfill'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
   });
 
+
+  it('lets admins sync pending Stripe payments from the order card', async () => {
+    adminOrderStatus = 'pending_payment';
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+
+    expect(await screen.findByText('Pending payment')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mark ord_test fulfilled' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Sync Stripe payment' }));
+
+    expect(await screen.findByText('Synced payment for ord_test. Confirmation email sent.')).toBeInTheDocument();
+    expect(screen.getByText('Paid')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mark ord_test fulfilled' })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/orders/ord_test/sync-payment'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }) }));
+  });
 
   it('lets admins issue a full refund from the order card', async () => {
     mockAuth.isAdmin = true;

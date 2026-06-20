@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { cancelAdminOrder, createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendContactMessage, uploadProductImage, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendContactMessage, syncAdminOrderPayment, uploadProductImage, type Order, type Product } from './api';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
@@ -612,6 +612,18 @@ export default function App() {
     }
   }
 
+  async function handleOrderPaymentSynced(order: Order) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const updated = await syncAdminOrderPayment(order.id, token);
+      rememberUpdatedOrder(updated);
+      setAdminMessage(`Synced payment for ${updated.id}. Confirmation email sent.`);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : `Could not sync payment for ${order.id}.`);
+    }
+  }
+
   async function handleOrderCanceled(order: Order) {
     try {
       const token = await getAdminToken();
@@ -649,6 +661,7 @@ export default function App() {
       {order.refundReason && <p>Refund note: {order.refundReason}</p>}
       <div className="order-actions">
         {canFulfill && <button onClick={() => void handleOrderFulfilled(order)}>Mark {order.id} fulfilled</button>}
+        {order.status === 'pending_payment' && <button onClick={() => void handleOrderPaymentSynced(order)}>Sync Stripe payment</button>}
         {order.status === 'pending_payment' && <button className="ghost" onClick={() => void handleOrderCanceled(order)}>Cancel pending order</button>}
         {canRefundOrder(order) && <>
           <label>Refund amount for {order.id}<input aria-label={`Refund amount for ${order.id}`} type="number" step="0.01" min="0.01" max={(remainingRefund / 100).toFixed(2)} placeholder={(remainingRefund / 100).toFixed(2)} value={refundAmounts[order.id] ?? ''} onChange={(event) => setRefundAmounts((amounts) => ({ ...amounts, [order.id]: event.target.value }))} /></label>
