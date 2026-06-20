@@ -172,11 +172,20 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       const refund = getRefundUpdate(event);
       if (refund) {
         if (refund.status === 'failed') {
+          const previousOrder = await store.getOrder(refund.orderId);
+          const previousStatus = previousOrder?.status;
+          const previousRefundId = previousOrder?.stripeRefundId;
           const order = await store.markOrderRefundFailed(refund.orderId, { refundId: refund.refundId, reason: refund.reason });
           if (!order) return reply.code(404).send({ error: 'Order not found' });
+          if (previousStatus !== 'refund_failed' || previousRefundId !== refund.refundId) await emailNotifier.sendOrderRefundFailed(order);
         } else if (refund.status === 'succeeded') {
+          const previousOrder = await store.getOrder(refund.orderId);
+          const previousStatus = previousOrder?.status;
+          const previousRefundId = previousOrder?.stripeRefundId;
           const order = await store.markOrderRefunded(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
           if (!order) return reply.code(404).send({ error: 'Order not found' });
+          const alreadyNotified = previousRefundId === refund.refundId && previousStatus !== undefined && ['refunded', 'partially_refunded'].includes(previousStatus);
+          if (!alreadyNotified) await emailNotifier.sendOrderRefunded(order);
         } else {
           const order = await store.markOrderRefundPending(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
           if (!order) return reply.code(404).send({ error: 'Order not found' });
@@ -216,7 +225,10 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
     if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be canceled without a refund' });
-    return { order: await store.cancelOrder(orderId, parsed.data.reason) };
+    const canceled = await store.cancelOrder(orderId, parsed.data.reason);
+    if (!canceled) return reply.code(404).send({ error: 'Order not found' });
+    await emailNotifier.sendOrderCanceled(canceled);
+    return { order: canceled };
   });
   app.post('/api/admin/orders/:orderId/refund', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
@@ -230,6 +242,8 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       const updated = refund.status === 'succeeded'
         ? await store.markOrderRefunded(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
         : await store.markOrderRefundPending(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
+      if (!updated) return reply.code(404).send({ error: 'Order not found' });
+      if (refund.status === 'succeeded') await emailNotifier.sendOrderRefunded(updated);
       return { order: updated, refund };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' });

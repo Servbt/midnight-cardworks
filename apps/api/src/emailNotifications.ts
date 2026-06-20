@@ -5,6 +5,9 @@ export type ContactMessage = { name: string; email: string; orderNumber?: string
 export type EmailNotifier = {
   sendOrderPaid(order: Order): Promise<void>;
   sendOrderFulfilled(order: Order): Promise<void>;
+  sendOrderCanceled(order: Order): Promise<void>;
+  sendOrderRefunded(order: Order): Promise<void>;
+  sendOrderRefundFailed(order: Order): Promise<void>;
   sendContactMessage(message: ContactMessage): Promise<void>;
 };
 
@@ -17,14 +20,14 @@ type ResendEmail = {
 };
 
 const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-const orderLines = (order: Order) => order.items.map((item) => `- ${item.quantity} × ${item.title} — ${money(item.price * item.quantity)}`).join('\n');
+const orderLines = (order: Order) => order.items.map((item) => `- ${item.quantity} x ${item.title} - ${money(item.price * item.quantity)}`).join('\n');
 
 function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEmail } | undefined {
   const from = process.env.EMAIL_FROM;
   if (!from) return undefined;
   const customerName = order.customerName ? ` ${order.customerName}` : '';
   const text = [
-    `Thanks${customerName} — your Midnight Cardworks order is confirmed.`,
+    `Thanks${customerName} - your Midnight Cardworks order is confirmed.`,
     '',
     `Order: ${order.id}`,
     `Total: ${money(order.total)}`,
@@ -47,7 +50,65 @@ function buildFulfilledEmail(order: Order): ResendEmail | undefined {
     from,
     to: [order.email],
     subject: `Order ${order.id} fulfilled`,
-    text: [`Good news — your Midnight Cardworks order has been marked fulfilled.`, '', `Order: ${order.id}`, order.shippingAddress ? `Ship to: ${order.shippingAddress}` : undefined, '', 'Thanks again for supporting the shop.'].filter(Boolean).join('\n')
+    text: [`Good news - your Midnight Cardworks order has been marked fulfilled.`, '', `Order: ${order.id}`, order.shippingAddress ? `Ship to: ${order.shippingAddress}` : undefined, '', 'Thanks again for supporting the shop.'].filter(Boolean).join('\n')
+  };
+}
+
+function buildCanceledEmail(order: Order): ResendEmail | undefined {
+  const from = process.env.EMAIL_FROM;
+  if (!from) return undefined;
+  return {
+    from,
+    to: [order.email],
+    subject: `Order ${order.id} canceled`,
+    text: [
+      'Your Midnight Cardworks order has been canceled.',
+      '',
+      `Order: ${order.id}`,
+      order.refundReason ? `Note: ${order.refundReason}` : undefined,
+      '',
+      'No payment was captured for this order.'
+    ].filter(Boolean).join('\n')
+  };
+}
+
+function buildRefundedEmail(order: Order): ResendEmail | undefined {
+  const from = process.env.EMAIL_FROM;
+  if (!from) return undefined;
+  const refundedAmount = order.refundedAmount > 0 ? order.refundedAmount : order.total;
+  const isFullRefund = refundedAmount >= order.total;
+  return {
+    from,
+    to: [order.email],
+    subject: `Order ${order.id} ${isFullRefund ? 'refunded' : 'partially refunded'}`,
+    text: [
+      `Your Midnight Cardworks order has been ${isFullRefund ? 'refunded' : 'partially refunded'}.`,
+      '',
+      `Order: ${order.id}`,
+      `Refunded to date: ${money(refundedAmount)}`,
+      `Order total: ${money(order.total)}`,
+      order.refundReason ? `Note: ${order.refundReason}` : undefined,
+      '',
+      'Your bank or card issuer may take a few business days to post the refund.'
+    ].filter(Boolean).join('\n')
+  };
+}
+
+function buildRefundFailedEmail(order: Order): ResendEmail | undefined {
+  const from = process.env.EMAIL_FROM;
+  if (!from) return undefined;
+  return {
+    from,
+    to: [order.email],
+    subject: `Refund update for order ${order.id}`,
+    text: [
+      'We tried to refund your Midnight Cardworks order, but Stripe reported that the refund failed.',
+      '',
+      `Order: ${order.id}`,
+      order.refundReason ? `Note: ${order.refundReason}` : undefined,
+      '',
+      'We will review the payment and follow up with the next step.'
+    ].filter(Boolean).join('\n')
   };
 }
 
@@ -91,6 +152,21 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
     },
     async sendOrderFulfilled(order) {
       const email = buildFulfilledEmail(order);
+      if (!email) return;
+      await sendResend(email);
+    },
+    async sendOrderCanceled(order) {
+      const email = buildCanceledEmail(order);
+      if (!email) return;
+      await sendResend(email);
+    },
+    async sendOrderRefunded(order) {
+      const email = buildRefundedEmail(order);
+      if (!email) return;
+      await sendResend(email);
+    },
+    async sendOrderRefundFailed(order) {
+      const email = buildRefundFailedEmail(order);
       if (!email) return;
       await sendResend(email);
     },

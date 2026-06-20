@@ -10,7 +10,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Launch-polished storefront with trust cues, inventory status, tags, sold-out handling, and empty search state
 - Persistent browser cart with quantity controls
 - Checkout flow requires receipt email, customer name, and shipping address before Stripe Checkout
-- Email notifications for paid orders, fulfilled orders, and customer contact messages via Resend
+- Email notifications for paid, fulfilled, canceled, and refunded orders plus customer contact messages via Resend
 - Clerk-backed customer order history for signed-in accounts
 - Admin dashboard for listing management, sale pricing, order review, cancellations, and refunds, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
@@ -57,7 +57,7 @@ The checkout endpoint is production-ready at the service seam:
 - Admins can cancel `pending_payment` orders before payment succeeds.
 - Admins can issue full or partial refunds for paid/fulfilled orders; refunds are created against the stored Stripe PaymentIntent.
 - Refund webhook events update order status to `refund_pending`, `partially_refunded`, `refunded`, or `refund_failed`.
-- When Resend is configured, paid orders send a customer confirmation email plus an optional shop-owner notification. Fulfilled orders send a customer fulfillment email.
+- When Resend is configured, paid orders send a customer confirmation email plus an optional shop-owner notification. Fulfilled, canceled, refunded, and refund-failed orders send customer status emails.
 
 Required production env vars:
 
@@ -228,7 +228,7 @@ Production behavior:
 2. Confirm Clerk Google sign-in works on the production domain.
 3. Sign in with an allowlisted admin email and confirm `/admin` can manage orders, listings, images, and sale pricing.
 4. Complete a Stripe test checkout and confirm the webhook marks the order paid.
-5. Confirm Resend sends customer paid/fulfilled emails and owner notifications.
-6. Confirm Stripe refund receipts are enabled in Stripe if you want Stripe to email customers when refunds are issued.
+5. Confirm Resend sends customer paid, fulfilled, canceled, refunded, and refund-failed emails plus owner notifications for new paid orders.
+6. Stripe refund receipts can stay enabled too if you want Stripe receipts in addition to shop emails.
 7. Confirm Cloudinary uploads produce hosted product image URLs.
 8. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.

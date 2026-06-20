@@ -38,6 +38,9 @@ function createEmailNotifierSpy() {
     notifier: {
       sendOrderPaid: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'paid', order }); },
       sendOrderFulfilled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'fulfilled', order }); },
+      sendOrderCanceled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'canceled', order }); },
+      sendOrderRefunded: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'refunded', order }); },
+      sendOrderRefundFailed: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'refund_failed', order }); },
       sendContactMessage: async (message: { name: string; email: string; orderNumber?: string; message: string }) => { sent.push({ type: 'contact', message }); }
     }
   };
@@ -290,6 +293,51 @@ describe('storefront API', () => {
 
     expect(fulfill.statusCode).toBe(200);
     expect(emailSpy.sent).toEqual([{ type: 'fulfilled', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'fulfilled' }) }]);
+  });
+
+  it('sends a cancellation email when admins cancel pending payment orders', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+
+    const cancel = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/cancel`, headers: adminHeaders, payload: { reason: 'Customer changed their mind before payment' } });
+
+    expect(cancel.statusCode).toBe(200);
+    expect(emailSpy.sent).toEqual([{ type: 'canceled', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'canceled' }) }]);
+  });
+
+  it('sends a refund email when admins issue a successful refund', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
+
+    const refund = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers: adminHeaders, payload: { reason: 'Customer requested cancellation' } });
+
+    expect(refund.statusCode).toBe(200);
+    expect(emailSpy.sent).toEqual([{ type: 'refunded', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'refunded' }) }]);
+  });
+
+  it('sends a refund failure email when Stripe reports a failed refund', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
+    const orderId = checkout.json().orderId;
+    await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
+
+    const webhook = await app.inject({
+      method: 'POST',
+      url: '/api/stripe/webhook',
+      payload: { type: 'refund.failed', data: { object: { id: 're_test_123', amount: 1798, status: 'failed', metadata: { orderId, reason: 'Card issuer declined refund' } } } }
+    });
+
+    expect(webhook.statusCode).toBe(200);
+    expect(emailSpy.sent).toEqual([{ type: 'refund_failed', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'refund_failed' }) }]);
   });
 
   it('emails the shop owner when a customer submits a contact message', async () => {
