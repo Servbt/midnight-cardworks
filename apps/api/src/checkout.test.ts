@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCheckoutResponse } from './checkout.js';
 import type { Order } from './types.js';
 
+const stripeCreate = vi.hoisted(() => vi.fn(async () => ({ id: 'cs_test_123', url: 'https://checkout.stripe.test/session', payment_intent: 'pi_test_123' })));
+
 vi.mock('stripe', () => ({
   default: class MockStripe {
     checkout = {
       sessions: {
-        create: async () => ({ id: 'cs_test_123', url: 'https://checkout.stripe.test/session', payment_intent: 'pi_test_123' })
+        create: stripeCreate
       }
     };
   }
@@ -25,7 +27,10 @@ const order: Order = {
 };
 
 describe('createCheckoutResponse', () => {
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    stripeCreate.mockClear();
+  });
 
   it('uses Stripe default export when a real secret key is configured', async () => {
     vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_fake_for_unit_test');
@@ -37,5 +42,6 @@ describe('createCheckoutResponse', () => {
     expect(response.orderId).toBe('ord_test');
     expect(response.stripeSessionId).toBe('cs_test_123');
     expect(response.stripePaymentIntentId).toBe('pi_test_123');
+    expect(stripeCreate).toHaveBeenCalledWith(expect.objectContaining({ allow_promotion_codes: true }));
   });
 });

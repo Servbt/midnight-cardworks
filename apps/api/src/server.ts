@@ -15,7 +15,7 @@ import { createInMemoryStore } from './store.js';
 import { getCompletedCheckout, getRefundUpdate, parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
-import type { Store, Product } from './types.js';
+import type { MarketingSubscriber, Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 import { effectiveProductPrice } from './pricing.js';
 
@@ -45,6 +45,17 @@ const contactSchema = z.object({
   message: z.string().trim().min(10).max(3000),
   website: z.string().optional().default('')
 });
+const newsletterSchema = z.object({
+  name: z.string().trim().max(120).optional(),
+  email: z.string().trim().email().max(200),
+  marketingConsent: z.literal(true),
+  website: z.string().optional().default('')
+});
+const unsubscribeSchema = z.object({ token: z.string().trim().min(8).max(160) });
+const marketingCampaignSchema = z.object({
+  subject: z.string().trim().min(3).max(120),
+  message: z.string().trim().min(10).max(5000)
+});
 const productSchema = z.object({
   id: z.string().min(1).optional(),
   slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -71,6 +82,11 @@ const imageUploadBodyLimit = 16 * 1024 * 1024;
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const productUrl = (slug: string) => `/products/${slug}`;
+const marketingCouponCode = () => (process.env.NEWSLETTER_COUPON_CODE || 'MIDNIGHT10').trim();
+function publicSubscriber(subscriber: MarketingSubscriber) {
+  const { unsubscribeToken: _unsubscribeToken, ...safeSubscriber } = subscriber;
+  return safeSubscriber;
+}
 function productSeoHead(product: Product) {
   const title = `${product.title} | Midnight Cardworks`;
   const url = productUrl(product.slug);
@@ -137,6 +153,20 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const { website: _website, ...message } = parsed.data;
     await emailNotifier.sendContactMessage(message);
     return { ok: true };
+  });
+  app.post('/api/newsletter', async (request, reply) => {
+    const parsed = newsletterSchema.safeParse(request.body);
+    if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid newsletter signup and consent required' });
+    const result = await store.subscribeMarketing({ email: parsed.data.email, name: parsed.data.name, source: 'storefront_coupon', couponCode: marketingCouponCode() });
+    await emailNotifier.sendMarketingWelcome(result.subscriber);
+    return reply.code(result.created ? 201 : 200).send({ subscriber: publicSubscriber(result.subscriber), created: result.created });
+  });
+  app.post('/api/newsletter/unsubscribe', async (request, reply) => {
+    const parsed = unsubscribeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Valid unsubscribe token required' });
+    const subscriber = await store.unsubscribeMarketing(parsed.data.token);
+    if (!subscriber) return reply.code(404).send({ error: 'Subscriber not found' });
+    return { subscriber: publicSubscriber(subscriber) };
   });
   app.post('/api/checkout', async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body);
@@ -212,6 +242,14 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   });
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
+  app.get('/api/admin/marketing/subscribers', { preHandler: requireAdmin }, async () => ({ subscribers: (await store.listMarketingSubscribers()).map(publicSubscriber) }));
+  app.post('/api/admin/marketing/campaigns', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = marketingCampaignSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Valid marketing campaign required' });
+    const subscribers = (await store.listMarketingSubscribers()).filter((subscriber) => subscriber.status === 'subscribed');
+    for (const subscriber of subscribers) await emailNotifier.sendMarketingCampaign(subscriber, parsed.data);
+    return { sent: subscribers.length };
+  });
   app.post('/api/admin/orders/:orderId/sync-payment', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const order = await store.getOrder(orderId);

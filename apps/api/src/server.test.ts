@@ -49,7 +49,7 @@ function checkoutPayload(items: Array<{ productId: string; quantity: number }>, 
   };
 }
 function createEmailNotifierSpy() {
-  const sent: Array<{ type: string; order?: { id: string; email: string; status: string }; message?: { name: string; email: string; orderNumber?: string; message: string } }> = [];
+  const sent: Array<{ type: string; order?: { id: string; email: string; status: string }; message?: { name: string; email: string; orderNumber?: string; message: string }; subscriber?: { email: string; status: string; couponCode: string }; campaign?: { subject: string; message: string } }> = [];
   return {
     sent,
     notifier: {
@@ -58,7 +58,9 @@ function createEmailNotifierSpy() {
       sendOrderCanceled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'canceled', order }); },
       sendOrderRefunded: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'refunded', order }); },
       sendOrderRefundFailed: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'refund_failed', order }); },
-      sendContactMessage: async (message: { name: string; email: string; orderNumber?: string; message: string }) => { sent.push({ type: 'contact', message }); }
+      sendContactMessage: async (message: { name: string; email: string; orderNumber?: string; message: string }) => { sent.push({ type: 'contact', message }); },
+      sendMarketingWelcome: async (subscriber: { email: string; status: string; couponCode: string }) => { sent.push({ type: 'marketing_welcome', subscriber }); },
+      sendMarketingCampaign: async (subscriber: { email: string; status: string; couponCode: string }, campaign: { subject: string; message: string }) => { sent.push({ type: 'marketing_campaign', subscriber, campaign }); }
     }
   };
 }
@@ -421,6 +423,69 @@ describe('storefront API', () => {
     expect(badEmail.statusCode).toBe(400);
     expect(bot.statusCode).toBe(400);
     expect(emailSpy.sent).toEqual([]);
+  });
+
+  it('stores newsletter subscribers and sends a launch coupon email', async () => {
+    vi.stubEnv('NEWSLETTER_COUPON_CODE', 'MIDNIGHT10');
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { emailNotifier: emailSpy.notifier });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/newsletter',
+      payload: { name: 'Ari Buyer', email: 'BUYER@EXAMPLE.COM', marketingConsent: true }
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().subscriber).toMatchObject({ email: 'buyer@example.com', name: 'Ari Buyer', status: 'subscribed', couponCode: 'MIDNIGHT10' });
+    expect(res.json().subscriber).not.toHaveProperty('unsubscribeToken');
+    expect(await store.listMarketingSubscribers()).toHaveLength(1);
+    expect(emailSpy.sent).toEqual([{ type: 'marketing_welcome', subscriber: expect.objectContaining({ email: 'buyer@example.com', status: 'subscribed', couponCode: 'MIDNIGHT10' }) }]);
+  });
+
+  it('rejects newsletter signups without consent or with spam honeypot data', async () => {
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+
+    const noConsent = await app.inject({ method: 'POST', url: '/api/newsletter', payload: { email: 'buyer@example.com', marketingConsent: false } });
+    const bot = await app.inject({ method: 'POST', url: '/api/newsletter', payload: { email: 'buyer@example.com', marketingConsent: true, website: 'https://spam.example' } });
+
+    expect(noConsent.statusCode).toBe(400);
+    expect(bot.statusCode).toBe(400);
+    expect(emailSpy.sent).toEqual([]);
+  });
+
+  it('unsubscribes marketing subscribers by token', async () => {
+    const store = createInMemoryStore();
+    const signup = await store.subscribeMarketing({ email: 'buyer@example.com', name: 'Ari', source: 'storefront_coupon', couponCode: 'MIDNIGHT10' });
+    const app = buildServer(store);
+
+    const res = await app.inject({ method: 'POST', url: '/api/newsletter/unsubscribe', payload: { token: signup.subscriber.unsubscribeToken } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().subscriber).toMatchObject({ email: 'buyer@example.com', status: 'unsubscribed' });
+    expect(res.json().subscriber).not.toHaveProperty('unsubscribeToken');
+    expect((await store.listMarketingSubscribers())[0]).toMatchObject({ email: 'buyer@example.com', status: 'unsubscribed' });
+  });
+
+  it('lets admins review subscribers and send campaigns to active subscribers only', async () => {
+    const store = createInMemoryStore();
+    const active = await store.subscribeMarketing({ email: 'active@example.com', source: 'storefront_coupon', couponCode: 'MIDNIGHT10' });
+    const inactive = await store.subscribeMarketing({ email: 'inactive@example.com', source: 'storefront_coupon', couponCode: 'MIDNIGHT10' });
+    await store.unsubscribeMarketing(inactive.subscriber.unsubscribeToken);
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+
+    const list = await app.inject({ method: 'GET', url: '/api/admin/marketing/subscribers', headers: adminHeaders });
+    const campaign = await app.inject({ method: 'POST', url: '/api/admin/marketing/campaigns', headers: adminHeaders, payload: { subject: 'New cards are live', message: 'Fresh card listings are ready in the shop.' } });
+
+    expect(list.statusCode).toBe(200);
+    expect(list.json().subscribers).toHaveLength(2);
+    expect(list.json().subscribers[0]).not.toHaveProperty('unsubscribeToken');
+    expect(campaign.statusCode).toBe(200);
+    expect(campaign.json()).toEqual({ sent: 1 });
+    expect(emailSpy.sent).toEqual([{ type: 'marketing_campaign', subscriber: expect.objectContaining({ email: active.subscriber.email, status: 'subscribed' }), campaign: { subject: 'New cards are live', message: 'Fresh card listings are ready in the shop.' } }]);
   });
 
   it('uploads and saves a product image for an admin listing', async () => {

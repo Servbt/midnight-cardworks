@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { PrismaClient } from '@prisma/client';
-import type { CheckoutInput, Order, OrderStatus, Product, Store } from './types.js';
+import type { CheckoutInput, MarketingSubscriber, MarketingSubscriberStatus, MarketingSubscribeInput, Order, OrderStatus, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
 import { effectiveProductPrice } from './pricing.js';
@@ -9,6 +9,11 @@ type PrismaProduct = Awaited<ReturnType<PrismaClient['product']['findFirstOrThro
 type PrismaOrder = Awaited<ReturnType<PrismaClient['order']['findFirstOrThrow']>> & {
   items: Array<{ productId: string; title: string; price: number; quantity: number }>;
 };
+type PrismaMarketingSubscriber = Awaited<ReturnType<PrismaClient['marketingSubscriber']['findFirstOrThrow']>>;
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
 
 function toProduct(product: PrismaProduct): Product {
   return {
@@ -52,6 +57,22 @@ function toOrder(order: PrismaOrder): Order {
       price: item.price,
       quantity: item.quantity
     }))
+  };
+}
+
+function toMarketingSubscriber(subscriber: PrismaMarketingSubscriber): MarketingSubscriber {
+  return {
+    id: subscriber.id,
+    email: subscriber.email,
+    name: subscriber.name ?? undefined,
+    status: subscriber.status as MarketingSubscriberStatus,
+    source: subscriber.source,
+    couponCode: subscriber.couponCode,
+    unsubscribeToken: subscriber.unsubscribeToken,
+    consentedAt: subscriber.consentedAt.toISOString(),
+    unsubscribedAt: subscriber.unsubscribedAt?.toISOString(),
+    createdAt: subscriber.createdAt.toISOString(),
+    updatedAt: subscriber.updatedAt.toISOString()
   };
 }
 
@@ -113,14 +134,14 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
       const orderItems = input.items.map((item) => {
         const product = products.find((candidate) => candidate.id === item.productId);
-        if (!product) throw new Error(`Unknown product ${item.productId}`);
+        if (!product) throw new Error('Unknown product ' + item.productId);
         return { productId: product.id, title: product.title, price: effectiveProductPrice(toProduct(product)), quantity: item.quantity };
       });
       const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
       const order = await prisma.order.create({
         data: {
-          id: `ord_${nanoid(8)}`,
+          id: 'ord_' + nanoid(8),
           email: input.email,
           customerName: input.customerName,
           shippingAddress: input.shippingAddress,
@@ -165,6 +186,41 @@ export function createPrismaStore(prisma: PrismaClient): Store {
     },
     async markOrderRefundFailed(orderId, refund) {
       return updateOrder(orderId, { status: 'refund_failed', stripeRefundId: refund.refundId, refundReason: refund.reason });
+    },
+    async subscribeMarketing(input: MarketingSubscribeInput) {
+      const email = normalizeEmail(input.email);
+      const existing = await prisma.marketingSubscriber.findUnique({ where: { email } });
+      const saved = existing
+        ? await prisma.marketingSubscriber.update({
+            where: { email },
+            data: {
+              name: input.name?.trim() || existing.name,
+              status: 'subscribed',
+              source: input.source,
+              couponCode: input.couponCode || existing.couponCode,
+              consentedAt: new Date(),
+              unsubscribedAt: null
+            }
+          })
+        : await prisma.marketingSubscriber.create({
+            data: {
+              id: 'sub_' + nanoid(8),
+              email,
+              name: input.name?.trim() || undefined,
+              source: input.source,
+              couponCode: input.couponCode,
+              unsubscribeToken: nanoid(32)
+            }
+          });
+      return { subscriber: toMarketingSubscriber(saved), created: !existing };
+    },
+    async listMarketingSubscribers() {
+      const subscribers = await prisma.marketingSubscriber.findMany({ orderBy: { createdAt: 'desc' } });
+      return subscribers.map(toMarketingSubscriber);
+    },
+    async unsubscribeMarketing(token) {
+      const saved = await prisma.marketingSubscriber.update({ where: { unsubscribeToken: token }, data: { status: 'unsubscribed', unsubscribedAt: new Date() } }).catch(() => undefined);
+      return saved ? toMarketingSubscriber(saved) : undefined;
     }
   };
 }

@@ -12,6 +12,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Checkout flow requires receipt email, customer name, and shipping address before Stripe Checkout
 - Email notifications for paid, fulfilled, canceled, and refunded orders plus customer contact messages via Resend
 - Privacy & Cookies page with consent-aware optional analytics
+- Coupon email signup, marketing subscriber admin tab, and unsubscribe flow
 - Clerk-backed customer order history for signed-in accounts
 - Admin dashboard for listing management, sale pricing, order review, cancellations, and refunds, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
@@ -73,6 +74,7 @@ The checkout endpoint is production-ready at the service seam:
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
 - Admins can cancel `pending_payment` orders before payment succeeds.
 - Admins can issue full or partial refunds for paid/fulfilled orders; refunds are created against the stored Stripe PaymentIntent.
+- Stripe Checkout allows promotion codes, so create a Stripe promotion code matching `NEWSLETTER_COUPON_CODE` before advertising the coupon.
 - Refund webhook events update order status to `refund_pending`, `partially_refunded`, `refunded`, or `refund_failed`.
 - When Resend is configured, paid orders send a customer confirmation email plus an optional shop-owner notification. Fulfilled, canceled, refunded, and refund-failed orders send customer status emails.
 
@@ -107,6 +109,21 @@ ORDER_NOTIFICATION_EMAIL=owner@example.com
 - `ORDER_NOTIFICATION_EMAIL` is optional and receives owner copies for newly paid orders.
 - The Contact page posts to `/api/contact` and sends customer questions to `ORDER_NOTIFICATION_EMAIL` with the customer's email as the reply-to address.
 - Contact messages include name, email, optional order number, message body, length validation, and a hidden honeypot field for basic spam filtering.
+
+## Marketing Emails & Coupon Signup
+
+The storefront includes a launch coupon signup block on the home page. Subscribers must explicitly check consent before the API stores them or sends the coupon email.
+
+```bash
+NEWSLETTER_COUPON_CODE=MIDNIGHT10
+MARKETING_POSTAL_ADDRESS="Your business mailing address"
+```
+
+- `POST /api/newsletter` stores the lowercased email, optional name, consent timestamp, coupon code, and unsubscribe token, then sends the welcome coupon through Resend when email env vars are configured.
+- `/unsubscribe?token=...` lets subscribers opt out of marketing emails.
+- The admin dashboard has a Marketing tab for reviewing subscribers and sending campaign emails to active subscribers only.
+- Marketing email sending skips when `EMAIL_FROM`, `RESEND_API_KEY`, or `MARKETING_POSTAL_ADDRESS` is missing; set all three before launch.
+- Create the matching promotion code in Stripe, because the app enables promotion code entry but Stripe owns actual discount redemption.
 
 ## Customer Accounts
 
@@ -218,6 +235,8 @@ Deployment flow:
    - `EMAIL_FROM`
    - `ORDER_NOTIFICATION_EMAIL`
    - `APP_BASE_URL` after Render gives the live URL
+   - `NEWSLETTER_COUPON_CODE`
+   - `MARKETING_POSTAL_ADDRESS`
    - Optional: `VITE_PLAUSIBLE_DOMAIN` for privacy-friendly analytics
 4. Deploy.
 5. After the first deploy, set `APP_BASE_URL` to the Render URL, then redeploy.
@@ -250,5 +269,6 @@ Production behavior:
 5. Confirm Resend sends customer paid, fulfilled, canceled, refunded, and refund-failed emails plus owner notifications for new paid orders.
 6. Stripe refund receipts can stay enabled too if you want Stripe receipts in addition to shop emails.
 7. Confirm Cloudinary uploads produce hosted product image URLs.
-8. Review the Privacy & Cookies page, analytics preference behavior, and any region-specific legal requirements before accepting live orders.
-9. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.
+8. Create the Stripe promotion code that matches `NEWSLETTER_COUPON_CODE`, then test the signup coupon in Stripe Checkout.
+9. Review the Privacy & Cookies page, analytics preference behavior, marketing email unsubscribe behavior, and any region-specific legal requirements before accepting live orders.
+10. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.

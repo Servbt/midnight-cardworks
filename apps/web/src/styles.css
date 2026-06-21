@@ -1509,6 +1509,49 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .recently-viewed-list span { color: var(--text-3); font-size: .75rem; font-weight: 600; }
 
 /* ─── CHECKOUT ───────────────────────────────────────────────────────────── */
+
+/* Newsletter */
+.newsletter-panel {
+  width: min(var(--max-w), calc(100% - 2 * var(--gutter)));
+  margin: clamp(1rem, 3vw, 2rem) auto 0;
+  padding: clamp(1rem, 3vw, 1.4rem);
+  border: 1px solid rgba(212,168,83,.35);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(212,168,83,.11), rgba(110,231,183,.06)), var(--bg-surface);
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr);
+  gap: 1rem;
+  align-items: center;
+}
+.newsletter-copy h2 {
+  font-family: var(--font-display);
+  margin: .25rem 0 .45rem;
+  color: var(--text);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1;
+}
+.newsletter-copy p { margin: 0; color: var(--text-2); line-height: 1.55; }
+.newsletter-form {
+  display: grid;
+  gap: .75rem;
+  padding: .85rem;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  background: rgba(10,10,18,.42);
+}
+.newsletter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1fr);
+  gap: .75rem;
+}
+.newsletter-consent {
+  display: flex !important;
+  align-items: flex-start;
+  color: var(--text-2) !important;
+  line-height: 1.45;
+}
+.newsletter-consent input { width: auto; margin-top: .15rem; flex: 0 0 auto; }
+
 .checkout-form { display: grid; gap: 1rem; margin-top: .5rem; }
 
 .checkout-intro,
@@ -1588,6 +1631,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 .checkout-form label,
 .contact-form label,
+.newsletter-form label,
+.marketing-compose label,
 .admin-listing label {
   display: grid;
   gap: .4rem;
@@ -1596,7 +1641,9 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   font-size: .82rem;
 }
 .checkout-form input, .checkout-form textarea,
-.contact-form input, .contact-form textarea { width: 100%; }
+.contact-form input, .contact-form textarea,
+.newsletter-form input,
+.marketing-compose input, .marketing-compose textarea { width: 100%; }
 
 .shipping-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
 .shipping-address-grid label:first-child { grid-column: 1 / -1; }
@@ -1685,6 +1732,61 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   font-weight: 600;
   font-size: .8rem;
 }
+
+
+.marketing-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr);
+  gap: 1rem;
+}
+.marketing-card {
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  padding: 1rem;
+  display: grid;
+  gap: .85rem;
+}
+.marketing-card h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: .95rem;
+}
+.marketing-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.marketing-card-header span {
+  color: var(--accent);
+  font-weight: 800;
+  font-size: .8rem;
+}
+.subscriber-list { display: grid; gap: .65rem; }
+.subscriber-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .35rem .75rem;
+  align-items: center;
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface-2);
+}
+.subscriber-list div { display: grid; gap: .12rem; }
+.subscriber-list strong { color: var(--text); font-size: .85rem; overflow-wrap: anywhere; }
+.subscriber-list span:not(.status-badge), .subscriber-list small { color: var(--text-3); font-size: .76rem; }
+.subscriber-list small { grid-column: 1 / -1; }
+.marketing-compose textarea { min-height: 180px; }
+.marketing-compose p { margin: 0; color: var(--text-3); font-size: .82rem; line-height: 1.5; }
+.unsubscribe-panel h2 {
+  font-family: var(--font-display);
+  color: var(--text);
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin: .2rem 0;
+}
+.unsubscribe-panel p { color: var(--text-2); line-height: 1.6; }
 
 .admin-tabs {
   display: flex;
@@ -2137,6 +2239,8 @@ footer {
   .product-detail-img-col { position: static; max-width: 320px; margin: 0 auto; }
 
   .gallery-preview-grid { grid-template-columns: 1fr; }
+  .newsletter-panel, .marketing-grid { grid-template-columns: 1fr; }
+  .newsletter-fields { grid-template-columns: 1fr; }
 
   .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
   .footer-links { flex-wrap: wrap; gap: 2rem; }

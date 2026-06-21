@@ -1,11 +1,31 @@
 import { nanoid } from 'nanoid';
-import type { Order, Product, Store } from './types.js';
+import type { MarketingSubscriber, MarketingSubscribeInput, Order, Product, Store } from './types.js';
 import { seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
 import { effectiveProductPrice } from './pricing.js';
 
 function now() {
   return new Date().toISOString();
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function createMarketingSubscriber(input: MarketingSubscribeInput): MarketingSubscriber {
+  const timestamp = now();
+  return {
+    id: 'sub_' + nanoid(8),
+    email: normalizeEmail(input.email),
+    name: input.name?.trim() || undefined,
+    status: 'subscribed',
+    source: input.source,
+    couponCode: input.couponCode,
+    unsubscribeToken: nanoid(32),
+    consentedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
 }
 
 function applyRefund(order: Order, refund: { amount: number; refundId?: string; reason?: string }) {
@@ -24,6 +44,7 @@ function applyRefund(order: Order, refund: { amount: number; refundId?: string; 
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
   const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
   const orders: Order[] = [];
+  const marketingSubscribers = new Map<string, MarketingSubscriber>();
   return {
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async listAdminProducts() { return [...products.values()]; },
@@ -43,12 +64,12 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       const productList = [...products.values()];
       const items = input.items.map((item) => {
         const product = productList.find((p) => p.id === item.productId);
-        if (!product) throw new Error(`Unknown product ${item.productId}`);
+        if (!product) throw new Error('Unknown product ' + item.productId);
         return { productId: product.id, title: product.title, price: effectiveProductPrice(product), quantity: item.quantity };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
-      const order: Order = { id: `ord_${nanoid(8)}`, email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
+      const order: Order = { id: 'ord_' + nanoid(8), email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
       orders.push(order);
       return order;
     },
@@ -100,6 +121,37 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
       order.refundReason = refund.reason ?? order.refundReason;
       return order;
+    },
+    async subscribeMarketing(input) {
+      const email = normalizeEmail(input.email);
+      const existing = marketingSubscribers.get(email);
+      if (existing) {
+        const updated: MarketingSubscriber = {
+          ...existing,
+          name: input.name?.trim() || existing.name,
+          status: 'subscribed',
+          source: input.source,
+          couponCode: input.couponCode || existing.couponCode,
+          consentedAt: now(),
+          unsubscribedAt: undefined,
+          updatedAt: now()
+        };
+        marketingSubscribers.set(email, updated);
+        return { subscriber: updated, created: false };
+      }
+      const subscriber = createMarketingSubscriber(input);
+      marketingSubscribers.set(email, subscriber);
+      return { subscriber, created: true };
+    },
+    async listMarketingSubscribers() {
+      return [...marketingSubscribers.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async unsubscribeMarketing(token) {
+      const subscriber = [...marketingSubscribers.values()].find((candidate) => candidate.unsubscribeToken === token);
+      if (!subscriber) return undefined;
+      const updated: MarketingSubscriber = { ...subscriber, status: 'unsubscribed', unsubscribedAt: now(), updatedAt: now() };
+      marketingSubscribers.set(updated.email, updated);
+      return updated;
     }
   };
 }

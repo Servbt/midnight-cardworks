@@ -19,6 +19,10 @@ const products = [
   { id: 'p2', slug: 'token', title: 'Midnight Token Pack', description: 'Token bundle', price: 899, saleActive: false, salePrice: null, category: 'Tokens', tags: ['tokens'], image: 'x', inventory: 35, active: true },
   { id: 'p3', slug: 'sold-out', title: 'Archive Showcase Proxy', description: 'Display-only showcase card', price: 1599, saleActive: false, salePrice: null, category: 'Display', tags: ['display', 'archive'], image: 'x', inventory: 0, active: true }
 ];
+const marketingSubscribers = [
+  { id: 'sub_1', email: 'buyer@example.com', name: 'Ari Buyer', status: 'subscribed', source: 'storefront_coupon', couponCode: 'MIDNIGHT10', consentedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' },
+  { id: 'sub_2', email: 'quiet@example.com', status: 'unsubscribed', source: 'storefront_coupon', couponCode: 'MIDNIGHT10', consentedAt: '2026-06-20T00:00:00.000Z', unsubscribedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-20T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
+];
 
 beforeEach(() => {
   mockAuth.isAdmin = false;
@@ -28,6 +32,10 @@ beforeEach(() => {
   adminOrderStatus = 'paid';
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+    if (String(url).includes('/api/admin/marketing/subscribers')) return new Response(JSON.stringify({ subscribers: marketingSubscribers }), { status: 200 });
+    if (String(url).includes('/api/admin/marketing/campaigns')) return new Response(JSON.stringify({ sent: 1 }), { status: 200 });
+    if (String(url).includes('/api/newsletter/unsubscribe')) return new Response(JSON.stringify({ subscriber: { ...marketingSubscribers[0], status: 'unsubscribed', unsubscribedAt: '2026-06-21T00:00:00.000Z' } }), { status: 200 });
+    if (String(url).includes('/api/newsletter')) return new Response(JSON.stringify({ subscriber: marketingSubscribers[0], created: true }), { status: 201 });
     if (String(url).includes('/api/admin/products') && !String(url).includes('/image')) {
       if (init?.method === 'POST') {
         const body = JSON.parse(String(init.body));
@@ -183,6 +191,19 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Allow analytics' }));
 
     expect(window.localStorage.getItem('midnight-cardworks.analyticsPreference')).toBe('accepted');
+  });
+
+  it('lets shoppers sign up for the launch coupon email', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Get a coupon for the first drop.' })).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Newsletter name'), 'Ari Buyer');
+    await userEvent.type(screen.getByLabelText('Newsletter email'), 'buyer@example.com');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Email me coupons and product updates' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send my coupon' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('You are on the list. Coupon sent. Code: MIDNIGHT10');
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/newsletter'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('buyer@example.com') }));
   });
 
   it('shows the dark Apple-inspired collector studio direction', async () => {
@@ -908,6 +929,26 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/products'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('moonlit-token') }));
   });
 
+  it('lets admins manage marketing subscribers and send a campaign', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Marketing/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Marketing emails' })).toBeInTheDocument();
+    expect(screen.getByText('buyer@example.com')).toBeInTheDocument();
+    expect(screen.getByText('quiet@example.com')).toBeInTheDocument();
+    expect(screen.getByText('1 active')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText('Marketing email subject'));
+    await userEvent.type(screen.getByLabelText('Marketing email subject'), 'New cards are live');
+    await userEvent.clear(screen.getByLabelText('Marketing email message'));
+    await userEvent.type(screen.getByLabelText('Marketing email message'), 'Fresh card listings are ready in the shop.');
+    await userEvent.click(screen.getByRole('button', { name: 'Send campaign to active subscribers' }));
+
+    expect(await screen.findByText('Marketing campaign sent to 1 subscriber.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/marketing/campaigns'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }), body: expect.stringContaining('New cards are live') }));
+  });
+
   it('lets admins apply and save sale pricing for selected listings', async () => {
     mockAuth.isAdmin = true;
     render(<App />);
@@ -939,6 +980,16 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument();
     expect(screen.queryByText('Admin dashboard')).not.toBeInTheDocument();
+  });
+
+  it('unsubscribes marketing emails from unsubscribe links', async () => {
+    window.history.pushState({}, '', '/unsubscribe?token=sub_token');
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Unsubscribe' })).toBeInTheDocument();
+    expect(await screen.findByText('buyer@example.com has been unsubscribed from marketing emails.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/newsletter/unsubscribe'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('sub_token') }));
   });
 
   it('shows a verified receipt when returning from Stripe Checkout', async () => {

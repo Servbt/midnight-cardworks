@@ -18,6 +18,11 @@ enum OrderStatus {
   refund_failed
 }
 
+enum MarketingSubscriberStatus {
+  subscribed
+  unsubscribed
+}
+
 model Product {
   id          String   @id
   slug        String   @unique
@@ -70,4 +75,18 @@ model OrderItem {
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
+}
+
+model MarketingSubscriber {
+  id               String                    @id
+  email            String                    @unique
+  name             String?
+  status           MarketingSubscriberStatus @default(subscribed)
+  source           String                    @default("storefront_coupon")
+  couponCode       String
+  unsubscribeToken String                    @unique
+  consentedAt      DateTime                  @default(now())
+  unsubscribedAt   DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
 }

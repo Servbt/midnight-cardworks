@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { cancelAdminOrder, createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendContactMessage, syncAdminOrderPayment, uploadProductImage, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type MarketingSubscriber, type Order, type Product } from './api';
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy';
+type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'unsubscribe';
 type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -61,9 +61,10 @@ export default function App() {
   const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
+  const [marketingSubscribers, setMarketingSubscribers] = useState<MarketingSubscriber[]>([]);
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
   const [adminMessage, setAdminMessage] = useState('');
-  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales'>('orders');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing'>('orders');
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
   const [saleSelection, setSaleSelection] = useState<string[]>([]);
   const [bulkSalePercent, setBulkSalePercent] = useState('15');
@@ -82,6 +83,16 @@ export default function App() {
   const [contactBody, setContactBody] = useState('');
   const [contactWebsite, setContactWebsite] = useState('');
   const [contactMessage, setContactMessage] = useState('');
+  const [newsletterName, setNewsletterName] = useState('');
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [newsletterWebsite, setNewsletterWebsite] = useState('');
+  const [newsletterMessage, setNewsletterMessage] = useState('');
+  const [newsletterCoupon, setNewsletterCoupon] = useState('');
+  const [unsubscribeToken, setUnsubscribeToken] = useState('');
+  const [unsubscribeMessage, setUnsubscribeMessage] = useState('');
+  const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
+  const [campaignMessage, setCampaignMessage] = useState('A new Midnight Cardworks update is ready. Add a short note about the deal, new product, or launch coupon here.');
   const { isAdmin, getAdminToken } = useAdminAccess();
   const { isSignedIn, email: sessionEmail, getCustomerToken } = useCustomerSession();
 
@@ -140,6 +151,16 @@ export default function App() {
         setView('privacy');
         return;
       }
+      if (window.location.pathname === '/unsubscribe') {
+        setSelectedProduct(null);
+        setProductMessage('');
+        setReceiptOrder(null);
+        setReceiptMessage('');
+        setUnsubscribeToken(params.get('token') ?? '');
+        setUnsubscribeMessage('');
+        setView('unsubscribe');
+        return;
+      }
       if (window.location.pathname === '/shop') {
         setCategory(params.get('category') ?? 'All');
         setQuery(params.get('q') ?? '');
@@ -166,10 +187,11 @@ export default function App() {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
       const authToken = token ?? undefined;
-      const [adminListings, adminOrders] = await Promise.all([fetchAdminProducts(authToken), fetchAdminOrders(authToken)]);
+      const [adminListings, adminOrders, subscribers] = await Promise.all([fetchAdminProducts(authToken), fetchAdminOrders(authToken), fetchAdminMarketingSubscribers(authToken)]);
       setAdminProducts(adminListings);
       setOrders(adminOrders);
-    }).catch(() => { setAdminProducts([]); setOrders([]); });
+      setMarketingSubscribers(subscribers);
+    }).catch(() => { setAdminProducts([]); setOrders([]); setMarketingSubscribers([]); });
   }, [view, checkoutMessage, isAdmin]);
   useEffect(() => {
     if (view !== 'account' || !isSignedIn || !sessionEmail) return;
@@ -192,6 +214,23 @@ export default function App() {
   useEffect(() => {
     if (analyticsPreference === 'accepted') loadAnalytics();
   }, [analyticsPreference]);
+  useEffect(() => {
+    if (view !== 'unsubscribe') return;
+    if (!unsubscribeToken) {
+      setUnsubscribeMessage('This unsubscribe link is missing a token.');
+      return;
+    }
+    let cancelled = false;
+    setUnsubscribeMessage('Unsubscribing...');
+    unsubscribeNewsletter(unsubscribeToken).then((subscriber) => {
+      if (cancelled) return;
+      setUnsubscribeMessage(subscriber.email + ' has been unsubscribed from marketing emails.');
+    }).catch((error) => {
+      if (cancelled) return;
+      setUnsubscribeMessage(error instanceof Error ? error.message : 'Could not unsubscribe that email yet.');
+    });
+    return () => { cancelled = true; };
+  }, [view, unsubscribeToken]);
   useEffect(() => {
     if (analyticsPreference !== 'accepted') return;
     trackAnalyticsEvent('Page View', { view, path: window.location.pathname });
@@ -221,6 +260,8 @@ export default function App() {
       description.content = selectedProduct.description;
     } else if (view === 'privacy') {
       document.title = 'Privacy & Cookies | Midnight Cardworks';
+    } else if (view === 'unsubscribe') {
+      document.title = 'Unsubscribe | Midnight Cardworks';
     } else if (view === 'home' || view === 'shop') {
       document.title = 'Midnight Cardworks';
     }
@@ -524,6 +565,39 @@ export default function App() {
     }
   }
 
+  async function handleNewsletterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newsletterConsent) {
+      setNewsletterMessage('Check the email consent box so we can send the coupon.');
+      return;
+    }
+    setNewsletterMessage('Sending your coupon...');
+    try {
+      const result = await subscribeNewsletter({ name: newsletterName || undefined, email: newsletterEmail, marketingConsent: newsletterConsent, website: newsletterWebsite });
+      setNewsletterCoupon(result.subscriber.couponCode);
+      setNewsletterMessage(result.created ? 'You are on the list. Coupon sent.' : 'You are already on the list. Coupon sent again.');
+      setNewsletterWebsite('');
+      trackAnalyticsEvent('Newsletter Signup');
+    } catch (error) {
+      setNewsletterMessage(error instanceof Error ? error.message : 'Could not sign you up yet.');
+    }
+  }
+
+  async function handleMarketingCampaignSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAdminMessage('Sending marketing campaign...');
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const result = await sendAdminMarketingCampaign({ subject: campaignSubject, message: campaignMessage }, token);
+      const subscribers = await fetchAdminMarketingSubscribers(token);
+      setMarketingSubscribers(subscribers);
+      setAdminMessage('Marketing campaign sent to ' + result.sent + ' ' + (result.sent === 1 ? 'subscriber' : 'subscribers') + '.');
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : 'Could not send marketing campaign.');
+    }
+  }
+
   async function handleImageUpload(product: Product, file: File | undefined) {
     if (!file) return;
     setAdminMessage(`Uploading image for ${product.title}...`);
@@ -756,6 +830,7 @@ export default function App() {
 
   const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
   const saleSelectedProducts = adminProducts.filter((product) => saleSelection.includes(product.slug));
+  const activeMarketingSubscribers = marketingSubscribers.filter((subscriber) => subscriber.status === 'subscribed');
 
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
@@ -820,6 +895,24 @@ export default function App() {
         </div>
       </div>
     </header> : null}
+
+    {view === 'home' && <section className="panel newsletter-panel" aria-label="Launch coupon signup">
+      <div className="newsletter-copy">
+        <p className="eyebrow">Launch list</p>
+        <h2>Get a coupon for the first drop.</h2>
+        <p>Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.</p>
+      </div>
+      <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
+        <div className="newsletter-fields">
+          <label>Name <span className="optional-label">optional</span><input aria-label="Newsletter name" value={newsletterName} onChange={(event) => setNewsletterName(event.target.value)} placeholder="Ari" /></label>
+          <label>Email<input aria-label="Newsletter email" type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="buyer@example.com" /></label>
+        </div>
+        <label className="honeypot">Website<input aria-label="Newsletter website" tabIndex={-1} autoComplete="off" value={newsletterWebsite} onChange={(event) => setNewsletterWebsite(event.target.value)} /></label>
+        <label className="checkbox-row newsletter-consent"><input aria-label="Email me coupons and product updates" type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} /> Email me coupons, new product drops, and sale updates. I can unsubscribe anytime.</label>
+        <button type="submit">Send my coupon</button>
+        {newsletterMessage && <p className="status-message" role="status">{newsletterMessage}{newsletterCoupon ? ' Code: ' + newsletterCoupon : ''}</p>}
+      </form>
+    </section>}
 
     {view === 'home' && <section className="panel storefront-panel">
       <section className="landing-section gallery-preview" aria-label="Gallery preview">
@@ -1098,13 +1191,14 @@ export default function App() {
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">
         <div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders, listings, and sale pricing from separate workspaces.</p></div>
-        <div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span><span>{adminProducts.filter(isProductOnSale).length} on sale</span></div>
+        <div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span><span>{adminProducts.filter(isProductOnSale).length} on sale</span><span>{activeMarketingSubscribers.length} subscribers</span></div>
       </div>
       {adminMessage && <p className="status-message">{adminMessage}</p>}
       <div className="admin-tabs" role="tablist" aria-label="Admin sections">
         <button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button>
         <button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button>
         <button role="tab" aria-selected={adminTab === 'sales'} className={adminTab === 'sales' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('sales')}>Sales ({adminProducts.filter(isProductOnSale).length})</button>
+        <button role="tab" aria-selected={adminTab === 'marketing'} className={adminTab === 'marketing' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('marketing')}>Marketing ({activeMarketingSubscribers.length})</button>
       </div>
       {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
         <div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>
@@ -1144,6 +1238,26 @@ export default function App() {
           </article>)}
         </div>
       </section>}
+      {adminTab === 'marketing' && <section className="admin-workspace marketing-workspace" role="tabpanel" aria-label="Marketing">
+        <div className="section-heading"><div><h3>Marketing emails</h3><p>Review opt-in subscribers and send deal or new product notes to active subscribers only.</p></div></div>
+        <div className="marketing-grid">
+          <section className="marketing-card" aria-label="Marketing subscribers">
+            <div className="marketing-card-header"><h4>Subscribers</h4><span>{activeMarketingSubscribers.length} active</span></div>
+            {marketingSubscribers.length === 0 ? <p>No coupon signups yet.</p> : <div className="subscriber-list">{marketingSubscribers.map((subscriber) => <article key={subscriber.id}>
+              <div><strong>{subscriber.email}</strong>{subscriber.name && <span>{subscriber.name}</span>}</div>
+              <span className="status-badge">{subscriber.status}</span>
+              <small>Coupon: {subscriber.couponCode}</small>
+            </article>)}</div>}
+          </section>
+          <form className="marketing-card marketing-compose" onSubmit={(event) => void handleMarketingCampaignSubmit(event)}>
+            <h4>Send campaign</h4>
+            <label>Subject<input aria-label="Marketing email subject" value={campaignSubject} onChange={(event) => setCampaignSubject(event.target.value)} /></label>
+            <label>Message<textarea aria-label="Marketing email message" minLength={10} maxLength={5000} value={campaignMessage} onChange={(event) => setCampaignMessage(event.target.value)} /></label>
+            <p>Emails include unsubscribe links and should only be sent for genuine deals, new products, or launch updates.</p>
+            <button type="submit">Send campaign to active subscribers</button>
+          </form>
+        </div>
+      </section>}
     </section>}
 
     {view === 'privacy' && <section className="panel narrow policy-panel" aria-label="Privacy and cookie policy">
@@ -1168,8 +1282,12 @@ export default function App() {
           <p>{analyticsConfigured ? 'Optional analytics helps identify popular listings and checkout friction without ad tracking or selling personal information.' : 'Analytics is currently disabled because no analytics domain is configured. Your choice will be remembered for when analytics is turned on.'}</p>
         </article>
         <article className="policy-card">
+          <h3>Marketing email</h3>
+          <p>If you sign up for coupons or product updates, the shop stores your email, optional name, consent time, coupon code, and unsubscribe status. Marketing emails include an unsubscribe link.</p>
+        </article>
+        <article className="policy-card">
           <h3>Your choices</h3>
-          <p>You can choose Necessary only, allow analytics, clear saved checkout details from the account page, or contact Midnight Cardworks with privacy or order questions.</p>
+          <p>You can choose Necessary only, allow analytics, unsubscribe from marketing email, clear saved checkout details from the account page, or contact Midnight Cardworks with privacy or order questions.</p>
         </article>
         <article className="policy-card">
           <h3>No ad tracking</h3>
@@ -1181,6 +1299,13 @@ export default function App() {
         <button className="ghost" type="button" onClick={() => chooseAnalyticsPreference('necessary')}>Necessary only</button>
         <button className="ghost" type="button" onClick={() => showContact({ scrollToTop: true })}>Contact the studio</button>
       </div>
+    </section>}
+
+    {view === 'unsubscribe' && <section className="panel narrow unsubscribe-panel" aria-label="Marketing unsubscribe">
+      <p className="eyebrow">Email preferences</p>
+      <h2>Unsubscribe</h2>
+      <p>{unsubscribeMessage || 'Checking your unsubscribe link...'}</p>
+      <button type="button" onClick={() => showShop({ category: 'All', query: '', scrollToTop: true })}>Back to shop</button>
     </section>}
 
     {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">

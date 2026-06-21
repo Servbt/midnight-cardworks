@@ -36,6 +36,7 @@ export async function createCheckoutResponse(order: Order) {
         }] : [])
       ],
       metadata: { orderId: order.id },
+      allow_promotion_codes: true,
       success_url: `${appBaseUrl}/checkout/success?order=${order.id}`,
       cancel_url: `${appBaseUrl}/cart?order=${order.id}`
     });

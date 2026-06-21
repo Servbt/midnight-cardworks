@@ -20,7 +20,22 @@ export type Order = {
   refundedAt?: string;
   createdAt: string;
 };
+export type MarketingSubscriberStatus = 'subscribed' | 'unsubscribed';
+export type MarketingSubscriber = {
+  id: string;
+  email: string;
+  name?: string;
+  status: MarketingSubscriberStatus;
+  source: string;
+  couponCode: string;
+  unsubscribeToken: string;
+  consentedAt: string;
+  unsubscribedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 export type CheckoutInput = { email: string; customerName: string; shippingAddress: string; items: CartItemInput[] };
+export type MarketingSubscribeInput = { email: string; name?: string; source: string; couponCode: string };
 export type Store = {
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;
@@ -38,4 +53,7 @@ export type Store = {
   markOrderRefundPending(orderId: string, refund: { amount: number; refundId?: string; reason?: string }): Promise<Order | undefined>;
   markOrderRefunded(orderId: string, refund: { amount: number; refundId?: string; reason?: string }): Promise<Order | undefined>;
   markOrderRefundFailed(orderId: string, refund: { refundId?: string; reason?: string }): Promise<Order | undefined>;
+  subscribeMarketing(input: MarketingSubscribeInput): Promise<{ subscriber: MarketingSubscriber; created: boolean }>;
+  listMarketingSubscribers(): Promise<MarketingSubscriber[]>;
+  unsubscribeMarketing(token: string): Promise<MarketingSubscriber | undefined>;
 };
