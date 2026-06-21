@@ -1924,6 +1924,104 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   padding: clamp(1.2rem, 4vw, 2.4rem);
 }
 
+.policy-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.policy-panel h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  color: var(--text);
+}
+
+.policy-panel > p {
+  color: var(--text-2);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .85rem;
+  margin-top: .5rem;
+}
+
+.policy-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+  padding: 1rem;
+  display: grid;
+  gap: .45rem;
+}
+
+.policy-card h3 {
+  margin: 0;
+  font-size: .95rem;
+  color: var(--text);
+}
+
+.policy-card p {
+  margin: 0;
+  color: var(--text-3);
+  line-height: 1.55;
+  font-size: .86rem;
+}
+
+.policy-actions {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-top: .25rem;
+}
+
+.privacy-notice {
+  position: fixed;
+  left: max(1rem, calc((100vw - var(--max-w)) / 2));
+  bottom: 1rem;
+  z-index: 60;
+  width: min(720px, calc(100vw - 2rem));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  background: rgba(18,18,28,.96);
+  box-shadow: 0 18px 48px rgba(0,0,0,.45);
+  backdrop-filter: blur(14px);
+}
+
+.privacy-notice strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: .25rem;
+}
+
+.privacy-notice p {
+  margin: 0;
+  color: var(--text-3);
+  line-height: 1.5;
+  font-size: .84rem;
+}
+
+.privacy-notice-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .55rem;
+  flex-wrap: wrap;
+}
+
+.privacy-notice-actions .text-btn {
+  min-height: auto;
+  padding: .35rem .15rem;
+}
+
 /* ─── FOOTER ─────────────────────────────────────────────────────────────── */
 footer {
   background: var(--bg-dark);
@@ -2042,6 +2140,9 @@ footer {
 
   .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
   .footer-links { flex-wrap: wrap; gap: 2rem; }
+  .policy-grid { grid-template-columns: 1fr; }
+  .privacy-notice { grid-template-columns: 1fr; }
+  .privacy-notice-actions { justify-content: flex-start; }
 
   .cart-marketplace-shell { grid-template-columns: 1fr; }
   .cart-summary-card { position: static; }
@@ -2078,4 +2179,6 @@ footer {
   .panel { padding-inline: .75rem; }
   .admin-workspace { padding: .75rem; }
   .nav-search { display: none; }
+  .privacy-notice { left: .65rem; right: .65rem; bottom: .65rem; width: auto; }
+  .privacy-notice-actions button { flex: 1 1 auto; }
 }

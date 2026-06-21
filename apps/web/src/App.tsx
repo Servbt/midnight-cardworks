@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { cancelAdminOrder, createCheckout, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendContactMessage, syncAdminOrderPayment, uploadProductImage, type Order, type Product } from './api';
+import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact';
+type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy';
+type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -20,6 +22,7 @@ const launchNotes = [
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
+const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
 type ShippingAddressFields = { streetAddress: string; apartment: string; city: string; zipCode: string };
 const blankShippingAddressFields: ShippingAddressFields = { streetAddress: '', apartment: '', city: '', zipCode: '' };
 const formatShippingAddress = (fields: ShippingAddressFields) => [
@@ -42,6 +45,14 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [shippingAddressFields, setShippingAddressFields] = useState<ShippingAddressFields>(blankShippingAddressFields);
+  const [analyticsPreference, setAnalyticsPreference] = useState<AnalyticsPreference>(() => {
+    try {
+      const preference = window.localStorage.getItem(analyticsPreferenceKey);
+      return preference === 'accepted' || preference === 'necessary' ? preference : 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  });
   const [savedCheckoutInfoExists, setSavedCheckoutInfoExists] = useState(false);
   const [savedCheckoutInfoMessage, setSavedCheckoutInfoMessage] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
@@ -121,6 +132,14 @@ export default function App() {
         setView('cart');
         return;
       }
+      if (window.location.pathname === '/privacy') {
+        setSelectedProduct(null);
+        setProductMessage('');
+        setReceiptOrder(null);
+        setReceiptMessage('');
+        setView('privacy');
+        return;
+      }
       if (window.location.pathname === '/shop') {
         setCategory(params.get('category') ?? 'All');
         setQuery(params.get('q') ?? '');
@@ -170,6 +189,13 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, [view, isSignedIn, sessionEmail]);
+  useEffect(() => {
+    if (analyticsPreference === 'accepted') loadAnalytics();
+  }, [analyticsPreference]);
+  useEffect(() => {
+    if (analyticsPreference !== 'accepted') return;
+    trackAnalyticsEvent('Page View', { view, path: window.location.pathname });
+  }, [analyticsPreference, view]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
   const visibleProducts = useMemo(() => products.filter((p) => {
@@ -193,6 +219,8 @@ export default function App() {
         document.head.appendChild(description);
       }
       description.content = selectedProduct.description;
+    } else if (view === 'privacy') {
+      document.title = 'Privacy & Cookies | Midnight Cardworks';
     } else if (view === 'home' || view === 'shop') {
       document.title = 'Midnight Cardworks';
     }
@@ -208,6 +236,7 @@ export default function App() {
     setDetailQuantity('1');
     rememberRecentlyViewed(product);
     setView('product');
+    trackAnalyticsEvent('View Listing', { slug: product.slug, category: product.category });
     window.history.pushState({}, '', `/products/${product.slug}`);
     setProductScrollSignal((signal) => signal + 1);
   }
@@ -271,6 +300,13 @@ export default function App() {
     if (options.scrollToTop) scrollToPageTop();
   }
 
+  function showPrivacy(options: { scrollToTop?: boolean } = {}) {
+    setView('privacy');
+    if (window.location.pathname === '/privacy') window.history.replaceState({}, '', '/privacy');
+    else window.history.pushState({}, '', '/privacy');
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
   function showCart() {
     setView('cart');
     if (window.location.pathname !== '/cart') window.history.pushState({}, '', '/cart');
@@ -294,6 +330,15 @@ export default function App() {
 
   function startOrder() {
     setView('contact');
+  }
+
+  function chooseAnalyticsPreference(preference: Exclude<AnalyticsPreference, 'unknown'>) {
+    setAnalyticsPreference(preference);
+    try {
+      window.localStorage.setItem(analyticsPreferenceKey, preference);
+    } catch {
+      // Preference storage is best-effort; the selection still applies for this visit.
+    }
   }
 
   const recentlyViewedSection = recentlyViewed.length > 0 ? <section className="recently-viewed" aria-label="Recently viewed listings">
@@ -322,6 +367,7 @@ export default function App() {
     setCartNotice('');
     setClearCartRequested(false);
     setAddedProductIds((ids) => ids.includes(product.id) ? ids : [...ids, product.id]);
+    trackAnalyticsEvent('Add To Cart', { slug: product.slug, category: product.category, quantity: safeQuantity });
   }
 
   function productAddedMessage(product: Product, quantity = 1) {
@@ -456,6 +502,7 @@ export default function App() {
       return;
     }
     const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+    trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
     setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
     setCart([]);
     setView('account');
@@ -468,6 +515,7 @@ export default function App() {
     try {
       await sendContactMessage({ name: contactName, email: contactEmail, orderNumber: contactOrderNumber || undefined, message: contactBody, website: contactWebsite });
       setContactMessage('sent');
+      trackAnalyticsEvent('Contact Submit');
       setContactBody('');
       setContactOrderNumber('');
       setContactWebsite('');
@@ -1098,6 +1146,55 @@ export default function App() {
       </section>}
     </section>}
 
+    {view === 'privacy' && <section className="panel narrow policy-panel" aria-label="Privacy and cookie policy">
+      <p className="eyebrow">Privacy & Cookies</p>
+      <h2>Privacy & Cookies</h2>
+      <p>Last updated June 21, 2026. This page explains what Midnight Cardworks collects to run the shop, fulfill orders, answer messages, and improve the storefront.</p>
+      <div className="policy-grid">
+        <article className="policy-card">
+          <h3>Information used to run the shop</h3>
+          <p>Checkout collects the email address, customer name, shipping address, cart items, order totals, and payment status needed to process and fulfill an order. Contact messages collect the name, email, optional order number, and message you send.</p>
+        </article>
+        <article className="policy-card">
+          <h3>Service providers</h3>
+          <p>Stripe handles payment, Clerk handles sign-in, Resend sends order and contact emails, Cloudinary stores listing images, and the hosting/database providers keep the site running. These providers receive the limited information needed for their part of the service.</p>
+        </article>
+        <article className="policy-card">
+          <h3>Cookies and browser storage</h3>
+          <p>Necessary browser storage supports cart behavior, sign-in/security, admin access, and checkout details only if you choose to save them on this device. Optional analytics only runs after you choose Allow analytics.</p>
+        </article>
+        <article className="policy-card">
+          <h3>Analytics choice</h3>
+          <p>{analyticsConfigured ? 'Optional analytics helps identify popular listings and checkout friction without ad tracking or selling personal information.' : 'Analytics is currently disabled because no analytics domain is configured. Your choice will be remembered for when analytics is turned on.'}</p>
+        </article>
+        <article className="policy-card">
+          <h3>Your choices</h3>
+          <p>You can choose Necessary only, allow analytics, clear saved checkout details from the account page, or contact Midnight Cardworks with privacy or order questions.</p>
+        </article>
+        <article className="policy-card">
+          <h3>No ad tracking</h3>
+          <p>Midnight Cardworks does not sell personal information, use advertising pixels, or track shoppers across unrelated websites.</p>
+        </article>
+      </div>
+      <div className="policy-actions">
+        <button type="button" onClick={() => chooseAnalyticsPreference('accepted')}>Allow analytics</button>
+        <button className="ghost" type="button" onClick={() => chooseAnalyticsPreference('necessary')}>Necessary only</button>
+        <button className="ghost" type="button" onClick={() => showContact({ scrollToTop: true })}>Contact the studio</button>
+      </div>
+    </section>}
+
+    {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
+      <div>
+        <strong>Privacy & cookie choices</strong>
+        <p>Necessary storage keeps cart, checkout, sign-in, and security features working. Optional privacy-friendly analytics helps improve the shop after you allow it.</p>
+      </div>
+      <div className="privacy-notice-actions">
+        <button className="ghost" type="button" onClick={() => chooseAnalyticsPreference('necessary')}>Necessary only</button>
+        <button type="button" onClick={() => chooseAnalyticsPreference('accepted')}>Allow analytics</button>
+        <button className="text-btn" type="button" onClick={() => showPrivacy({ scrollToTop: true })}>Privacy & Cookies</button>
+      </div>
+    </aside>}
+
     <footer>
       <div className="footer-inner">
         <div className="footer-brand">
@@ -1115,8 +1212,12 @@ export default function App() {
           <div>
             <h4>Studio</h4>
             <button className="text-btn" onClick={startOrder}>Start a commission</button>
-            <button className="text-btn" onClick={() => setView('contact')}>Contact</button>
+            <button className="text-btn" onClick={() => showContact({ scrollToTop: true })}>Contact</button>
             <button className="text-btn" onClick={() => setView('account')}>Account</button>
+          </div>
+          <div>
+            <h4>Legal</h4>
+            <button className="text-btn" onClick={() => showPrivacy({ scrollToTop: true })}>Privacy & Cookies</button>
           </div>
         </nav>
       </div>

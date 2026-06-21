@@ -55,6 +55,8 @@ afterEach(() => {
   cleanup();
   window.localStorage.clear();
   window.history.replaceState({}, '', '/');
+  document.querySelectorAll('script[data-midnight-analytics="plausible"]').forEach((script) => script.remove());
+  delete (window as any).plausible;
   vi.unstubAllGlobals();
 });
 
@@ -153,6 +155,34 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/shop');
     expect(window.location.search).toBe('?category=Commander');
     expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+  });
+
+  it('shows privacy notice and remembers necessary-only choice', async () => {
+    render(<App />);
+
+    const notice = screen.getByRole('region', { name: 'Privacy and cookie notice' });
+    expect(within(notice).getByText('Privacy & cookie choices')).toBeInTheDocument();
+
+    await userEvent.click(within(notice).getByRole('button', { name: 'Necessary only' }));
+
+    expect(window.localStorage.getItem('midnight-cardworks.analyticsPreference')).toBe('necessary');
+    expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
+  });
+
+  it('opens the privacy page from the footer and lets shoppers allow analytics', async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Necessary only' }));
+    const footer = screen.getByRole('contentinfo');
+    await userEvent.click(within(footer).getByRole('button', { name: 'Privacy & Cookies' }));
+
+    expect(window.location.pathname).toBe('/privacy');
+    expect(await screen.findByRole('heading', { name: 'Privacy & Cookies' })).toBeInTheDocument();
+    expect(screen.getByText(/Stripe handles payment/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Allow analytics' }));
+
+    expect(window.localStorage.getItem('midnight-cardworks.analyticsPreference')).toBe('accepted');
   });
 
   it('shows the dark Apple-inspired collector studio direction', async () => {

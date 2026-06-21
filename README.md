@@ -11,6 +11,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Persistent browser cart with quantity controls
 - Checkout flow requires receipt email, customer name, and shipping address before Stripe Checkout
 - Email notifications for paid, fulfilled, canceled, and refunded orders plus customer contact messages via Resend
+- Privacy & Cookies page with consent-aware optional analytics
 - Clerk-backed customer order history for signed-in accounts
 - Admin dashboard for listing management, sale pricing, order review, cancellations, and refunds, restricted to allowlisted Clerk admin emails
 - Fastify API with Prisma/Postgres-ready persistence
@@ -42,6 +43,22 @@ Each active listing has a public route at `/products/:slug`.
 - Fastify injects product-specific `<title>`, meta description, canonical link, Open Graph product tags, and JSON-LD structured data into the served HTML for crawlers/social previews.
 - Inactive listings remain hidden from the public catalog and are not used for public SEO pages.
 - Keep product titles/descriptions specific and customer-readable in admin because they become SEO/share preview copy.
+
+## Privacy & Analytics
+
+The storefront includes a public Privacy & Cookies page at `/privacy` and a small cookie/privacy notice. Necessary browser storage supports cart, sign-in, security, and checkout info that a shopper explicitly saves on their device.
+
+Optional analytics is designed for Plausible:
+
+```bash
+VITE_PLAUSIBLE_DOMAIN=your-domain.com
+VITE_PLAUSIBLE_SRC=https://plausible.io/js/script.js # optional override
+```
+
+- No analytics script loads unless `VITE_PLAUSIBLE_DOMAIN` is configured and the visitor chooses `Allow analytics`.
+- Shoppers can choose `Necessary only`; their preference is stored locally in `midnight-cardworks.analyticsPreference`.
+- Tracked events avoid personal data: `Page View`, `View Listing`, `Add To Cart`, `Begin Stripe Checkout`, and `Contact Submit`.
+- The policy copy is MVP-ready, but review it before launch if your audience, tools, or jurisdictions expand.
 
 ## Stripe Checkout
 
@@ -201,6 +218,7 @@ Deployment flow:
    - `EMAIL_FROM`
    - `ORDER_NOTIFICATION_EMAIL`
    - `APP_BASE_URL` after Render gives the live URL
+   - Optional: `VITE_PLAUSIBLE_DOMAIN` for privacy-friendly analytics
 4. Deploy.
 5. After the first deploy, set `APP_BASE_URL` to the Render URL, then redeploy.
 6. In Stripe, add webhook endpoint:
@@ -232,4 +250,5 @@ Production behavior:
 5. Confirm Resend sends customer paid, fulfilled, canceled, refunded, and refund-failed emails plus owner notifications for new paid orders.
 6. Stripe refund receipts can stay enabled too if you want Stripe receipts in addition to shop emails.
 7. Confirm Cloudinary uploads produce hosted product image URLs.
-8. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.
+8. Review the Privacy & Cookies page, analytics preference behavior, and any region-specific legal requirements before accepting live orders.
+9. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.
