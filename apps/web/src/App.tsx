@@ -7,6 +7,7 @@ import { redirectToCheckout } from './checkoutRedirect';
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'unsubscribe';
 type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
+type NewsletterOfferSurface = 'home' | 'account';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -23,6 +24,14 @@ const launchNotes = [
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
+const newsletterOfferHomeSeenKey = 'midnight-cardworks.newsletterOfferHomeSeen';
+const newsletterSignupCompleteKey = 'midnight-cardworks.newsletterSignupComplete';
+const readLocalFlag = (key: string) => {
+  try { return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'; } catch { return false; }
+};
+const writeLocalFlag = (key: string) => {
+  try { window.localStorage.setItem(key, 'true'); } catch { /* storage can be unavailable in private contexts */ }
+};
 type ShippingAddressFields = { streetAddress: string; apartment: string; city: string; zipCode: string };
 const blankShippingAddressFields: ShippingAddressFields = { streetAddress: '', apartment: '', city: '', zipCode: '' };
 const formatShippingAddress = (fields: ShippingAddressFields) => [
@@ -89,6 +98,8 @@ export default function App() {
   const [newsletterWebsite, setNewsletterWebsite] = useState('');
   const [newsletterMessage, setNewsletterMessage] = useState('');
   const [newsletterCoupon, setNewsletterCoupon] = useState('');
+  const [newsletterOfferOpen, setNewsletterOfferOpen] = useState(false);
+  const [newsletterOfferSurface, setNewsletterOfferSurface] = useState<NewsletterOfferSurface>('home');
   const [unsubscribeToken, setUnsubscribeToken] = useState('');
   const [unsubscribeMessage, setUnsubscribeMessage] = useState('');
   const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
@@ -100,6 +111,9 @@ export default function App() {
   useEffect(() => {
     if (isSignedIn && sessionEmail && !email) setEmail(sessionEmail);
   }, [isSignedIn, sessionEmail, email]);
+  useEffect(() => {
+    if (isSignedIn && sessionEmail && !newsletterEmail) setNewsletterEmail(sessionEmail);
+  }, [isSignedIn, sessionEmail, newsletterEmail]);
   useEffect(() => {
     try {
       const savedInfo = window.localStorage.getItem(savedCheckoutInfoKey);
@@ -214,6 +228,25 @@ export default function App() {
   useEffect(() => {
     if (analyticsPreference === 'accepted') loadAnalytics();
   }, [analyticsPreference]);
+  useEffect(() => {
+    if (readLocalFlag(newsletterSignupCompleteKey)) {
+      setNewsletterOfferOpen(false);
+      return;
+    }
+    const homeOfferSeen = readLocalFlag(newsletterOfferHomeSeenKey);
+    if (view === 'home' && !homeOfferSeen) {
+      writeLocalFlag(newsletterOfferHomeSeenKey);
+      setNewsletterOfferSurface('home');
+      setNewsletterOfferOpen(true);
+      return;
+    }
+    if (view === 'account' && homeOfferSeen) {
+      setNewsletterOfferSurface('account');
+      setNewsletterOfferOpen(true);
+      return;
+    }
+    setNewsletterOfferOpen(false);
+  }, [view]);
   useEffect(() => {
     if (view !== 'unsubscribe') return;
     if (!unsubscribeToken) {
@@ -574,6 +607,8 @@ export default function App() {
     setNewsletterMessage('Sending your coupon...');
     try {
       const result = await subscribeNewsletter({ name: newsletterName || undefined, email: newsletterEmail, marketingConsent: newsletterConsent, website: newsletterWebsite });
+      writeLocalFlag(newsletterOfferHomeSeenKey);
+      writeLocalFlag(newsletterSignupCompleteKey);
       setNewsletterCoupon(result.subscriber.couponCode);
       setNewsletterMessage(result.created ? 'You are on the list. Coupon sent.' : 'You are already on the list. Coupon sent again.');
       setNewsletterWebsite('');
@@ -581,6 +616,11 @@ export default function App() {
     } catch (error) {
       setNewsletterMessage(error instanceof Error ? error.message : 'Could not sign you up yet.');
     }
+  }
+
+  function closeNewsletterOffer() {
+    if (newsletterOfferSurface === 'home') writeLocalFlag(newsletterOfferHomeSeenKey);
+    setNewsletterOfferOpen(false);
   }
 
   async function handleMarketingCampaignSubmit(event: FormEvent<HTMLFormElement>) {
@@ -832,6 +872,30 @@ export default function App() {
   const saleSelectedProducts = adminProducts.filter((product) => saleSelection.includes(product.slug));
   const activeMarketingSubscribers = marketingSubscribers.filter((subscriber) => subscriber.status === 'subscribed');
 
+  const newsletterOfferDialog = newsletterOfferOpen ? <div className="newsletter-popup-backdrop" role="presentation">
+    <section className="newsletter-popup" role="dialog" aria-modal="true" aria-labelledby="newsletter-offer-title">
+      <button className="newsletter-popup-close" type="button" aria-label="Close launch coupon signup" onClick={closeNewsletterOffer}>Close</button>
+      <div className="newsletter-copy">
+        <p className="eyebrow">{newsletterOfferSurface === 'account' ? 'Account offer' : 'Launch list'}</p>
+        <h2 id="newsletter-offer-title">Get a coupon for the first drop.</h2>
+        <p>{newsletterOfferSurface === 'account' ? 'The launch coupon is still waiting here in your account area. Join for coupon codes, product notes, and sale alerts.' : 'Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.'}</p>
+      </div>
+      <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
+        <div className="newsletter-fields">
+          <label>Name <span className="optional-label">optional</span><input aria-label="Newsletter name" value={newsletterName} onChange={(event) => setNewsletterName(event.target.value)} placeholder="Ari" /></label>
+          <label>Email<input aria-label="Newsletter email" type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="buyer@example.com" /></label>
+        </div>
+        <label className="honeypot">Website<input aria-label="Newsletter website" tabIndex={-1} autoComplete="off" value={newsletterWebsite} onChange={(event) => setNewsletterWebsite(event.target.value)} /></label>
+        <label className="checkbox-row newsletter-consent"><input aria-label="Email me coupons and product updates" type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} /> Email me coupons, new product drops, and sale updates. I can unsubscribe anytime.</label>
+        <div className="newsletter-popup-actions">
+          <button type="submit">Send my coupon</button>
+          <button className="ghost" type="button" onClick={closeNewsletterOffer}>Maybe later</button>
+        </div>
+        {newsletterMessage && <p className="status-message" role="status">{newsletterMessage}{newsletterCoupon ? ' Code: ' + newsletterCoupon : ''}</p>}
+      </form>
+    </section>
+  </div> : null;
+
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
       <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>Midnight Cardworks</a>
@@ -896,23 +960,6 @@ export default function App() {
       </div>
     </header> : null}
 
-    {view === 'home' && <section className="panel newsletter-panel" aria-label="Launch coupon signup">
-      <div className="newsletter-copy">
-        <p className="eyebrow">Launch list</p>
-        <h2>Get a coupon for the first drop.</h2>
-        <p>Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.</p>
-      </div>
-      <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
-        <div className="newsletter-fields">
-          <label>Name <span className="optional-label">optional</span><input aria-label="Newsletter name" value={newsletterName} onChange={(event) => setNewsletterName(event.target.value)} placeholder="Ari" /></label>
-          <label>Email<input aria-label="Newsletter email" type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="buyer@example.com" /></label>
-        </div>
-        <label className="honeypot">Website<input aria-label="Newsletter website" tabIndex={-1} autoComplete="off" value={newsletterWebsite} onChange={(event) => setNewsletterWebsite(event.target.value)} /></label>
-        <label className="checkbox-row newsletter-consent"><input aria-label="Email me coupons and product updates" type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} /> Email me coupons, new product drops, and sale updates. I can unsubscribe anytime.</label>
-        <button type="submit">Send my coupon</button>
-        {newsletterMessage && <p className="status-message" role="status">{newsletterMessage}{newsletterCoupon ? ' Code: ' + newsletterCoupon : ''}</p>}
-      </form>
-    </section>}
 
     {view === 'home' && <section className="panel storefront-panel">
       <section className="landing-section gallery-preview" aria-label="Gallery preview">
@@ -1307,6 +1354,8 @@ export default function App() {
       <p>{unsubscribeMessage || 'Checking your unsubscribe link...'}</p>
       <button type="button" onClick={() => showShop({ category: 'All', query: '', scrollToTop: true })}>Back to shop</button>
     </section>}
+
+    {newsletterOfferDialog}
 
     {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
       <div>

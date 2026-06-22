@@ -206,6 +206,36 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/newsletter'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('buyer@example.com') }));
   });
 
+  it('shows the launch coupon as a popup only on the first home visit', async () => {
+    render(<App />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
+    expect(within(dialog).getByText('Launch list')).toBeInTheDocument();
+    expect(window.localStorage.getItem('midnight-cardworks.newsletterOfferHomeSeen')).toBe('true');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close launch coupon signup' }));
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+
+    cleanup();
+    render(<App />);
+
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument());
+  });
+
+  it('moves the launch coupon popup to the account page after the home offer was seen', async () => {
+    window.localStorage.setItem('midnight-cardworks.newsletterOfferHomeSeen', 'true');
+    render(<App />);
+
+    expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
+    expect(within(dialog).getByText('Account offer')).toBeInTheDocument();
+  });
+
   it('shows the dark Apple-inspired collector studio direction', async () => {
     render(<App />);
 

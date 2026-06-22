@@ -1511,13 +1511,25 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── CHECKOUT ───────────────────────────────────────────────────────────── */
 
 /* Newsletter */
-.panel.newsletter-panel {
-  width: min(960px, calc(100% - 2 * var(--gutter)));
-  margin: clamp(1rem, 3vw, 2rem) auto 0;
-  padding: clamp(1rem, 3vw, 1.4rem);
-  border: 1px solid rgba(212,168,83,.35);
+.newsletter-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: rgba(7,7,16,.72);
+  backdrop-filter: blur(10px);
+}
+.newsletter-popup {
+  width: min(760px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: clamp(1rem, 3vw, 1.45rem);
+  border: 1px solid rgba(212,168,83,.38);
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(212,168,83,.11), rgba(110,231,183,.06)), var(--bg-surface);
+  background: linear-gradient(135deg, rgba(212,168,83,.13), rgba(110,231,183,.07)), var(--bg-surface);
+  box-shadow: 0 28px 90px rgba(0,0,0,.62);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
@@ -1525,8 +1537,16 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   justify-items: center;
   text-align: center;
 }
+.newsletter-popup-close {
+  justify-self: end;
+  min-height: auto;
+  padding: .38rem .65rem;
+  border-color: var(--border-2);
+  background: rgba(255,255,255,.04);
+  color: var(--text-2);
+}
 .newsletter-copy {
-  max-width: 680px;
+  max-width: 620px;
   display: grid;
   justify-items: center;
 }
@@ -1539,13 +1559,12 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 .newsletter-copy p { margin: 0; color: var(--text-2); line-height: 1.55; }
 .newsletter-form {
-  width: min(100%, 680px);
+  width: min(100%, 620px);
   display: grid;
   gap: .75rem;
-  padding: .85rem;
-  border: 1px solid var(--border-2);
-  border-radius: 10px;
-  background: rgba(10,10,18,.42);
+  padding: 0;
+  border: 0;
+  background: transparent;
   text-align: left;
 }
 .newsletter-fields {
@@ -1560,6 +1579,12 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   line-height: 1.45;
 }
 .newsletter-consent input { width: auto; margin-top: .15rem; flex: 0 0 auto; }
+.newsletter-popup-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+  align-items: center;
+}
 
 .checkout-form { display: grid; gap: 1rem; margin-top: .5rem; }
 
@@ -2249,7 +2274,7 @@ footer {
   .product-detail-img-col { position: static; max-width: 320px; margin: 0 auto; }
 
   .gallery-preview-grid { grid-template-columns: 1fr; }
-  .newsletter-panel, .marketing-grid { grid-template-columns: 1fr; }
+  .marketing-grid { grid-template-columns: 1fr; }
   .newsletter-fields { grid-template-columns: 1fr; }
 
   .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
