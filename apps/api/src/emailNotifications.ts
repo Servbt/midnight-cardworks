@@ -25,6 +25,11 @@ type ResendEmail = {
 };
 
 const newline = String.fromCharCode(10);
+const parseEmailList = (value?: string) => (value ?? '').split(',').map((email) => email.trim()).filter(Boolean);
+const ownerNotificationEmails = () => {
+  const explicit = parseEmailList(process.env.ORDER_NOTIFICATION_EMAIL);
+  return explicit.length > 0 ? explicit : parseEmailList(process.env.ADMIN_EMAILS);
+};
 const money = (cents: number) => '$' + (cents / 100).toFixed(2);
 const orderLines = (order: Order) => order.items.map((item) => '- ' + item.quantity + ' x ' + item.title + ' - ' + money(item.price * item.quantity)).join(newline);
 const appBaseUrl = () => {
@@ -49,11 +54,11 @@ function marketingFooter(subscriber: MarketingSubscriber) {
 
 function buildPendingOrderAdminEmail(order: Order): ResendEmail | undefined {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.ORDER_NOTIFICATION_EMAIL;
-  if (!from || !to) return undefined;
+  const to = ownerNotificationEmails();
+  if (!from || to.length === 0) return undefined;
   return {
     from,
-    to: [to],
+    to,
     subject: 'Pending checkout started ' + order.id,
     text: [
       'A Midnight Cardworks checkout order was created and is waiting for payment.',
@@ -88,8 +93,8 @@ function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEm
     'We will prepare it for fulfillment.'
   ].filter(Boolean).join(newline);
   const customer: ResendEmail = { from, to: [order.email], subject: 'Order ' + order.id + ' confirmed', text };
-  const adminTo = process.env.ORDER_NOTIFICATION_EMAIL;
-  const admin = adminTo ? { from, to: [adminTo], subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
+  const adminTo = ownerNotificationEmails();
+  const admin = adminTo.length > 0 ? { from, to: adminTo, subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
   return { customer, admin };
 }
 
@@ -164,11 +169,11 @@ function buildRefundFailedEmail(order: Order): ResendEmail | undefined {
 
 function buildContactEmail(message: ContactMessage): ResendEmail | undefined {
   const from = process.env.EMAIL_FROM;
-  const to = process.env.ORDER_NOTIFICATION_EMAIL;
-  if (!from || !to) return undefined;
+  const to = ownerNotificationEmails();
+  if (!from || to.length === 0) return undefined;
   return {
     from,
-    to: [to],
+    to,
     reply_to: message.email,
     subject: 'New Midnight Cardworks message from ' + message.name,
     text: [

@@ -100,13 +100,13 @@ Email sending is optional and uses Resend when configured. Without `RESEND_API_K
 ```bash
 RESEND_API_KEY=re_...
 EMAIL_FROM=Midnight Cardworks <orders@your-domain.com>
-ORDER_NOTIFICATION_EMAIL=owner@example.com
+ORDER_NOTIFICATION_EMAIL=owner@example.com # optional; falls back to ADMIN_EMAILS
 ```
 
 - `EMAIL_FROM` must be a verified Resend sender/domain.
 - Customer confirmation emails are sent after Stripe confirms payment via webhook; the initial pending-payment alert goes only to the shop owner.
 - Customer fulfillment emails are sent when an admin marks an order fulfilled.
-- `ORDER_NOTIFICATION_EMAIL` is optional and receives owner alerts when checkout creates a pending payment order, plus owner copies when Stripe later confirms payment.
+- `ORDER_NOTIFICATION_EMAIL` is optional and receives owner alerts when checkout creates a pending payment order, plus owner copies when Stripe later confirms payment. If it is not set, those owner emails fall back to `ADMIN_EMAILS`.
 - The Contact page posts to `/api/contact` and sends customer questions to `ORDER_NOTIFICATION_EMAIL` with the customer's email as the reply-to address.
 - Contact messages include name, email, optional order number, message body, length validation, and a hidden honeypot field for basic spam filtering.
 
@@ -233,7 +233,7 @@ Deployment flow:
    - `CLOUDINARY_URL`
    - `RESEND_API_KEY`
    - `EMAIL_FROM`
-   - `ORDER_NOTIFICATION_EMAIL`
+   - `ORDER_NOTIFICATION_EMAIL` or `ADMIN_EMAILS` for owner order/contact notifications
    - `APP_BASE_URL` after Render gives the live URL
    - `NEWSLETTER_COUPON_CODE`
    - `MARKETING_POSTAL_ADDRESS`
