@@ -174,7 +174,8 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     try {
       const order = await store.createOrder(parsed.data);
       const checkout = await createCheckoutResponse(order);
-      if (checkout.stripeSessionId) await store.recordCheckoutSession(order.id, checkout.stripeSessionId);
+      const notificationOrder = checkout.stripeSessionId ? await store.recordCheckoutSession(order.id, checkout.stripeSessionId) : order;
+      await emailNotifier.sendOrderPending(notificationOrder ?? order).catch(() => undefined);
       return reply.code(201).send(checkout);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });

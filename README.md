@@ -10,7 +10,7 @@ Private MVP ecommerce storefront for custom card listings. The UI is an original
 - Launch-polished storefront with trust cues, inventory status, tags, sold-out handling, and empty search state
 - Persistent browser cart with quantity controls
 - Checkout flow requires receipt email, customer name, and shipping address before Stripe Checkout
-- Email notifications for paid, fulfilled, canceled, and refunded orders plus customer contact messages via Resend
+- Email notifications for pending owner alerts, paid, fulfilled, canceled, and refunded orders plus customer contact messages via Resend
 - Privacy & Cookies page with consent-aware optional analytics
 - Coupon email signup, marketing subscriber admin tab, and unsubscribe flow
 - Clerk-backed customer order history for signed-in accounts
@@ -104,9 +104,9 @@ ORDER_NOTIFICATION_EMAIL=owner@example.com
 ```
 
 - `EMAIL_FROM` must be a verified Resend sender/domain.
-- Customer confirmation emails are sent after Stripe confirms payment via webhook.
+- Customer confirmation emails are sent after Stripe confirms payment via webhook; the initial pending-payment alert goes only to the shop owner.
 - Customer fulfillment emails are sent when an admin marks an order fulfilled.
-- `ORDER_NOTIFICATION_EMAIL` is optional and receives owner copies for newly paid orders.
+- `ORDER_NOTIFICATION_EMAIL` is optional and receives owner alerts when checkout creates a pending payment order, plus owner copies when Stripe later confirms payment.
 - The Contact page posts to `/api/contact` and sends customer questions to `ORDER_NOTIFICATION_EMAIL` with the customer's email as the reply-to address.
 - Contact messages include name, email, optional order number, message body, length validation, and a hidden honeypot field for basic spam filtering.
 
@@ -266,7 +266,7 @@ Production behavior:
 2. Confirm Clerk Google sign-in works on the production domain.
 3. Sign in with an allowlisted admin email and confirm `/admin` can manage orders, listings, images, and sale pricing.
 4. Complete a Stripe test checkout and confirm the webhook marks the order paid.
-5. Confirm Resend sends customer paid, fulfilled, canceled, refunded, and refund-failed emails plus owner notifications for new paid orders.
+5. Confirm Resend sends owner notifications for new pending payment orders and newly paid orders, plus customer paid, fulfilled, canceled, refunded, and refund-failed emails.
 6. Stripe refund receipts can stay enabled too if you want Stripe receipts in addition to shop emails.
 7. Confirm Cloudinary uploads produce hosted product image URLs.
 8. Create the Stripe promotion code that matches `NEWSLETTER_COUPON_CODE`, then test the signup coupon in Stripe Checkout.

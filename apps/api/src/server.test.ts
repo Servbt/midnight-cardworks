@@ -53,6 +53,7 @@ function createEmailNotifierSpy() {
   return {
     sent,
     notifier: {
+      sendOrderPending: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'pending', order }); },
       sendOrderPaid: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'paid', order }); },
       sendOrderFulfilled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'fulfilled', order }); },
       sendOrderCanceled: async (order: { id: string; email: string; status: string }) => { sent.push({ type: 'canceled', order }); },
@@ -96,6 +97,20 @@ describe('storefront API', () => {
     expect(order).toMatchObject({ email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane, Los Angeles 90001', subtotal: 2598, shippingCost: 499, total: 3097 });
   });
 
+  it('emails the shop owner when checkout creates a pending payment order', async () => {
+    const store = createInMemoryStore();
+    const emailSpy = createEmailNotifierSpy();
+    const app = buildServer(store, { emailNotifier: emailSpy.notifier });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/checkout',
+      payload: checkoutPayload([{ productId: 'p1', quantity: 1 }])
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(emailSpy.sent).toEqual([{ type: 'pending', order: expect.objectContaining({ id: res.json().orderId, email: 'buyer@example.com', status: 'pending_payment' }) }]);
+  });
   it('rejects checkout orders without required shipping details', async () => {
     const app = buildServer(createInMemoryStore());
 
@@ -236,6 +251,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
     await store.recordCheckoutSession(orderId, 'cs_test_sync');
     vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_sync');
 
@@ -328,6 +344,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
 
     const webhook = await app.inject({
       method: 'POST',
@@ -345,6 +362,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
     await store.markOrderPaid(orderId);
 
     const fulfill = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/fulfill`, headers: adminHeaders });
@@ -359,6 +377,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
 
     const cancel = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/cancel`, headers: adminHeaders, payload: { reason: 'Customer changed their mind before payment' } });
 
@@ -372,6 +391,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
     await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
 
     const refund = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/refund`, headers: adminHeaders, payload: { reason: 'Customer requested cancellation' } });
@@ -386,6 +406,7 @@ describe('storefront API', () => {
     const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
+    emailSpy.sent.length = 0;
     await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
 
     const webhook = await app.inject({

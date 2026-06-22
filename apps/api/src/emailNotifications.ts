@@ -4,6 +4,7 @@ export type ContactMessage = { name: string; email: string; orderNumber?: string
 export type MarketingCampaign = { subject: string; message: string };
 
 export type EmailNotifier = {
+  sendOrderPending(order: Order): Promise<void>;
   sendOrderPaid(order: Order): Promise<void>;
   sendOrderFulfilled(order: Order): Promise<void>;
   sendOrderCanceled(order: Order): Promise<void>;
@@ -46,6 +47,31 @@ function marketingFooter(subscriber: MarketingSubscriber) {
   };
 }
 
+function buildPendingOrderAdminEmail(order: Order): ResendEmail | undefined {
+  const from = process.env.EMAIL_FROM;
+  const to = process.env.ORDER_NOTIFICATION_EMAIL;
+  if (!from || !to) return undefined;
+  return {
+    from,
+    to: [to],
+    subject: 'Pending checkout started ' + order.id,
+    text: [
+      'A Midnight Cardworks checkout order was created and is waiting for payment.',
+      '',
+      'Order: ' + order.id,
+      'Customer: ' + order.email,
+      order.customerName ? 'Name: ' + order.customerName : undefined,
+      order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined,
+      order.stripeSessionId ? 'Stripe Checkout Session: ' + order.stripeSessionId : undefined,
+      'Status: ' + order.status,
+      'Total: ' + money(order.total),
+      '',
+      orderLines(order),
+      '',
+      'Do not fulfill until Stripe confirms payment or the admin sync marks it paid.'
+    ].filter(Boolean).join(newline)
+  };
+}
 function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEmail } | undefined {
   const from = process.env.EMAIL_FROM;
   if (!from) return undefined;
@@ -202,6 +228,11 @@ async function sendResend(email: ResendEmail) {
 
 export function createEmailNotifierFromEnv(): EmailNotifier {
   return {
+    async sendOrderPending(order) {
+      const email = buildPendingOrderAdminEmail(order);
+      if (!email) return;
+      await sendResend(email);
+    },
     async sendOrderPaid(order) {
       const emails = buildPaidEmail(order);
       if (!emails) return;

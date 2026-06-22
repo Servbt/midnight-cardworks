@@ -1511,17 +1511,24 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── CHECKOUT ───────────────────────────────────────────────────────────── */
 
 /* Newsletter */
-.newsletter-panel {
-  width: min(var(--max-w), calc(100% - 2 * var(--gutter)));
+.panel.newsletter-panel {
+  width: min(960px, calc(100% - 2 * var(--gutter)));
   margin: clamp(1rem, 3vw, 2rem) auto 0;
   padding: clamp(1rem, 3vw, 1.4rem);
   border: 1px solid rgba(212,168,83,.35);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(212,168,83,.11), rgba(110,231,183,.06)), var(--bg-surface);
   display: grid;
-  grid-template-columns: minmax(0, .9fr) minmax(320px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: center;
+  justify-items: center;
+  text-align: center;
+}
+.newsletter-copy {
+  max-width: 680px;
+  display: grid;
+  justify-items: center;
 }
 .newsletter-copy h2 {
   font-family: var(--font-display);
@@ -1532,12 +1539,14 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 .newsletter-copy p { margin: 0; color: var(--text-2); line-height: 1.55; }
 .newsletter-form {
+  width: min(100%, 680px);
   display: grid;
   gap: .75rem;
   padding: .85rem;
   border: 1px solid var(--border-2);
   border-radius: 10px;
   background: rgba(10,10,18,.42);
+  text-align: left;
 }
 .newsletter-fields {
   display: grid;
@@ -2082,8 +2091,9 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 
 .privacy-notice {
   position: fixed;
-  left: max(1rem, calc((100vw - var(--max-w)) / 2));
+  left: 50%;
   bottom: 1rem;
+  transform: translateX(-50%);
   z-index: 60;
   width: min(720px, calc(100vw - 2rem));
   display: grid;
@@ -2283,6 +2293,6 @@ footer {
   .panel { padding-inline: .75rem; }
   .admin-workspace { padding: .75rem; }
   .nav-search { display: none; }
-  .privacy-notice { left: .65rem; right: .65rem; bottom: .65rem; width: auto; }
+  .privacy-notice { left: .65rem; right: .65rem; bottom: .65rem; width: auto; transform: none; }
   .privacy-notice-actions button { flex: 1 1 auto; }
 }
