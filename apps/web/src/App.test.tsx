@@ -223,8 +223,9 @@ describe('Midnight Cardworks storefront', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument());
   });
 
-  it('moves the launch coupon popup to the account page after the home offer was seen', async () => {
+  it('shows the launch coupon as an inline account offer above order history after the home offer was seen', async () => {
     window.localStorage.setItem('midnight-cardworks.newsletterOfferHomeSeen', 'true');
+    mockAuth.isSignedIn = true;
     render(<App />);
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
@@ -232,8 +233,12 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
 
-    const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
-    expect(within(dialog).getByText('Account offer')).toBeInTheDocument();
+    const accountOffer = await screen.findByRole('region', { name: 'Account launch coupon' });
+    expect(within(accountOffer).getByText('Account offer')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+
+    const history = await screen.findByRole('region', { name: 'Order history' });
+    expect(accountOffer.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('shows the dark Apple-inspired collector studio direction', async () => {

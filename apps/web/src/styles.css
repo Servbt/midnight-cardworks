@@ -1579,11 +1579,23 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   line-height: 1.45;
 }
 .newsletter-consent input { width: auto; margin-top: .15rem; flex: 0 0 auto; }
-.newsletter-popup-actions {
+.newsletter-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: .65rem;
   align-items: center;
+}
+.account-newsletter-offer {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  text-align: center;
+  border-color: rgba(212,168,83,.35);
+  background: linear-gradient(135deg, rgba(212,168,83,.12), rgba(74,144,226,.09)), var(--bg-surface);
+}
+.account-newsletter-offer .newsletter-copy,
+.account-newsletter-offer .newsletter-form {
+  justify-self: center;
 }
 
 .checkout-form { display: grid; gap: 1rem; margin-top: .5rem; }

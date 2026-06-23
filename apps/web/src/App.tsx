@@ -7,7 +7,6 @@ import { redirectToCheckout } from './checkoutRedirect';
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'unsubscribe';
 type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
-type NewsletterOfferSurface = 'home' | 'account';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 const moneyToCents = (value: string) => Math.round(Number(value || '0') * 100);
@@ -99,7 +98,8 @@ export default function App() {
   const [newsletterMessage, setNewsletterMessage] = useState('');
   const [newsletterCoupon, setNewsletterCoupon] = useState('');
   const [newsletterOfferOpen, setNewsletterOfferOpen] = useState(false);
-  const [newsletterOfferSurface, setNewsletterOfferSurface] = useState<NewsletterOfferSurface>('home');
+  const [newsletterHomeOfferSeen, setNewsletterHomeOfferSeen] = useState(() => readLocalFlag(newsletterOfferHomeSeenKey));
+  const [newsletterSignupComplete, setNewsletterSignupComplete] = useState(() => readLocalFlag(newsletterSignupCompleteKey));
   const [unsubscribeToken, setUnsubscribeToken] = useState('');
   const [unsubscribeMessage, setUnsubscribeMessage] = useState('');
   const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
@@ -230,18 +230,15 @@ export default function App() {
   }, [analyticsPreference]);
   useEffect(() => {
     if (readLocalFlag(newsletterSignupCompleteKey)) {
+      setNewsletterSignupComplete(true);
       setNewsletterOfferOpen(false);
       return;
     }
     const homeOfferSeen = readLocalFlag(newsletterOfferHomeSeenKey);
+    setNewsletterHomeOfferSeen(homeOfferSeen);
     if (view === 'home' && !homeOfferSeen) {
       writeLocalFlag(newsletterOfferHomeSeenKey);
-      setNewsletterOfferSurface('home');
-      setNewsletterOfferOpen(true);
-      return;
-    }
-    if (view === 'account' && homeOfferSeen) {
-      setNewsletterOfferSurface('account');
+      setNewsletterHomeOfferSeen(true);
       setNewsletterOfferOpen(true);
       return;
     }
@@ -609,6 +606,8 @@ export default function App() {
       const result = await subscribeNewsletter({ name: newsletterName || undefined, email: newsletterEmail, marketingConsent: newsletterConsent, website: newsletterWebsite });
       writeLocalFlag(newsletterOfferHomeSeenKey);
       writeLocalFlag(newsletterSignupCompleteKey);
+      setNewsletterHomeOfferSeen(true);
+      setNewsletterSignupComplete(true);
       setNewsletterCoupon(result.subscriber.couponCode);
       setNewsletterMessage(result.created ? 'You are on the list. Coupon sent.' : 'You are already on the list. Coupon sent again.');
       setNewsletterWebsite('');
@@ -619,7 +618,8 @@ export default function App() {
   }
 
   function closeNewsletterOffer() {
-    if (newsletterOfferSurface === 'home') writeLocalFlag(newsletterOfferHomeSeenKey);
+    writeLocalFlag(newsletterOfferHomeSeenKey);
+    setNewsletterHomeOfferSeen(true);
     setNewsletterOfferOpen(false);
   }
 
@@ -871,28 +871,31 @@ export default function App() {
   const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
   const saleSelectedProducts = adminProducts.filter((product) => saleSelection.includes(product.slug));
   const activeMarketingSubscribers = marketingSubscribers.filter((subscriber) => subscriber.status === 'subscribed');
+  const showAccountNewsletterOffer = view === 'account' && isSignedIn && newsletterHomeOfferSeen && (!newsletterSignupComplete || Boolean(newsletterMessage));
+
+  const newsletterSignupForm = (showDismissAction = false) => <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
+    <div className="newsletter-fields">
+      <label>Name <span className="optional-label">optional</span><input aria-label="Newsletter name" value={newsletterName} onChange={(event) => setNewsletterName(event.target.value)} placeholder="Ari" /></label>
+      <label>Email<input aria-label="Newsletter email" type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="buyer@example.com" /></label>
+    </div>
+    <label className="honeypot">Website<input aria-label="Newsletter website" tabIndex={-1} autoComplete="off" value={newsletterWebsite} onChange={(event) => setNewsletterWebsite(event.target.value)} /></label>
+    <label className="checkbox-row newsletter-consent"><input aria-label="Email me coupons and product updates" type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} /> Email me coupons, new product drops, and sale updates. I can unsubscribe anytime.</label>
+    <div className="newsletter-actions">
+      <button type="submit">Send my coupon</button>
+      {showDismissAction && <button className="ghost" type="button" onClick={closeNewsletterOffer}>Maybe later</button>}
+    </div>
+    {newsletterMessage && <p className="status-message" role="status">{newsletterMessage}{newsletterCoupon ? ' Code: ' + newsletterCoupon : ''}</p>}
+  </form>;
 
   const newsletterOfferDialog = newsletterOfferOpen ? <div className="newsletter-popup-backdrop" role="presentation">
     <section className="newsletter-popup" role="dialog" aria-modal="true" aria-labelledby="newsletter-offer-title">
       <button className="newsletter-popup-close" type="button" aria-label="Close launch coupon signup" onClick={closeNewsletterOffer}>Close</button>
       <div className="newsletter-copy">
-        <p className="eyebrow">{newsletterOfferSurface === 'account' ? 'Account offer' : 'Launch list'}</p>
+        <p className="eyebrow">Launch list</p>
         <h2 id="newsletter-offer-title">Get a coupon for the first drop.</h2>
-        <p>{newsletterOfferSurface === 'account' ? 'The launch coupon is still waiting here in your account area. Join for coupon codes, product notes, and sale alerts.' : 'Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.'}</p>
+        <p>Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.</p>
       </div>
-      <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
-        <div className="newsletter-fields">
-          <label>Name <span className="optional-label">optional</span><input aria-label="Newsletter name" value={newsletterName} onChange={(event) => setNewsletterName(event.target.value)} placeholder="Ari" /></label>
-          <label>Email<input aria-label="Newsletter email" type="email" required value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} placeholder="buyer@example.com" /></label>
-        </div>
-        <label className="honeypot">Website<input aria-label="Newsletter website" tabIndex={-1} autoComplete="off" value={newsletterWebsite} onChange={(event) => setNewsletterWebsite(event.target.value)} /></label>
-        <label className="checkbox-row newsletter-consent"><input aria-label="Email me coupons and product updates" type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} /> Email me coupons, new product drops, and sale updates. I can unsubscribe anytime.</label>
-        <div className="newsletter-popup-actions">
-          <button type="submit">Send my coupon</button>
-          <button className="ghost" type="button" onClick={closeNewsletterOffer}>Maybe later</button>
-        </div>
-        {newsletterMessage && <p className="status-message" role="status">{newsletterMessage}{newsletterCoupon ? ' Code: ' + newsletterCoupon : ''}</p>}
-      </form>
+      {newsletterSignupForm(true)}
     </section>
   </div> : null;
 
@@ -1199,6 +1202,14 @@ export default function App() {
           {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
         </>}
       </section>
+      {showAccountNewsletterOffer && <section className="panel narrow account-newsletter-offer" role="region" aria-label="Account launch coupon">
+        <div className="newsletter-copy">
+          <p className="eyebrow">Account offer</p>
+          <h2>Get a coupon for the first drop.</h2>
+          <p>The launch coupon is still waiting here in your account area. Join for coupon codes, product notes, and sale alerts.</p>
+        </div>
+        {newsletterSignupForm(false)}
+      </section>}
       {isSignedIn && <section className="panel narrow account-order-history" role="region" aria-label="Order history">
         <div className="account-section-header"><div><h2>Order history</h2><p>Review recent orders and jump back into the shop when you’re ready.</p></div><button type="button" onClick={continueShopping}>Continue shopping</button></div>
         {customerOrdersMessage && <p>{customerOrdersMessage}</p>}
