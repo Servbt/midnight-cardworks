@@ -23,6 +23,13 @@ const marketingSubscribers = [
   { id: 'sub_1', email: 'buyer@example.com', name: 'Ari Buyer', status: 'subscribed', source: 'storefront_coupon', couponCode: 'MIDNIGHT10', consentedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' },
   { id: 'sub_2', email: 'quiet@example.com', status: 'unsubscribed', source: 'storefront_coupon', couponCode: 'MIDNIGHT10', consentedAt: '2026-06-20T00:00:00.000Z', unsubscribedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-20T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
 ];
+const faqItems = [
+  { id: 'faq_1', question: 'Are these tournament legal?', answer: 'No, these are casual-play pieces only.', sortOrder: 10, active: true, createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' },
+  { id: 'faq_2', question: 'Can I ask about a custom idea?', answer: 'Yes, send a note with the card name and direction.', sortOrder: 20, active: true, createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
+];
+const blogPosts = [
+  { id: 'blog_1', slug: 'first-drop-notes', title: 'First Drop Notes', excerpt: 'Launch context for the first Midnight Cardworks lineup.', body: 'The first drop focuses on commander tables.\n\nExpect proxy centerpieces, tokens, and display cards.', published: true, publishedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
+];
 
 beforeEach(() => {
   mockAuth.isAdmin = false;
@@ -32,6 +39,18 @@ beforeEach(() => {
   adminOrderStatus = 'paid';
   vi.stubGlobal('scrollTo', vi.fn());
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+    if (String(url).includes('/api/admin/content/faqs')) {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      return new Response(JSON.stringify({ faqItem: { id: body.id ?? 'faq_saved', question: body.question, answer: body.answer, sortOrder: body.sortOrder, active: body.active, createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-22T00:00:00.000Z' } }), { status: 200 });
+    }
+    if (String(url).includes('/api/admin/content/blog-posts')) {
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      return new Response(JSON.stringify({ blogPost: { id: body.id ?? 'blog_saved', slug: body.slug, title: body.title, excerpt: body.excerpt, body: body.body, published: body.published, publishedAt: body.publishedAt ?? '2026-06-22T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-22T00:00:00.000Z' } }), { status: 200 });
+    }
+    if (String(url).includes('/api/admin/content')) return new Response(JSON.stringify({ faqItems, blogPosts }), { status: 200 });
+    if (String(url).includes('/api/content/blog-posts/first-drop-notes')) return new Response(JSON.stringify({ post: blogPosts[0] }), { status: 200 });
+    if (String(url).includes('/api/content/blog-posts')) return new Response(JSON.stringify({ blogPosts }), { status: 200 });
+    if (String(url).includes('/api/content/faqs')) return new Response(JSON.stringify({ faqItems }), { status: 200 });
     if (String(url).includes('/api/admin/marketing/subscribers')) return new Response(JSON.stringify({ subscribers: marketingSubscribers }), { status: 200 });
     if (String(url).includes('/api/admin/marketing/campaigns')) return new Response(JSON.stringify({ sent: 1 }), { status: 200 });
     if (String(url).includes('/api/newsletter/unsubscribe')) return new Response(JSON.stringify({ subscriber: { ...marketingSubscribers[0], status: 'unsubscribed', unsubscribedAt: '2026-06-21T00:00:00.000Z' } }), { status: 200 });
@@ -163,6 +182,30 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.location.pathname).toBe('/shop');
     expect(window.location.search).toBe('?category=Commander');
     expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+  });
+
+  it('opens public FAQ and blog pages from the shop navigation', async () => {
+    window.localStorage.setItem('midnight-cardworks.newsletterOfferHomeSeen', 'true');
+    render(<App />);
+
+    const categoryNav = screen.getByRole('navigation', { name: 'Shop categories' });
+    await userEvent.click(within(categoryNav).getByRole('button', { name: 'FAQ' }));
+
+    expect(window.location.pathname).toBe('/faq');
+    expect(await screen.findByRole('heading', { name: 'Frequently asked questions' })).toBeInTheDocument();
+    expect(screen.getByText('No, these are casual-play pieces only.')).toBeInTheDocument();
+
+    await userEvent.click(within(categoryNav).getByRole('button', { name: 'Blog' }));
+
+    expect(window.location.pathname).toBe('/blog');
+    expect(await screen.findByRole('heading', { name: 'Studio notes' })).toBeInTheDocument();
+    expect(screen.getByText('Launch context for the first Midnight Cardworks lineup.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Read First Drop Notes' }));
+
+    expect(window.location.pathname).toBe('/blog/first-drop-notes');
+    expect(await screen.findByRole('heading', { name: 'First Drop Notes' })).toBeInTheDocument();
+    expect(screen.getByText('Expect proxy centerpieces, tokens, and display cards.')).toBeInTheDocument();
   });
 
   it('shows privacy notice and remembers necessary-only choice', async () => {
@@ -822,6 +865,33 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('tab', { name: 'Create listing' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel', { name: 'Create listing' })).toBeInTheDocument();
     expect(screen.getByLabelText('New product slug')).toBeInTheDocument();
+  });
+
+  it('lets admins create FAQ and blog content from the content workspace', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Content/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Content manager' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /FAQ \(2\)/ })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.type(screen.getByLabelText('FAQ question'), 'Do you ship internationally?');
+    await userEvent.type(screen.getByLabelText('FAQ answer'), 'Message first so the studio can quote shipping accurately.');
+    await userEvent.click(screen.getByRole('button', { name: 'Create FAQ' }));
+
+    expect(await screen.findByText('Saved FAQ: Do you ship internationally?.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/content/faqs'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }), body: expect.stringContaining('Do you ship internationally?') }));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Blog/ }));
+    await userEvent.type(screen.getByLabelText('Blog title'), 'New drop preview');
+    expect(screen.getByLabelText('Blog slug')).toHaveValue('new-drop-preview');
+    await userEvent.type(screen.getByLabelText('Blog excerpt'), 'A small preview of the next shop drop.');
+    await userEvent.type(screen.getByLabelText('Blog body'), 'New commander proxies are being photographed this week.');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Blog post published' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Create post' }));
+
+    expect(await screen.findByText('Saved blog post: New drop preview.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/admin/content/blog-posts'), expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ authorization: 'Bearer admin-token' }), body: expect.stringContaining('new-drop-preview') }));
   });
 
   it('shows admin order review', async () => {

@@ -76,6 +76,22 @@ const productSchema = z.object({
   }
 });
 const imageUploadSchema = z.object({ fileName: z.string().min(1), contentType: z.string().regex(/^image\//), dataUrl: z.string().startsWith('data:image/') });
+const faqItemSchema = z.object({
+  id: z.string().min(1).optional(),
+  question: z.string().trim().min(1).max(240),
+  answer: z.string().trim().min(1).max(3000),
+  sortOrder: z.number().int().nonnegative().max(9999),
+  active: z.boolean()
+});
+const blogPostSchema = z.object({
+  id: z.string().min(1).optional(),
+  slug: z.string().min(1).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  title: z.string().trim().min(1).max(180),
+  excerpt: z.string().trim().min(1).max(500),
+  body: z.string().trim().min(1).max(20000),
+  published: z.boolean(),
+  publishedAt: z.string().datetime().nullable().optional()
+});
 const orderActionSchema = z.object({ reason: z.string().trim().max(500).optional() });
 const refundSchema = z.object({ amount: z.number().int().positive().optional(), reason: z.string().trim().max(500).optional() });
 const imageUploadBodyLimit = 16 * 1024 * 1024;
@@ -146,6 +162,14 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const product = await store.getProduct(slug);
     if (!product) return reply.code(404).send({ error: 'Product not found' });
     return { product };
+  });
+  app.get('/api/content/faqs', async () => ({ faqItems: await store.listFaqItems() }));
+  app.get('/api/content/blog-posts', async () => ({ blogPosts: await store.listBlogPosts() }));
+  app.get('/api/content/blog-posts/:slug', async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const post = await store.getBlogPost(slug);
+    if (!post) return reply.code(404).send({ error: 'Blog post not found' });
+    return { post };
   });
   app.post('/api/contact', async (request, reply) => {
     const parsed = contactSchema.safeParse(request.body);
@@ -243,6 +267,17 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   });
   app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
+  app.get('/api/admin/content', { preHandler: requireAdmin }, async () => ({ faqItems: await store.listFaqItems({ includeInactive: true }), blogPosts: await store.listBlogPosts({ includeDrafts: true }) }));
+  app.post('/api/admin/content/faqs', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = faqItemSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Valid FAQ content required' });
+    return { faqItem: await store.upsertFaqItem(parsed.data) };
+  });
+  app.post('/api/admin/content/blog-posts', { preHandler: requireAdmin }, async (request, reply) => {
+    const parsed = blogPostSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Valid blog post content required' });
+    return { blogPost: await store.upsertBlogPost(parsed.data) };
+  });
   app.get('/api/admin/marketing/subscribers', { preHandler: requireAdmin }, async () => ({ subscribers: (await store.listMarketingSubscribers()).map(publicSubscriber) }));
   app.post('/api/admin/marketing/campaigns', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = marketingCampaignSchema.safeParse(request.body);

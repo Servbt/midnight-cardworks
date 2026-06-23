@@ -34,8 +34,30 @@ export type MarketingSubscriber = {
   createdAt: string;
   updatedAt: string;
 };
+export type FaqItem = {
+  id: string;
+  question: string;
+  answer: string;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type BlogPost = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  body: string;
+  published: boolean;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 export type CheckoutInput = { email: string; customerName: string; shippingAddress: string; items: CartItemInput[] };
 export type MarketingSubscribeInput = { email: string; name?: string; source: string; couponCode: string };
+export type FaqItemInput = { id?: string; question: string; answer: string; sortOrder: number; active: boolean };
+export type BlogPostInput = { id?: string; slug: string; title: string; excerpt: string; body: string; published: boolean; publishedAt?: string | null };
 export type Store = {
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;
@@ -56,4 +78,9 @@ export type Store = {
   subscribeMarketing(input: MarketingSubscribeInput): Promise<{ subscriber: MarketingSubscriber; created: boolean }>;
   listMarketingSubscribers(): Promise<MarketingSubscriber[]>;
   unsubscribeMarketing(token: string): Promise<MarketingSubscriber | undefined>;
+  listFaqItems(options?: { includeInactive?: boolean }): Promise<FaqItem[]>;
+  upsertFaqItem(input: FaqItemInput): Promise<FaqItem>;
+  listBlogPosts(options?: { includeDrafts?: boolean }): Promise<BlogPost[]>;
+  getBlogPost(slug: string, options?: { includeDrafts?: boolean }): Promise<BlogPost | undefined>;
+  upsertBlogPost(input: BlogPostInput): Promise<BlogPost>;
 };

@@ -5,6 +5,9 @@ export type ShippingAddressFields = { streetAddress:string; apartment:string; ci
 export type MarketingSubscriber = { id:string; email:string; name?:string; status:'subscribed'|'unsubscribed'; source:string; couponCode:string; consentedAt:string; unsubscribedAt?:string; createdAt:string; updatedAt:string };
 export type NewsletterSignupPayload = { name?:string; email:string; marketingConsent:boolean; website?:string };
 export type MarketingCampaignPayload = { subject:string; message:string };
+export type FaqItem = { id:string; question:string; answer:string; sortOrder:number; active:boolean; createdAt:string; updatedAt:string };
+export type BlogPost = { id:string; slug:string; title:string; excerpt:string; body:string; published:boolean; publishedAt?:string; createdAt:string; updatedAt:string };
+export type AdminContent = { faqItems:FaqItem[]; blogPosts:BlogPost[] };
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 async function errorMessage(response: Response, fallback: string) {
@@ -27,6 +30,9 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 export async function fetchProducts(): Promise<Product[]> { const r = await fetch(API + '/api/products'); return (await r.json()).products; }
 export async function fetchProduct(slug: string): Promise<Product> { const r = await fetch(API + '/api/products/' + slug); if(!r.ok) throw new Error('Product not found'); return (await r.json()).product; }
+export async function fetchFaqItems(): Promise<FaqItem[]> { const r = await fetch(API + '/api/content/faqs'); if(!r.ok) throw new Error('FAQ not found'); return (await r.json()).faqItems; }
+export async function fetchBlogPosts(): Promise<BlogPost[]> { const r = await fetch(API + '/api/content/blog-posts'); if(!r.ok) throw new Error('Blog not found'); return (await r.json()).blogPosts; }
+export async function fetchBlogPost(slug: string): Promise<BlogPost> { const r = await fetch(API + '/api/content/blog-posts/' + slug); if(!r.ok) throw new Error('Blog post not found'); return (await r.json()).post; }
 export async function createCheckout(email:string, customerName:string, shippingAddressFields:ShippingAddressFields, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;subtotal:number;shippingCost:number;total:number}> { const r = await fetch(API + '/api/checkout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddressFields, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
 export async function fetchOrder(orderId: string): Promise<Order> { const r = await fetch(API + '/api/orders/' + orderId); if(!r.ok) throw new Error('Order not found'); return (await r.json()).order; }
 export async function fetchCustomerOrders(token?: string): Promise<Order[]> { const r = await fetch(API + '/api/orders', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Orders not found'); return (await r.json()).orders; }
@@ -35,6 +41,19 @@ export async function subscribeNewsletter(payload: NewsletterSignupPayload): Pro
 export async function unsubscribeNewsletter(token: string): Promise<MarketingSubscriber> { const r = await fetch(API + '/api/newsletter/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }); if(!r.ok) throw new Error(await errorMessage(r, 'Unsubscribe failed')); return (await r.json()).subscriber; }
 export async function fetchAdminOrders(token?: string): Promise<Order[]> { const r = await fetch(API + '/api/admin/orders', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Admin access required'); return (await r.json()).orders; }
 export async function fetchAdminProducts(token?: string): Promise<Product[]> { const r = await fetch(API + '/api/admin/products', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Admin access required'); return (await r.json()).products; }
+export async function fetchAdminContent(token?: string): Promise<AdminContent> { const r = await fetch(API + '/api/admin/content', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Admin access required'); return r.json(); }
+export async function saveAdminFaqItem(item: FaqItem, token?: string): Promise<FaqItem> {
+  const payload = { question: item.question, answer: item.answer, sortOrder: item.sortOrder, active: item.active, ...(item.id ? { id: item.id } : {}) };
+  const r = await fetch(API + '/api/admin/content/faqs', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(payload) });
+  if(!r.ok) throw new Error(await errorMessage(r, 'FAQ save failed'));
+  return (await r.json()).faqItem;
+}
+export async function saveAdminBlogPost(post: BlogPost, token?: string): Promise<BlogPost> {
+  const payload = { slug: post.slug, title: post.title, excerpt: post.excerpt, body: post.body, published: post.published, publishedAt: post.publishedAt ?? null, ...(post.id ? { id: post.id } : {}) };
+  const r = await fetch(API + '/api/admin/content/blog-posts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(payload) });
+  if(!r.ok) throw new Error(await errorMessage(r, 'Blog post save failed'));
+  return (await r.json()).blogPost;
+}
 export async function fetchAdminMarketingSubscribers(token?: string): Promise<MarketingSubscriber[]> { const r = await fetch(API + '/api/admin/marketing/subscribers', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Admin access required'); return (await r.json()).subscribers; }
 export async function sendAdminMarketingCampaign(payload: MarketingCampaignPayload, token?: string): Promise<{ sent: number }> { const r = await fetch(API + '/api/admin/marketing/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error(await errorMessage(r, 'Campaign send failed')); return r.json(); }
 export async function saveAdminProduct(product: Product, token?: string): Promise<Product> { const { id, ...rest } = product; const payload = id ? product : rest; const r = await fetch(API + '/api/admin/products', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Product save failed'); return (await r.json()).product; }

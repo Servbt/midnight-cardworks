@@ -1679,6 +1679,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .contact-form label,
 .newsletter-form label,
 .marketing-compose label,
+.content-editor-card label,
 .admin-listing label {
   display: grid;
   gap: .4rem;
@@ -1689,7 +1690,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .checkout-form input, .checkout-form textarea,
 .contact-form input, .contact-form textarea,
 .newsletter-form input,
-.marketing-compose input, .marketing-compose textarea { width: 100%; }
+.marketing-compose input, .marketing-compose textarea,
+.content-editor-card input, .content-editor-card textarea { width: 100%; }
 
 .shipping-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
 .shipping-address-grid label:first-child { grid-column: 1 / -1; }
@@ -1825,6 +1827,74 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .subscriber-list span:not(.status-badge), .subscriber-list small { color: var(--text-3); font-size: .76rem; }
 .subscriber-list small { grid-column: 1 / -1; }
 .marketing-compose textarea { min-height: 180px; }
+.content-page {
+  display: grid;
+  gap: 1rem;
+}
+.content-page h2 {
+  font-family: var(--font-display);
+  color: var(--text);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  margin: .2rem 0;
+}
+.content-page > p,
+.blog-post-body p {
+  color: var(--text-2);
+  line-height: 1.65;
+}
+.faq-list,
+.blog-list,
+.content-editor-grid,
+.content-tab-panel {
+  display: grid;
+  gap: .9rem;
+}
+.content-card,
+.content-editor-card {
+  padding: 1rem;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: var(--bg-surface);
+}
+.content-card {
+  display: grid;
+  gap: .5rem;
+}
+.content-card h3,
+.content-editor-card h4 {
+  margin: 0;
+  color: var(--text);
+}
+.content-card p,
+.content-editor-card p {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.blog-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+}
+.blog-card div,
+.content-editor-card {
+  display: grid;
+  gap: .75rem;
+}
+.content-editor-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.blog-editor-card textarea[aria-label^="Blog body"] { min-height: 220px; }
+.content-subtabs { background: rgba(255,255,255,.03); }
+.blog-post-body {
+  display: grid;
+  gap: .8rem;
+  padding-top: .25rem;
+}
 .marketing-compose p { margin: 0; color: var(--text-3); font-size: .82rem; line-height: 1.5; }
 .unsubscribe-panel h2 {
   font-family: var(--font-display);

@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { cancelAdminOrder, createCheckout, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchCustomerOrders, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type MarketingSubscriber, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
-type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'unsubscribe';
+type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'faq' | 'blog' | 'blog-post' | 'unsubscribe';
 type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -15,6 +15,8 @@ const effectiveProductPrice = (product: Product) => isProductOnSale(product) ? p
 const flatShippingCents = 499;
 const freeShippingThresholdCents = 5000;
 const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, saleActive: false, salePrice: null, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, active: true };
+const blankFaqItem: FaqItem = { id: '', question: '', answer: '', sortOrder: 40, active: true, createdAt: '', updatedAt: '' };
+const blankBlogPost: BlogPost = { id: '', slug: '', title: '', excerpt: '', body: '', published: false, publishedAt: undefined, createdAt: '', updatedAt: '' };
 const launchNotes = [
   { title: 'Secure Stripe checkout', copy: 'Payments stay on Stripe so card data never touches the shop server.' },
   { title: 'Made-to-order fulfillment', copy: 'Each order is reviewed, packed, and marked fulfilled from the admin dashboard.' },
@@ -70,9 +72,15 @@ export default function App() {
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [marketingSubscribers, setMarketingSubscribers] = useState<MarketingSubscriber[]>([]);
+  const [faqItems, setFaqItems] = useState<FaqItem[]>([]);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
+  const [selectedBlogPost, setSelectedBlogPost] = useState<BlogPost | null>(null);
   const [newProduct, setNewProduct] = useState<Product>(blankProduct);
+  const [newFaqItem, setNewFaqItem] = useState<FaqItem>(blankFaqItem);
+  const [newBlogPost, setNewBlogPost] = useState<BlogPost>(blankBlogPost);
   const [adminMessage, setAdminMessage] = useState('');
-  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing'>('orders');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing' | 'content'>('orders');
+  const [contentTab, setContentTab] = useState<'faq' | 'blog'>('faq');
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
   const [saleSelection, setSaleSelection] = useState<string[]>([]);
   const [bulkSalePercent, setBulkSalePercent] = useState('15');
@@ -107,7 +115,11 @@ export default function App() {
   const { isAdmin, getAdminToken } = useAdminAccess();
   const { isSignedIn, email: sessionEmail, getCustomerToken } = useCustomerSession();
 
-  useEffect(() => { fetchProducts().then(setProducts).catch(() => setProducts([])); }, []);
+  useEffect(() => {
+    fetchProducts().then(setProducts).catch(() => setProducts([]));
+    fetchFaqItems().then(setFaqItems).catch(() => setFaqItems([]));
+    fetchBlogPosts().then(setBlogPosts).catch(() => setBlogPosts([]));
+  }, []);
   useEffect(() => {
     if (isSignedIn && sessionEmail && !email) setEmail(sessionEmail);
   }, [isSignedIn, sessionEmail, email]);
@@ -133,6 +145,7 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('order');
       const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
+      const blogPostMatch = window.location.pathname.match(/^\/blog\/([a-z0-9-]+)$/);
       if (productMatch) {
         setView('product');
         setProductMessage('Loading listing...');
@@ -157,8 +170,37 @@ export default function App() {
         setView('cart');
         return;
       }
+      if (window.location.pathname === '/faq') {
+        setSelectedProduct(null);
+        setSelectedBlogPost(null);
+        setProductMessage('');
+        setReceiptOrder(null);
+        setReceiptMessage('');
+        setView('faq');
+        return;
+      }
+      if (window.location.pathname === '/blog') {
+        setSelectedProduct(null);
+        setSelectedBlogPost(null);
+        setProductMessage('');
+        setReceiptOrder(null);
+        setReceiptMessage('');
+        setView('blog');
+        return;
+      }
+      if (blogPostMatch) {
+        setSelectedProduct(null);
+        setProductMessage('');
+        setReceiptOrder(null);
+        setReceiptMessage('');
+        setSelectedBlogPost(null);
+        setView('blog-post');
+        fetchBlogPost(blogPostMatch[1]).then(setSelectedBlogPost).catch(() => setSelectedBlogPost(null));
+        return;
+      }
       if (window.location.pathname === '/privacy') {
         setSelectedProduct(null);
+        setSelectedBlogPost(null);
         setProductMessage('');
         setReceiptOrder(null);
         setReceiptMessage('');
@@ -201,11 +243,13 @@ export default function App() {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
       const authToken = token ?? undefined;
-      const [adminListings, adminOrders, subscribers] = await Promise.all([fetchAdminProducts(authToken), fetchAdminOrders(authToken), fetchAdminMarketingSubscribers(authToken)]);
+      const [adminListings, adminOrders, subscribers, content] = await Promise.all([fetchAdminProducts(authToken), fetchAdminOrders(authToken), fetchAdminMarketingSubscribers(authToken), fetchAdminContent(authToken)]);
       setAdminProducts(adminListings);
       setOrders(adminOrders);
       setMarketingSubscribers(subscribers);
-    }).catch(() => { setAdminProducts([]); setOrders([]); setMarketingSubscribers([]); });
+      setFaqItems(content.faqItems);
+      setBlogPosts(content.blogPosts);
+    }).catch(() => { setAdminProducts([]); setOrders([]); setMarketingSubscribers([]); setFaqItems([]); setBlogPosts([]); });
   }, [view, checkoutMessage, isAdmin]);
   useEffect(() => {
     if (view !== 'account' || !isSignedIn || !sessionEmail) return;
@@ -288,6 +332,12 @@ export default function App() {
         document.head.appendChild(description);
       }
       description.content = selectedProduct.description;
+    } else if (view === 'faq') {
+      document.title = 'FAQ | Midnight Cardworks';
+    } else if (view === 'blog') {
+      document.title = 'Blog | Midnight Cardworks';
+    } else if (view === 'blog-post') {
+      document.title = selectedBlogPost ? `${selectedBlogPost.title} | Midnight Cardworks` : 'Blog | Midnight Cardworks';
     } else if (view === 'privacy') {
       document.title = 'Privacy & Cookies | Midnight Cardworks';
     } else if (view === 'unsubscribe') {
@@ -295,7 +345,7 @@ export default function App() {
     } else if (view === 'home' || view === 'shop') {
       document.title = 'Midnight Cardworks';
     }
-  }, [view, selectedProduct]);
+  }, [view, selectedProduct, selectedBlogPost]);
 
   useLayoutEffect(() => {
     if (productScrollSignal === 0 || view !== 'product' || !selectedProduct) return;
@@ -375,6 +425,30 @@ export default function App() {
     setView('privacy');
     if (window.location.pathname === '/privacy') window.history.replaceState({}, '', '/privacy');
     else window.history.pushState({}, '', '/privacy');
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
+  function showFaq(options: { scrollToTop?: boolean } = {}) {
+    setView('faq');
+    if (window.location.pathname === '/faq') window.history.replaceState({}, '', '/faq');
+    else window.history.pushState({}, '', '/faq');
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
+  function showBlog(options: { scrollToTop?: boolean } = {}) {
+    setView('blog');
+    setSelectedBlogPost(null);
+    if (window.location.pathname === '/blog') window.history.replaceState({}, '', '/blog');
+    else window.history.pushState({}, '', '/blog');
+    if (options.scrollToTop) scrollToPageTop();
+  }
+
+  function showBlogPost(post: BlogPost, options: { scrollToTop?: boolean } = {}) {
+    setSelectedBlogPost(post);
+    setView('blog-post');
+    const path = `/blog/${post.slug}`;
+    if (window.location.pathname === path) window.history.replaceState({}, '', path);
+    else window.history.pushState({}, '', path);
     if (options.scrollToTop) scrollToPageTop();
   }
 
@@ -469,6 +543,14 @@ export default function App() {
 
   function orderItemSummary(order: Order) {
     return order.items.map((item) => `${item.quantity} × ${item.title} — ${formatMoney(item.price * item.quantity)}`);
+  }
+
+  function blogParagraphs(post: BlogPost) {
+    return post.body.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
+  }
+
+  function slugifyContentTitle(value: string) {
+    return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
   }
 
   function contactSupportAboutOrder(orderId: string) {
@@ -635,6 +717,49 @@ export default function App() {
       setAdminMessage('Marketing campaign sent to ' + result.sent + ' ' + (result.sent === 1 ? 'subscriber' : 'subscribers') + '.');
     } catch (error) {
       setAdminMessage(error instanceof Error ? error.message : 'Could not send marketing campaign.');
+    }
+  }
+
+  function rememberSavedFaqItem(saved: FaqItem) {
+    setFaqItems((items) => [...items.filter((item) => item.id !== saved.id), saved].sort((a, b) => a.sortOrder - b.sortOrder || a.question.localeCompare(b.question)));
+  }
+
+  function rememberSavedBlogPost(saved: BlogPost) {
+    setBlogPosts((items) => [saved, ...items.filter((item) => item.id !== saved.id)].sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)));
+    setSelectedBlogPost((post) => post?.id === saved.id ? saved : post);
+  }
+
+  function updateFaqItem(id: string, patch: Partial<FaqItem>) {
+    setFaqItems((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  function updateBlogPost(id: string, patch: Partial<BlogPost>) {
+    setBlogPosts((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  }
+
+  async function handleFaqSave(item: FaqItem, isNew = false) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const saved = await saveAdminFaqItem(item, token);
+      rememberSavedFaqItem(saved);
+      setAdminMessage(`Saved FAQ: ${saved.question}.`);
+      if (isNew) setNewFaqItem({ ...blankFaqItem, sortOrder: Math.max(10, ...faqItems.map((faq) => faq.sortOrder + 10)) });
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : 'Could not save FAQ content.');
+    }
+  }
+
+  async function handleBlogSave(post: BlogPost, isNew = false) {
+    try {
+      const token = await getAdminToken();
+      if (!token) throw new Error('Admin token required');
+      const saved = await saveAdminBlogPost({ ...post, slug: post.slug || slugifyContentTitle(post.title) }, token);
+      rememberSavedBlogPost(saved);
+      setAdminMessage(`Saved blog post: ${saved.title}.`);
+      if (isNew) setNewBlogPost(blankBlogPost);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : 'Could not save blog content.');
     }
   }
 
@@ -868,9 +993,37 @@ export default function App() {
     </article>;
   }
 
+  function faqEditor(item: FaqItem, isNew = false) {
+    const setFaq = (patch: Partial<FaqItem>) => isNew ? setNewFaqItem((faq) => ({ ...faq, ...patch })) : updateFaqItem(item.id, patch);
+    return <form className="content-editor-card" key={isNew ? 'new-faq' : item.id} onSubmit={(event) => { event.preventDefault(); void handleFaqSave(item, isNew); }}>
+      <div className="content-editor-card-header"><h4>{isNew ? 'Create FAQ' : item.question || 'FAQ draft'}</h4><span className="status-badge">{item.active ? 'Live' : 'Hidden'}</span></div>
+      <label>{isNew ? 'FAQ question' : `Question for ${item.question || 'FAQ'}`}<input aria-label={isNew ? 'FAQ question' : `Question for ${item.question || 'FAQ'}`} required value={item.question} onChange={(event) => setFaq({ question: event.target.value })} /></label>
+      <label>{isNew ? 'FAQ answer' : `Answer for ${item.question || 'FAQ'}`}<textarea aria-label={isNew ? 'FAQ answer' : `Answer for ${item.question || 'FAQ'}`} required value={item.answer} onChange={(event) => setFaq({ answer: event.target.value })} /></label>
+      <label>{isNew ? 'FAQ sort order' : `Sort order for ${item.question || 'FAQ'}`}<input aria-label={isNew ? 'FAQ sort order' : `Sort order for ${item.question || 'FAQ'}`} type="number" min="0" value={item.sortOrder} onChange={(event) => setFaq({ sortOrder: Number(event.target.value) })} /></label>
+      <label className="checkbox-row"><input aria-label={isNew ? 'FAQ active' : `FAQ active for ${item.question || 'FAQ'}`} type="checkbox" checked={item.active} onChange={(event) => setFaq({ active: event.target.checked })} /> Active on FAQ page</label>
+      <button type="submit">{isNew ? 'Create FAQ' : 'Save FAQ'}</button>
+    </form>;
+  }
+
+  function blogEditor(post: BlogPost, isNew = false) {
+    const setPost = (patch: Partial<BlogPost>) => isNew ? setNewBlogPost((draft) => ({ ...draft, ...patch })) : updateBlogPost(post.id, patch);
+    return <form className="content-editor-card blog-editor-card" key={isNew ? 'new-blog' : post.id} onSubmit={(event) => { event.preventDefault(); void handleBlogSave(post, isNew); }}>
+      <div className="content-editor-card-header"><h4>{isNew ? 'Create blog post' : post.title || 'Blog draft'}</h4><span className="status-badge">{post.published ? 'Published' : 'Draft'}</span></div>
+      <label>{isNew ? 'Blog title' : `Title for ${post.title || 'blog post'}`}<input aria-label={isNew ? 'Blog title' : `Title for ${post.title || 'blog post'}`} required value={post.title} onChange={(event) => setPost({ title: event.target.value, slug: isNew ? slugifyContentTitle(event.target.value) : post.slug })} /></label>
+      <label>{isNew ? 'Blog slug' : `Slug for ${post.title || 'blog post'}`}<input aria-label={isNew ? 'Blog slug' : `Slug for ${post.title || 'blog post'}`} required value={post.slug} onChange={(event) => setPost({ slug: slugifyContentTitle(event.target.value) })} /></label>
+      <label>{isNew ? 'Blog excerpt' : `Excerpt for ${post.title || 'blog post'}`}<textarea aria-label={isNew ? 'Blog excerpt' : `Excerpt for ${post.title || 'blog post'}`} required value={post.excerpt} onChange={(event) => setPost({ excerpt: event.target.value })} /></label>
+      <label>{isNew ? 'Blog body' : `Body for ${post.title || 'blog post'}`}<textarea aria-label={isNew ? 'Blog body' : `Body for ${post.title || 'blog post'}`} required value={post.body} onChange={(event) => setPost({ body: event.target.value })} /></label>
+      <label className="checkbox-row"><input aria-label={isNew ? 'Blog post published' : `Published for ${post.title || 'blog post'}`} type="checkbox" checked={post.published} onChange={(event) => setPost({ published: event.target.checked })} /> Published on blog page</label>
+      <button type="submit">{isNew ? 'Create post' : 'Save post'}</button>
+    </form>;
+  }
+
   const cartCount = cart.reduce((s, l) => s + l.quantity, 0);
   const saleSelectedProducts = adminProducts.filter((product) => saleSelection.includes(product.slug));
   const activeMarketingSubscribers = marketingSubscribers.filter((subscriber) => subscriber.status === 'subscribed');
+  const publicFaqItems = faqItems.filter((item) => item.active).sort((a, b) => a.sortOrder - b.sortOrder || a.question.localeCompare(b.question));
+  const publicBlogPosts = blogPosts.filter((post) => post.published).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
+  const contentItemCount = faqItems.length + blogPosts.length;
   const showAccountNewsletterOffer = view === 'account' && isSignedIn && newsletterHomeOfferSeen && (!newsletterSignupComplete || Boolean(newsletterMessage));
 
   const newsletterSignupForm = (showDismissAction = false) => <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
@@ -931,6 +1084,8 @@ export default function App() {
         <button key={c} className={`nav-tab${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => showShop({ category: c, scrollToTop: true })}>{c}</button>
       ))}
       <button className={`nav-tab${view === 'contact' ? ' active' : ''}`} onClick={() => showContact({ scrollToTop: true })}>Contact</button>
+      <button className={`nav-tab${view === 'faq' ? ' active' : ''}`} onClick={() => showFaq({ scrollToTop: true })}>FAQ</button>
+      <button className={`nav-tab${view === 'blog' || view === 'blog-post' ? ' active' : ''}`} onClick={() => showBlog({ scrollToTop: true })}>Blog</button>
     </nav>
   </div>;
 
@@ -1092,7 +1247,7 @@ export default function App() {
                 : `Sold out: ${selectedProduct.title}`}
             </button>
             <div className="trust-strip">
-              <span>🔒 Secure Stripe checkout</span>
+              <span>ðŸ”’ Secure Stripe checkout</span>
               <span>✦ Made-to-order</span>
               <span>⚠ Casual play only</span>
             </div>
@@ -1222,6 +1377,37 @@ export default function App() {
       </section>}
     </>}
 
+    {view === 'faq' && <section className="panel narrow content-page faq-page" aria-label="Frequently asked questions">
+      <p className="eyebrow">FAQ</p>
+      <h2>Frequently asked questions</h2>
+      <p>Clear answers about casual-play pieces, custom requests, checkout, and fulfillment.</p>
+      {publicFaqItems.length === 0 ? <p>No FAQ entries are live yet.</p> : <div className="faq-list">{publicFaqItems.map((item) => <article className="content-card" key={item.id}>
+        <h3>{item.question}</h3>
+        <p>{item.answer}</p>
+      </article>)}</div>}
+      <div className="policy-actions"><button type="button" onClick={() => showContact({ scrollToTop: true })}>Ask a question</button><button className="ghost" type="button" onClick={() => showShop({ category: 'All', query: '', scrollToTop: true })}>Back to shop</button></div>
+    </section>}
+
+    {view === 'blog' && <section className="panel narrow content-page blog-page" aria-label="Blog">
+      <p className="eyebrow">Blog</p>
+      <h2>Studio notes</h2>
+      <p>Product notes, launch updates, and behind-the-scenes context from Midnight Cardworks.</p>
+      {publicBlogPosts.length === 0 ? <p>No posts are published yet.</p> : <div className="blog-list">{publicBlogPosts.map((post) => <article className="content-card blog-card" key={post.id}>
+        <div><span className="status-badge">{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'Published'}</span><h3>{post.title}</h3><p>{post.excerpt}</p></div>
+        <button type="button" onClick={() => showBlogPost(post, { scrollToTop: true })}>Read {post.title}</button>
+      </article>)}</div>}
+    </section>}
+
+    {view === 'blog-post' && <section className="panel narrow content-page blog-post-page" aria-label="Blog post">
+      {selectedBlogPost ? <>
+        <p className="eyebrow">Studio notes</p>
+        <h2>{selectedBlogPost.title}</h2>
+        <p>{selectedBlogPost.excerpt}</p>
+        <div className="blog-post-body">{blogParagraphs(selectedBlogPost).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
+        <div className="policy-actions"><button type="button" onClick={() => showBlog({ scrollToTop: true })}>Back to blog</button><button className="ghost" type="button" onClick={() => showShop({ category: 'All', query: '', scrollToTop: true })}>Shop the lineup</button></div>
+      </> : <><p className="eyebrow">Studio notes</p><h2>Post unavailable</h2><p>This post is not published or could not be loaded.</p><button type="button" onClick={() => showBlog({ scrollToTop: true })}>Back to blog</button></>}
+    </section>}
+
     {view === 'contact' && <section className="panel narrow contact-panel">
       <p className="eyebrow">Support channel</p>
       <h2>Contact Midnight Cardworks</h2>
@@ -1248,14 +1434,15 @@ export default function App() {
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">
-        <div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders, listings, and sale pricing from separate workspaces.</p></div>
-        <div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span><span>{adminProducts.filter(isProductOnSale).length} on sale</span><span>{activeMarketingSubscribers.length} subscribers</span></div>
+        <div><p className="eyebrow">Seller console</p><h2>Admin dashboard</h2><p>Manage orders, listings, sale pricing, content, and marketing from separate workspaces.</p></div>
+        <div className="admin-summary"><span>{orders.length} orders</span><span>{adminProducts.length} listings</span><span>{adminProducts.filter(isProductOnSale).length} on sale</span><span>{contentItemCount} content items</span><span>{activeMarketingSubscribers.length} subscribers</span></div>
       </div>
       {adminMessage && <p className="status-message">{adminMessage}</p>}
       <div className="admin-tabs" role="tablist" aria-label="Admin sections">
         <button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button>
         <button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button>
         <button role="tab" aria-selected={adminTab === 'sales'} className={adminTab === 'sales' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('sales')}>Sales ({adminProducts.filter(isProductOnSale).length})</button>
+        <button role="tab" aria-selected={adminTab === 'content'} className={adminTab === 'content' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('content')}>Content ({contentItemCount})</button>
         <button role="tab" aria-selected={adminTab === 'marketing'} className={adminTab === 'marketing' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('marketing')}>Marketing ({activeMarketingSubscribers.length})</button>
       </div>
       {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
@@ -1295,6 +1482,18 @@ export default function App() {
             <button type="button" onClick={() => void handleSaleSave([product])}>Save sale for {product.title}</button>
           </article>)}
         </div>
+      </section>}
+      {adminTab === 'content' && <section className="admin-workspace content-workspace" role="tabpanel" aria-label="Content">
+        <div className="section-heading"><div><h3>Content manager</h3><p>Edit public FAQ answers and blog posts without touching code.</p></div></div>
+        <div className="admin-tabs content-subtabs" role="tablist" aria-label="Content workspaces">
+          <button role="tab" aria-selected={contentTab === 'faq'} className={contentTab === 'faq' ? 'active-tab' : 'ghost'} onClick={() => setContentTab('faq')}>FAQ ({faqItems.length})</button>
+          <button role="tab" aria-selected={contentTab === 'blog'} className={contentTab === 'blog' ? 'active-tab' : 'ghost'} onClick={() => setContentTab('blog')}>Blog ({blogPosts.length})</button>
+        </div>
+        {contentTab === 'faq' ? <section className="content-tab-panel" role="tabpanel" aria-label="FAQ editor">
+          <div className="content-editor-grid">{faqEditor(newFaqItem, true)}{faqItems.map((item) => faqEditor(item))}</div>
+        </section> : <section className="content-tab-panel" role="tabpanel" aria-label="Blog editor">
+          <div className="content-editor-grid">{blogEditor(newBlogPost, true)}{blogPosts.map((post) => blogEditor(post))}</div>
+        </section>}
       </section>}
       {adminTab === 'marketing' && <section className="admin-workspace marketing-workspace" role="tabpanel" aria-label="Marketing">
         <div className="section-heading"><div><h3>Marketing emails</h3><p>Review opt-in subscribers and send deal or new product notes to active subscribers only.</p></div></div>
@@ -1398,6 +1597,8 @@ export default function App() {
             <h4>Studio</h4>
             <button className="text-btn" onClick={startOrder}>Start a commission</button>
             <button className="text-btn" onClick={() => showContact({ scrollToTop: true })}>Contact</button>
+            <button className="text-btn" onClick={() => showFaq({ scrollToTop: true })}>FAQ</button>
+            <button className="text-btn" onClick={() => showBlog({ scrollToTop: true })}>Blog</button>
             <button className="text-btn" onClick={() => setView('account')}>Account</button>
           </div>
           <div>

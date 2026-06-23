@@ -83,6 +83,51 @@ describe('storefront API', () => {
     expect(body.products[0]).toHaveProperty('price');
   });
 
+  it('serves public FAQ and blog content', async () => {
+    const app = buildServer(createInMemoryStore());
+
+    const faqs = await app.inject({ method: 'GET', url: '/api/content/faqs' });
+    const posts = await app.inject({ method: 'GET', url: '/api/content/blog-posts' });
+    const post = await app.inject({ method: 'GET', url: '/api/content/blog-posts/first-drop-notes' });
+
+    expect(faqs.statusCode).toBe(200);
+    expect(faqs.json().faqItems[0]).toMatchObject({ active: true, question: 'Are these tournament legal?' });
+    expect(posts.statusCode).toBe(200);
+    expect(posts.json().blogPosts[0]).toMatchObject({ slug: 'first-drop-notes', published: true });
+    expect(post.statusCode).toBe(200);
+    expect(post.json().post).toMatchObject({ slug: 'first-drop-notes', title: 'First Drop Notes' });
+  });
+
+  it('lets admins manage FAQ and blog content', async () => {
+    const app = buildServer(createInMemoryStore(), { adminAuth });
+
+    const content = await app.inject({ method: 'GET', url: '/api/admin/content', headers: adminHeaders });
+    const faq = await app.inject({
+      method: 'POST',
+      url: '/api/admin/content/faqs',
+      headers: adminHeaders,
+      payload: { question: 'Do you ship internationally?', answer: 'Message first so the studio can quote shipping accurately.', sortOrder: 5, active: true }
+    });
+    const blog = await app.inject({
+      method: 'POST',
+      url: '/api/admin/content/blog-posts',
+      headers: adminHeaders,
+      payload: { slug: 'new-drop-preview', title: 'New Drop Preview', excerpt: 'A small preview of the next drop.', body: 'New commander proxies are being photographed this week.', published: true }
+    });
+    const publicFaqs = await app.inject({ method: 'GET', url: '/api/content/faqs' });
+    const publicPost = await app.inject({ method: 'GET', url: '/api/content/blog-posts/new-drop-preview' });
+
+    expect(content.statusCode).toBe(200);
+    expect(content.json().faqItems.length).toBeGreaterThan(0);
+    expect(content.json().blogPosts.length).toBeGreaterThan(0);
+    expect(faq.statusCode).toBe(200);
+    expect(faq.json().faqItem).toMatchObject({ question: 'Do you ship internationally?', active: true });
+    expect(blog.statusCode).toBe(200);
+    expect(blog.json().blogPost).toMatchObject({ slug: 'new-drop-preview', published: true });
+    expect(publicFaqs.json().faqItems.map((item: { question: string }) => item.question)).toContain('Do you ship internationally?');
+    expect(publicPost.json().post).toMatchObject({ slug: 'new-drop-preview', title: 'New Drop Preview' });
+  });
+
   it('creates a checkout order from cart items with customer, shipping details, and separate shipping cost', async () => {
     const store = createInMemoryStore();
     const app = buildServer(store);

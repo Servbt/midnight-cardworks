@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { PrismaClient } from '@prisma/client';
-import type { CheckoutInput, MarketingSubscriber, MarketingSubscriberStatus, MarketingSubscribeInput, Order, OrderStatus, Product, Store } from './types.js';
-import { seedProducts } from './seed.js';
+import type { BlogPost, BlogPostInput, CheckoutInput, FaqItem, FaqItemInput, MarketingSubscriber, MarketingSubscriberStatus, MarketingSubscribeInput, Order, OrderStatus, Product, Store } from './types.js';
+import { seedBlogPosts, seedFaqItems, seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
 import { effectiveProductPrice } from './pricing.js';
 
@@ -10,6 +10,8 @@ type PrismaOrder = Awaited<ReturnType<PrismaClient['order']['findFirstOrThrow']>
   items: Array<{ productId: string; title: string; price: number; quantity: number }>;
 };
 type PrismaMarketingSubscriber = Awaited<ReturnType<PrismaClient['marketingSubscriber']['findFirstOrThrow']>>;
+type PrismaFaqItem = Awaited<ReturnType<PrismaClient['faqItem']['findFirstOrThrow']>>;
+type PrismaBlogPost = Awaited<ReturnType<PrismaClient['blogPost']['findFirstOrThrow']>>;
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -76,12 +78,69 @@ function toMarketingSubscriber(subscriber: PrismaMarketingSubscriber): Marketing
   };
 }
 
+function toFaqItem(item: PrismaFaqItem): FaqItem {
+  return {
+    id: item.id,
+    question: item.question,
+    answer: item.answer,
+    sortOrder: item.sortOrder,
+    active: item.active,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString()
+  };
+}
+
+function toBlogPost(post: PrismaBlogPost): BlogPost {
+  return {
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt,
+    body: post.body,
+    published: post.published,
+    publishedAt: post.publishedAt?.toISOString(),
+    createdAt: post.createdAt.toISOString(),
+    updatedAt: post.updatedAt.toISOString()
+  };
+}
+
 export async function seedPrismaProducts(prisma: PrismaClient, products: Product[] = seedProducts) {
   for (const product of products) {
     await prisma.product.upsert({
       where: { slug: product.slug },
       update: product,
       create: product
+    });
+  }
+}
+
+export async function seedPrismaContent(prisma: PrismaClient, faqItems: FaqItem[] = seedFaqItems, blogPosts: BlogPost[] = seedBlogPosts) {
+  for (const item of faqItems) {
+    await prisma.faqItem.upsert({
+      where: { id: item.id },
+      update: {},
+      create: {
+        id: item.id,
+        question: item.question,
+        answer: item.answer,
+        sortOrder: item.sortOrder,
+        active: item.active
+      }
+    });
+  }
+  for (const post of blogPosts) {
+    await prisma.blogPost.upsert({
+      where: { slug: post.slug },
+      update: {},
+      create: {
+        id: post.id,
+        slug: post.slug,
+        title: post.title,
+        excerpt: post.excerpt,
+        body: post.body,
+        published: post.published,
+        publishedAt: post.publishedAt ? new Date(post.publishedAt) : null
+      }
     });
   }
 }
@@ -239,6 +298,47 @@ export function createPrismaStore(prisma: PrismaClient): Store {
     async unsubscribeMarketing(token) {
       const saved = await prisma.marketingSubscriber.update({ where: { unsubscribeToken: token }, data: { status: 'unsubscribed', unsubscribedAt: new Date() } }).catch(() => undefined);
       return saved ? toMarketingSubscriber(saved) : undefined;
+    },
+    async listFaqItems(options = {}) {
+      const items = await prisma.faqItem.findMany({
+        where: options.includeInactive ? undefined : { active: true },
+        orderBy: [{ sortOrder: 'asc' }, { question: 'asc' }]
+      });
+      return items.map(toFaqItem);
+    },
+    async upsertFaqItem(input: FaqItemInput) {
+      const id = input.id || 'faq_' + nanoid(8);
+      const saved = await prisma.faqItem.upsert({
+        where: { id },
+        update: { question: input.question, answer: input.answer, sortOrder: input.sortOrder, active: input.active },
+        create: { id, question: input.question, answer: input.answer, sortOrder: input.sortOrder, active: input.active }
+      });
+      return toFaqItem(saved);
+    },
+    async listBlogPosts(options = {}) {
+      const posts = await prisma.blogPost.findMany({
+        where: options.includeDrafts ? undefined : { published: true },
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }]
+      });
+      return posts.map(toBlogPost);
+    },
+    async getBlogPost(slug, options = {}) {
+      const post = await prisma.blogPost.findUnique({ where: { slug } });
+      if (!post || (!options.includeDrafts && !post.published)) return undefined;
+      return toBlogPost(post);
+    },
+    async upsertBlogPost(input: BlogPostInput) {
+      const existing = input.id
+        ? await prisma.blogPost.findUnique({ where: { id: input.id } })
+        : await prisma.blogPost.findUnique({ where: { slug: input.slug } });
+      const id = existing?.id ?? input.id ?? 'blog_' + nanoid(8);
+      const publishedAt = input.published ? input.publishedAt ? new Date(input.publishedAt) : existing?.publishedAt ?? new Date() : input.publishedAt ? new Date(input.publishedAt) : existing?.publishedAt ?? null;
+      const saved = await prisma.blogPost.upsert({
+        where: { id },
+        update: { slug: input.slug, title: input.title, excerpt: input.excerpt, body: input.body, published: input.published, publishedAt },
+        create: { id, slug: input.slug, title: input.title, excerpt: input.excerpt, body: input.body, published: input.published, publishedAt }
+      });
+      return toBlogPost(saved);
     }
   };
 }
