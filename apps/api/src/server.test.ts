@@ -180,6 +180,21 @@ describe('storefront API', () => {
     expect(orders.json().orders[0]).toMatchObject({ id: orderId, status: 'paid' });
   });
 
+  it('decrements product inventory once when Stripe confirms checkout completion', async () => {
+    const store = createInMemoryStore();
+    const app = buildServer(store, { adminAuth });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 2 }]) });
+    const orderId = checkout.json().orderId;
+
+    const webhookPayload = { type: 'checkout.session.completed', data: { object: { metadata: { orderId } } } };
+    const firstWebhook = await app.inject({ method: 'POST', url: '/api/stripe/webhook', payload: webhookPayload });
+    const secondWebhook = await app.inject({ method: 'POST', url: '/api/stripe/webhook', payload: webhookPayload });
+
+    expect(firstWebhook.statusCode).toBe(200);
+    expect(secondWebhook.statusCode).toBe(200);
+    expect(await store.getProduct('golden-hour-commander-proxy')).toMatchObject({ inventory: 18 });
+  });
+
   it('rejects unsigned Stripe webhooks in production when the webhook secret is missing', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('STRIPE_WEBHOOK_SECRET', '');
@@ -260,6 +275,7 @@ describe('storefront API', () => {
     expect(sync.statusCode).toBe(200);
     expect(sync.json().order).toMatchObject({ id: orderId, status: 'paid', stripeSessionId: 'cs_test_sync', stripePaymentIntentId: 'pi_synced' });
     expect(sync.json().checkout).toMatchObject({ paid: true, paymentStatus: 'paid' });
+    expect(await store.getProduct('golden-hour-commander-proxy')).toMatchObject({ inventory: 19 });
     expect(emailSpy.sent).toEqual([{ type: 'paid', order: expect.objectContaining({ id: orderId, email: 'buyer@example.com', status: 'paid' }) }]);
   });
 

@@ -28,6 +28,18 @@ function createMarketingSubscriber(input: MarketingSubscribeInput): MarketingSub
   };
 }
 
+function decrementInventoryForOrder(products: Map<string, Product>, order: Order) {
+  const quantitiesByProductId = new Map<string, number>();
+  for (const item of order.items) {
+    quantitiesByProductId.set(item.productId, (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity);
+  }
+  for (const [slug, product] of products) {
+    const quantity = quantitiesByProductId.get(product.id);
+    if (!quantity) continue;
+    products.set(slug, { ...product, inventory: Math.max(0, product.inventory - quantity) });
+  }
+}
+
 function applyRefund(order: Order, refund: { amount: number; refundId?: string; reason?: string }) {
   if (refund.refundId && order.stripeRefundId === refund.refundId && (order.status === 'refunded' || order.status === 'partially_refunded')) {
     return order;
@@ -82,6 +94,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     async markOrderPaid(orderId, payment = {}) {
       const order = orders.find((candidate) => candidate.id === orderId);
       if (!order) return undefined;
+      if (order.status === 'pending_payment') decrementInventoryForOrder(products, order);
       order.status = 'paid';
       order.stripeSessionId = payment.stripeSessionId ?? order.stripeSessionId;
       order.stripePaymentIntentId = payment.stripePaymentIntentId ?? order.stripePaymentIntentId;

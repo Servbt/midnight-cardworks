@@ -160,7 +160,25 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       return updateOrder(orderId, { stripeSessionId });
     },
     async markOrderPaid(orderId, payment = {}) {
-      return updateOrder(orderId, { status: 'paid', stripeSessionId: payment.stripeSessionId, stripePaymentIntentId: payment.stripePaymentIntentId });
+      const data: Record<string, unknown> = { status: 'paid' };
+      if (payment.stripeSessionId) data.stripeSessionId = payment.stripeSessionId;
+      if (payment.stripePaymentIntentId) data.stripePaymentIntentId = payment.stripePaymentIntentId;
+
+      const updated = await prisma.$transaction(async (transaction) => {
+        const order = await transaction.order.findUnique({ where: { id: orderId }, include: { items: true } });
+        if (!order) return undefined;
+        const transition = await transaction.order.updateMany({ where: { id: orderId, status: 'pending_payment' }, data });
+        if (transition.count === 1) {
+          for (const item of order.items) {
+            await transaction.product.update({ where: { id: item.productId }, data: { inventory: { decrement: item.quantity } } });
+            await transaction.product.updateMany({ where: { id: item.productId, inventory: { lt: 0 } }, data: { inventory: 0 } });
+          }
+        } else {
+          await transaction.order.update({ where: { id: orderId }, data });
+        }
+        return transaction.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      });
+      return updated ? toOrder(updated) : undefined;
     },
     async markOrderFulfilled(orderId) {
       return updateOrder(orderId, { status: 'fulfilled' });
