@@ -1,0 +1,43 @@
+# Midnight Cardworks
+
+> Midnight Cardworks is a dark collector studio selling custom proxy-style cards, token packs, display cards, and land sets for casual play, gifts, and display binders.
+
+Midnight Cardworks products are unofficial custom game pieces. They are not affiliated with or endorsed by Wizards of the Coast and are not tournament legal.
+
+The site supports secure Stripe checkout, customer accounts, order history, contact support, newsletter coupon signup, and admin-managed product, sale, FAQ, blog, and order content.
+
+## Core Pages
+
+- [Home](https://midnight-cardworks.onrender.com/): Midnight Cardworks storefront overview.
+- [Shop](https://midnight-cardworks.onrender.com/shop): Current product lineup and category filters.
+- [FAQ](https://midnight-cardworks.onrender.com/faq): Questions about casual-play legality, custom requests, checkout, and fulfillment.
+- [Blog](https://midnight-cardworks.onrender.com/blog): Product notes, launch updates, and studio context.
+- [Contact](https://midnight-cardworks.onrender.com/contact): Customer support and custom inquiry form.
+- [Privacy & Cookies](https://midnight-cardworks.onrender.com/privacy): Privacy, cookies, analytics, saved checkout information, and marketing email details.
+
+## Product Categories
+
+- [All products](https://midnight-cardworks.onrender.com/shop?category=All): Full current lineup.
+- [Commander proxies](https://midnight-cardworks.onrender.com/shop?category=Commander): Custom commander centerpiece cards for casual play.
+- [Token packs](https://midnight-cardworks.onrender.com/shop?category=Tokens): Coordinated tabletop token bundles.
+- [Display cards](https://midnight-cardworks.onrender.com/shop?category=Display): Collector-focused display cards and gifts.
+- [Land sets](https://midnight-cardworks.onrender.com/shop?category=Land%20Sets): Custom land sets for casual commander tables.
+
+## Current Featured Listings
+
+- [Golden Hour Commander Proxy](https://midnight-cardworks.onrender.com/products/golden-hour-commander-proxy): Premium custom commander centerpiece with bold yellow energy and collector-grade presentation.
+- [Midnight Token Pack](https://midnight-cardworks.onrender.com/products/midnight-token-pack): Coordinated token bundle for casual tables.
+- [Velvet Archive Display Card](https://midnight-cardworks.onrender.com/products/velvet-archive-display-card): Display-ready custom art card for collectors, gifts, and deck boxes.
+- [Social Link Land Set](https://midnight-cardworks.onrender.com/products/social-link-land-set): Five-card custom land set with color-coded visual motifs.
+
+## Customer Support Context
+
+- Products are made for casual play, display, and gifts.
+- Products are not tournament legal.
+- Checkout is handled through Stripe.
+- Order updates and fulfillment are managed by Midnight Cardworks.
+- Custom questions and order support should use the contact page.
+
+## Optional
+
+- [Account](https://midnight-cardworks.onrender.com/account): Customer sign-in, order history, and saved checkout information controls.
