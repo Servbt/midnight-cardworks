@@ -10,10 +10,12 @@
     "typecheck": "npm run typecheck --workspaces",
     "build": "npm run build --workspaces",
     "start": "node apps/api/dist/index.js",
-    "render:build": "npm run db:generate && npm run build && npm run db:migrate",
+    "render:build": "npm run db:generate && npm run build",
     "db:generate": "npm run db:generate --workspace @midnight-cardworks/api",
     "db:migrate": "npm run db:migrate --workspace @midnight-cardworks/api",
-    "db:dev": "npm run db:dev --workspace @midnight-cardworks/api"
+    "db:dev": "npm run db:dev --workspace @midnight-cardworks/api",
+    "check:production-env": "node scripts/check-production-env.mjs",
+    "check:production-env:strict": "node scripts/check-production-env.mjs --strict"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

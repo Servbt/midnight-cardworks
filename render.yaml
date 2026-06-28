@@ -2,9 +2,11 @@ services:
   - type: web
     name: midnight-cardworks
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm ci --include=dev && npm run render:build
+    preDeployCommand: npm run db:migrate
     startCommand: npm run start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -38,7 +40,15 @@ services:
         sync: false
       - key: ORDER_NOTIFICATION_EMAIL
         sync: false
+      - key: NEWSLETTER_COUPON_CODE
+        sync: false
+      - key: MARKETING_POSTAL_ADDRESS
+        sync: false
+      - key: VITE_PLAUSIBLE_DOMAIN
+        sync: false
+      - key: VITE_PLAUSIBLE_SRC
+        value: https://plausible.io/js/script.js
 
 databases:
   - name: midnight-cardworks-db
-    plan: free
+    plan: basic-256mb

@@ -59,6 +59,7 @@ export type MarketingSubscribeInput = { email: string; name?: string; source: st
 export type FaqItemInput = { id?: string; question: string; answer: string; sortOrder: number; active: boolean };
 export type BlogPostInput = { id?: string; slug: string; title: string; excerpt: string; body: string; published: boolean; publishedAt?: string | null };
 export type Store = {
+  healthCheck(): Promise<void>;
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;
   getProduct(slug: string): Promise<Product | undefined>;

@@ -156,6 +156,9 @@ export function createPrismaStore(prisma: PrismaClient): Store {
   }
 
   return {
+    async healthCheck() {
+      await prisma.$queryRaw`SELECT 1`;
+    },
     async listProducts() {
       const products = await prisma.product.findMany({ where: { active: true }, orderBy: { createdAt: 'asc' } });
       return products.map(toProduct);

@@ -60,6 +60,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
   const faqItems = new Map(seedFaqItems.map((item) => [item.id, { ...item }]));
   const blogPosts = new Map(seedBlogPosts.map((post) => [post.slug, { ...post }]));
   return {
+    async healthCheck() {},
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async listAdminProducts() { return [...products.values()]; },
     async getProduct(slug) { return products.get(slug); },

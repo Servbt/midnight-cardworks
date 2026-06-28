@@ -151,7 +151,14 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       app.register(fastifyStatic, { root: staticRoot, prefix: '/', wildcard: false });
     }
   }
-  app.get('/health', async () => ({ ok: true }));
+  app.get('/health', async (_request, reply) => {
+    try {
+      await store.healthCheck();
+      return { ok: true };
+    } catch {
+      return reply.code(503).send({ ok: false });
+    }
+  });
   async function requireAdmin(request: { headers: { authorization?: string } }, reply: { code(statusCode: number): { send(payload: unknown): unknown } }) {
     const result = await adminAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });

@@ -74,6 +74,21 @@ describe('storefront API', () => {
     stripeMock.paymentIntentId = 'pi_synced';
   });
 
+  it('reports storage health to the hosting platform', async () => {
+    const healthyApp = buildServer(createInMemoryStore());
+    const healthy = await healthyApp.inject({ method: 'GET', url: '/health' });
+
+    const unavailableStore = createInMemoryStore();
+    unavailableStore.healthCheck = async () => { throw new Error('database unavailable'); };
+    const unavailableApp = buildServer(unavailableStore);
+    const unavailable = await unavailableApp.inject({ method: 'GET', url: '/health' });
+
+    expect(healthy.statusCode).toBe(200);
+    expect(healthy.json()).toEqual({ ok: true });
+    expect(unavailable.statusCode).toBe(503);
+    expect(unavailable.json()).toEqual({ ok: false });
+  });
+
   it('lists active products for the shop grid', async () => {
     const app = buildServer(createInMemoryStore());
     const res = await app.inject({ method: 'GET', url: '/api/products' });
