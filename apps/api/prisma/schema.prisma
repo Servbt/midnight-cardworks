@@ -46,6 +46,7 @@ model Product {
 model Order {
   id        String      @id
   email           String
+  receiptTokenHash String?
   customerName    String?
   shippingAddress String?
   subtotal        Int

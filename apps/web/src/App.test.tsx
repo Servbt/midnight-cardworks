@@ -1098,12 +1098,14 @@ describe('Midnight Cardworks storefront', () => {
   });
 
   it('shows a verified receipt when returning from Stripe Checkout', async () => {
-    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
 
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Order received' })).toBeInTheDocument();
     expect(screen.getByText('Payment verified')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { 'x-receipt-token': 'r'.repeat(43) }, cache: 'no-store' }));
     expect(screen.getByText('Order number: ord_test')).toBeInTheDocument();
     expect(screen.getByText(/1 × Golden Hour Commander Proxy — \$12.99/)).toBeInTheDocument();
     expect(screen.getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();

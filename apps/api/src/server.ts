@@ -17,6 +17,7 @@ import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { MarketingSubscriber, Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
+import { canReadReceipt, createReceiptAccess, customerOrder } from './orderAccess.js';
 import { effectiveProductPrice } from './pricing.js';
 
 const shippingAddressFieldsSchema = z.object({
@@ -139,8 +140,8 @@ type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; admi
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
-  const adminAuth = options.adminAuth ?? createAdminAuthFromEnv();
   const customerAuth = options.customerAuth ?? createCustomerAuthFromEnv();
+  const adminAuth = options.adminAuth ?? createAdminAuthFromEnv(process.env, customerAuth);
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
@@ -203,25 +204,35 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
-      const order = await store.createOrder(parsed.data);
-      const checkout = await createCheckoutResponse(order);
+      const access = createReceiptAccess();
+      const order = await store.createOrder({ ...parsed.data, receiptTokenHash: access.hash });
+      const checkout = await createCheckoutResponse(order, access.token);
       const notificationOrder = checkout.stripeSessionId ? await store.recordCheckoutSession(order.id, checkout.stripeSessionId) : order;
       await emailNotifier.sendOrderPending(notificationOrder ?? order).catch(() => undefined);
-      return reply.code(201).send(checkout);
+      reply.header('Cache-Control', 'no-store');
+      const { stripeSessionId: _session, stripePaymentIntentId: _payment, ...publicCheckout } = checkout;
+      return reply.code(201).send(publicCheckout);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
   });
   app.get('/api/orders', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const result = await customerAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });
-    return { orders: await store.listOrdersByEmail(result.email) };
+    return { orders: (await store.listOrdersByEmail(result.email)).map(customerOrder) };
   });
   app.get('/api/orders/:orderId', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const { orderId } = request.params as { orderId: string };
+    const receiptToken = request.headers['x-receipt-token'];
+    const identity = request.headers.authorization ? await customerAuth.authorize(request.headers.authorization) : undefined;
+    if (identity && !identity.ok) return reply.code(identity.status).send({ error: identity.error });
+    if (!identity && !receiptToken) return reply.code(401).send({ error: 'Sign-in or receipt access required' });
     const order = await store.getOrder(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    return { order };
+    const ownsOrder = order && identity?.ok && order.email.trim().toLowerCase() === identity.email.trim().toLowerCase();
+    if (!order || (!ownsOrder && !canReadReceipt(order, receiptToken))) return reply.code(404).send({ error: 'Order not found' });
+    return { order: customerOrder(order) };
   });
   app.post('/api/stripe/webhook', async (request, reply) => {
     try {

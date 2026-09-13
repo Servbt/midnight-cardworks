@@ -28,6 +28,10 @@ services:
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
+      - key: CLERK_ISSUER_URL
+        sync: false
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
       - key: ADMIN_EMAILS
         sync: false
       - key: VITE_ADMIN_EMAILS

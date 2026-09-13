@@ -1,5 +1,6 @@
 export type Product = { id:string; slug:string; title:string; description:string; price:number; saleActive:boolean; salePrice:number|null; category:string; tags:string[]; image:string; inventory:number; active:boolean; featured?:boolean };
 export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; subtotal?:number; shippingCost?:number; total:number; status:string; stripeSessionId?:string; stripePaymentIntentId?:string; stripeRefundId?:string; refundedAmount:number; refundReason?:string; canceledAt?:string; refundedAt?:string; items:Array<{title:string;quantity:number;price:number}> };
+export type CustomerOrder = Pick<Order, 'id' | 'shippingAddress' | 'subtotal' | 'shippingCost' | 'total' | 'status' | 'refundedAmount' | 'canceledAt' | 'refundedAt' | 'items'>;
 export type ContactPayload = { name:string; email:string; orderNumber?:string; message:string; website?:string };
 export type ShippingAddressFields = { streetAddress:string; apartment:string; city:string; zipCode:string };
 export type MarketingSubscriber = { id:string; email:string; name?:string; status:'subscribed'|'unsubscribed'; source:string; couponCode:string; consentedAt:string; unsubscribedAt?:string; createdAt:string; updatedAt:string };
@@ -34,8 +35,15 @@ export async function fetchFaqItems(): Promise<FaqItem[]> { const r = await fetc
 export async function fetchBlogPosts(): Promise<BlogPost[]> { const r = await fetch(API + '/api/content/blog-posts'); if(!r.ok) throw new Error('Blog not found'); return (await r.json()).blogPosts; }
 export async function fetchBlogPost(slug: string): Promise<BlogPost> { const r = await fetch(API + '/api/content/blog-posts/' + slug); if(!r.ok) throw new Error('Blog post not found'); return (await r.json()).post; }
 export async function createCheckout(email:string, customerName:string, shippingAddressFields:ShippingAddressFields, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;subtotal:number;shippingCost:number;total:number}> { const r = await fetch(API + '/api/checkout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddressFields, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
-export async function fetchOrder(orderId: string): Promise<Order> { const r = await fetch(API + '/api/orders/' + orderId); if(!r.ok) throw new Error('Order not found'); return (await r.json()).order; }
-export async function fetchCustomerOrders(token?: string): Promise<Order[]> { const r = await fetch(API + '/api/orders', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Orders not found'); return (await r.json()).orders; }
+export async function fetchOrder(orderId: string, access: { receiptToken?: string; token?: string } = {}): Promise<CustomerOrder> {
+  const headers: Record<string, string> = {};
+  if (access.receiptToken) headers['x-receipt-token'] = access.receiptToken;
+  else if (access.token) headers.authorization = 'Bearer ' + access.token;
+  const r = await fetch(API + '/api/orders/' + encodeURIComponent(orderId), { headers, cache: 'no-store' });
+  if (!r.ok) throw new Error('Open your private receipt link or sign in with the email used for this order.');
+  return (await r.json()).order;
+}
+export async function fetchCustomerOrders(token?: string): Promise<CustomerOrder[]> { const r = await fetch(API + '/api/orders', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Orders not found'); return (await r.json()).orders; }
 export async function sendContactMessage(payload: ContactPayload): Promise<void> { const r = await fetch(API + '/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Message send failed'); }
 export async function subscribeNewsletter(payload: NewsletterSignupPayload): Promise<{ subscriber: MarketingSubscriber; created: boolean }> { const r = await fetch(API + '/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error(await errorMessage(r, 'Newsletter signup failed')); return r.json(); }
 export async function unsubscribeNewsletter(token: string): Promise<MarketingSubscriber> { const r = await fetch(API + '/api/newsletter/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }); if(!r.ok) throw new Error(await errorMessage(r, 'Unsubscribe failed')); return (await r.json()).subscriber; }

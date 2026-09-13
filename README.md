@@ -142,6 +142,32 @@ CLERK_SECRET_KEY=sk_live_or_test_key
 Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
 The API uses `CLERK_SECRET_KEY` to verify customer sessions before returning account order history from `/api/orders`.
 
+## Order access and Clerk verification
+
+Customer and admin APIs share session verification against a fixed Clerk instance. Configure:
+
+```bash
+CLERK_ISSUER_URL=https://your-instance.clerk.accounts.dev
+CLERK_AUTHORIZED_PARTIES=https://your-shop.example
+```
+
+Use the exact Clerk Frontend API origin for `CLERK_ISSUER_URL` (your custom Clerk domain in production). It must match the session token issuer. `CLERK_AUTHORIZED_PARTIES` is a comma-separated list of storefront origins; when omitted, it defaults to `APP_BASE_URL`. Origins must use HTTPS in production and cannot include paths, credentials, queries, or fragments. Local development can use `http://localhost:5173` as an authorized party. The issuer always requires HTTPS. Missing or invalid configuration denies account/admin access.
+
+Verification requires a signed, unexpired Clerk session from that issuer and an allowed `azp` origin. Order ownership and the admin allowlist use the account's **verified primary email**. Customer order history matches checkout emails case-insensitively, including older mixed-case addresses.
+
+- `GET /api/orders` requires a customer bearer token and returns that account's orders.
+- `GET /api/orders/:orderId` requires either the matching customer's bearer token or the order's private `X-Receipt-Token` header. Knowing an order ID alone does not grant access.
+- New checkouts generate a random 256-bit receipt token and store only its SHA-256 hash. Stripe's success URL carries the token in a fragment, which is not sent to the web server. The storefront removes it from the address bar and retains it in session storage for reloads in the same tab, with an in-memory fallback when storage is unavailable.
+- Guest and customer responses omit email, customer name, payment-provider identifiers, access hashes, and internal refund notes. They include receipt items, amounts, status, dates, and the delivery address. Responses disable caching.
+- Treat private receipt links as credentials. Guest tokens grant access only to their own receipt. Existing orders have no guest token; their old order-ID-only links now require sign-in with the matching verified primary email. Support can use the protected admin dashboard for customers who cannot sign in.
+
+Deployment order for this change:
+
+1. Set `CLERK_ISSUER_URL` and the allowed storefront origins on the API host, matching the frontend Clerk instance.
+2. Run `npm run db:generate` and build the application.
+3. Apply migrations with `npm run db:migrate` before starting the new API. The new nullable `receiptTokenHash` column preserves existing orders; Render's existing pre-deploy migration command handles this.
+4. Smoke-test a real Clerk customer session, an allowlisted admin, and a new guest checkout return. Older Checkout Sessions do not gain a token retroactively.
+
 ## Admin Access
 
 Admin dashboard UI and admin API routes are restricted to signed-in Clerk users whose email appears in the admin allowlist.
