@@ -39,6 +39,7 @@ function toOrder(order: PrismaOrder): Order {
   return {
     id: order.id,
     email: order.email,
+    receiptTokenHash: order.receiptTokenHash ?? undefined,
     customerName: order.customerName ?? undefined,
     shippingAddress: order.shippingAddress ?? undefined,
     subtotal: order.subtotal,
@@ -184,7 +185,7 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       return orders.map(toOrder);
     },
     async listOrdersByEmail(email) {
-      const orders = await prisma.order.findMany({ where: { email }, include: { items: true }, orderBy: { createdAt: 'desc' } });
+      const orders = await prisma.order.findMany({ where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } }, include: { items: true }, orderBy: { createdAt: 'desc' } });
       return orders.map(toOrder);
     },
     async getOrder(orderId) {
@@ -204,7 +205,8 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       const order = await prisma.order.create({
         data: {
           id: 'ord_' + nanoid(8),
-          email: input.email,
+          email: normalizeEmail(input.email),
+          receiptTokenHash: input.receiptTokenHash,
           customerName: input.customerName,
           shippingAddress: input.shippingAddress,
           subtotal,

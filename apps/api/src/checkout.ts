@@ -6,9 +6,10 @@ function stripeId(value: unknown) {
   return undefined;
 }
 
-export async function createCheckoutResponse(order: Order) {
+export async function createCheckoutResponse(order: Order, receiptToken: string) {
   const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  const receiptPath = `/checkout/success?order=${encodeURIComponent(order.id)}#receiptToken=${encodeURIComponent(receiptToken)}`;
 
   if (stripeSecret && !stripeSecret.includes('replace_me')) {
     const stripeModule = await import('stripe');
@@ -37,11 +38,11 @@ export async function createCheckoutResponse(order: Order) {
       ],
       metadata: { orderId: order.id },
       allow_promotion_codes: true,
-      success_url: `${appBaseUrl}/checkout/success?order=${order.id}`,
+      success_url: `${appBaseUrl}${receiptPath}`,
       cancel_url: `${appBaseUrl}/cart?order=${order.id}`
     });
     return { orderId: order.id, checkoutUrl: session.url, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total, stripeSessionId: session.id, stripePaymentIntentId: stripeId(session.payment_intent) };
   }
 
-  return { orderId: order.id, checkoutUrl: `/checkout/success?order=${order.id}`, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };
+  return { orderId: order.id, checkoutUrl: receiptPath, status: order.status, subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total };
 }

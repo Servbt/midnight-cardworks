@@ -277,10 +277,10 @@ describe('storefront API', () => {
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
 
-    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: { 'x-receipt-token': new URLSearchParams(new URL(checkout.json().checkoutUrl, 'http://localhost').hash.slice(1)).get('receiptToken')! } });
 
     expect(receipt.statusCode).toBe(200);
-    expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
+    expect(receipt.json().order).toMatchObject({ id: orderId, subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
   });
 
   it('lists customer order history for the signed-in account only', async () => {
@@ -293,7 +293,7 @@ describe('storefront API', () => {
 
     expect(history.statusCode).toBe(200);
     expect(history.json().orders).toHaveLength(1);
-    expect(history.json().orders[0]).toMatchObject({ email: 'buyer@example.com', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] });
+    expect(history.json().orders[0]).toMatchObject({ items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] });
   });
 
   it('blocks anonymous customer order history access', async () => {
@@ -313,7 +313,7 @@ describe('storefront API', () => {
     await store.markOrderPaid(orderId);
 
     const fulfill = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/fulfill`, headers: adminHeaders });
-    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: { 'x-receipt-token': new URLSearchParams(new URL(checkout.json().checkoutUrl, 'http://localhost').hash.slice(1)).get('receiptToken')! } });
 
     expect(fulfill.statusCode).toBe(200);
     expect(fulfill.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });

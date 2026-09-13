@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type CustomerOrder, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
+import { receiptTokenFor } from './receiptAccess';
 import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
@@ -68,7 +69,7 @@ export default function App() {
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [checkoutValidationMessage, setCheckoutValidationMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [marketingSubscribers, setMarketingSubscribers] = useState<MarketingSubscriber[]>([]);
@@ -87,8 +88,9 @@ export default function App() {
   const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
-  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<CustomerOrder | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
+  const [receiptAccess, setReceiptAccess] = useState<{ orderId: string; receiptToken?: string } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [productMessage, setProductMessage] = useState('');
@@ -160,10 +162,8 @@ export default function App() {
       if (window.location.pathname === '/checkout/success' && orderId) {
         setView('receipt');
         setReceiptMessage('Checking payment status...');
-        fetchOrder(orderId).then((order) => {
-          setReceiptOrder(order);
-          setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
-        }).catch(() => setReceiptMessage('Could not verify this order yet'));
+        setReceiptOrder(null);
+        setReceiptAccess({ orderId, receiptToken: receiptTokenFor(orderId) });
         return;
       }
       if (window.location.pathname === '/cart') {
@@ -239,6 +239,24 @@ export default function App() {
     window.addEventListener('popstate', applyCurrentLocation);
     return () => window.removeEventListener('popstate', applyCurrentLocation);
   }, [isAdmin]);
+  useEffect(() => {
+    if (view !== 'receipt' || !receiptAccess) return;
+    let active = true;
+    setReceiptOrder(null);
+    setReceiptMessage('Checking payment status...');
+    const { orderId, receiptToken } = receiptAccess;
+    const receipt = receiptToken
+      ? fetchOrder(orderId, { receiptToken })
+      : getCustomerToken().then((token) => fetchOrder(orderId, { token: token ?? undefined }));
+    receipt.then((order) => {
+      if (!active) return;
+      setReceiptOrder(order);
+      setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
+    }).catch(() => {
+      if (active) setReceiptMessage('Open your private receipt link or sign in with the email used for this order.');
+    });
+    return () => { active = false; };
+  }, [view, receiptAccess, isSignedIn, sessionEmail]);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
@@ -541,7 +559,7 @@ export default function App() {
     return ['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status) && refundableAmount(order) > 0;
   }
 
-  function orderItemSummary(order: Order) {
+  function orderItemSummary(order: Pick<Order, 'items'>) {
     return order.items.map((item) => `${item.quantity} × ${item.title} — ${formatMoney(item.price * item.quantity)}`);
   }
 
@@ -1430,7 +1448,7 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">
