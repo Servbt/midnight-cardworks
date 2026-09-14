@@ -1,3 +1,4 @@
+import { stripeSecret } from './productionConfig.js';
 import { nanoid } from 'nanoid';
 import type { Order } from './types.js';
 
@@ -8,11 +9,6 @@ type StripeRefundClient = {
   checkout: { sessions: { retrieve(id: string): Promise<{ payment_intent?: unknown }> } };
   refunds: { create(input: unknown): Promise<{ id: string; amount: number; status: string | null; metadata?: Record<string, string> }> };
 };
-
-function hasRealStripeSecret() {
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
-  return Boolean(stripeSecret && !stripeSecret.includes('replace_me'));
-}
 
 function stripeId(value: unknown) {
   if (typeof value === 'string') return value;
@@ -32,13 +28,14 @@ export async function createOrderRefund(order: Order, request: RefundRequest = {
   if (!Number.isInteger(amount) || amount <= 0) throw new Error('Refund amount must be positive');
   if (amount > remainingAmount) throw new Error('Refund amount exceeds the remaining refundable total');
 
-  if (!hasRealStripeSecret()) {
+  const secret = stripeSecret();
+  if (!secret) {
     return { refundId: `re_demo_${order.id}_${nanoid(6)}`, amount, status: 'succeeded', reason: request.reason };
   }
 
   const stripeModule = await import('stripe');
   const StripeClient = ((stripeModule as any).default ?? stripeModule) as { new (key: string): StripeRefundClient };
-  const stripe = new StripeClient(process.env.STRIPE_SECRET_KEY!);
+  const stripe = new StripeClient(secret);
   const paymentIntentId = order.stripePaymentIntentId ?? await retrievePaymentIntentFromSession(stripe, order.stripeSessionId);
   if (!paymentIntentId) throw new Error('Order is missing Stripe payment details. Open the matching payment in Stripe Dashboard to refund this older order.');
 

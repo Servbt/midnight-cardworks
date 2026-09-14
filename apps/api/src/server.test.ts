@@ -75,12 +75,12 @@ describe('storefront API', () => {
   });
 
   it('reports storage health to the hosting platform', async () => {
-    const healthyApp = buildServer(createInMemoryStore());
+    const healthyApp = await buildServer(createInMemoryStore());
     const healthy = await healthyApp.inject({ method: 'GET', url: '/health' });
 
     const unavailableStore = createInMemoryStore();
     unavailableStore.healthCheck = async () => { throw new Error('database unavailable'); };
-    const unavailableApp = buildServer(unavailableStore);
+    const unavailableApp = await buildServer(unavailableStore);
     const unavailable = await unavailableApp.inject({ method: 'GET', url: '/health' });
 
     expect(healthy.statusCode).toBe(200);
@@ -90,7 +90,7 @@ describe('storefront API', () => {
   });
 
   it('lists active products for the shop grid', async () => {
-    const app = buildServer(createInMemoryStore());
+    const app = await buildServer(createInMemoryStore());
     const res = await app.inject({ method: 'GET', url: '/api/products' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -99,7 +99,7 @@ describe('storefront API', () => {
   });
 
   it('serves public FAQ and blog content', async () => {
-    const app = buildServer(createInMemoryStore());
+    const app = await buildServer(createInMemoryStore());
 
     const faqs = await app.inject({ method: 'GET', url: '/api/content/faqs' });
     const posts = await app.inject({ method: 'GET', url: '/api/content/blog-posts' });
@@ -114,7 +114,7 @@ describe('storefront API', () => {
   });
 
   it('lets admins manage FAQ and blog content', async () => {
-    const app = buildServer(createInMemoryStore(), { adminAuth });
+    const app = await buildServer(createInMemoryStore(), { adminAuth });
 
     const content = await app.inject({ method: 'GET', url: '/api/admin/content', headers: adminHeaders });
     const faq = await app.inject({
@@ -145,7 +145,7 @@ describe('storefront API', () => {
 
   it('creates a checkout order from cart items with customer, shipping details, and separate shipping cost', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store);
+    const app = await buildServer(store);
     const res = await app.inject({
       method: 'POST',
       url: '/api/checkout',
@@ -160,7 +160,7 @@ describe('storefront API', () => {
   it('emails the shop owner when checkout creates a pending payment order', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { emailNotifier: emailSpy.notifier });
 
     const res = await app.inject({
       method: 'POST',
@@ -172,7 +172,7 @@ describe('storefront API', () => {
     expect(emailSpy.sent).toEqual([{ type: 'pending', order: expect.objectContaining({ id: res.json().orderId, email: 'buyer@example.com', status: 'pending_payment' }) }]);
   });
   it('rejects checkout orders without required shipping details', async () => {
-    const app = buildServer(createInMemoryStore());
+    const app = await buildServer(createInMemoryStore());
 
     const res = await app.inject({
       method: 'POST',
@@ -187,7 +187,7 @@ describe('storefront API', () => {
   it('uses active sale pricing when creating checkout orders', async () => {
     const product = { ...(await createInMemoryStore().getProduct('golden-hour-commander-proxy'))!, saleActive: true, salePrice: 999 };
     const store = createInMemoryStore([product]);
-    const app = buildServer(store);
+    const app = await buildServer(store);
 
     const res = await app.inject({
       method: 'POST',
@@ -203,7 +203,7 @@ describe('storefront API', () => {
 
   it('waives shipping when the cart subtotal reaches the free shipping threshold', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store);
+    const app = await buildServer(store);
 
     const res = await app.inject({
       method: 'POST',
@@ -217,7 +217,7 @@ describe('storefront API', () => {
 
   it('exposes admin order review after checkout', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p2', quantity: 1 }]) });
     const res = await app.inject({ method: 'GET', url: '/api/admin/orders', headers: adminHeaders });
     expect(res.json().orders[0].email).toBe('buyer@example.com');
@@ -225,7 +225,7 @@ describe('storefront API', () => {
 
   it('marks an order paid when Stripe confirms checkout completion', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
 
@@ -242,7 +242,7 @@ describe('storefront API', () => {
 
   it('decrements product inventory once when Stripe confirms checkout completion', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 2 }]) });
     const orderId = checkout.json().orderId;
 
@@ -258,7 +258,7 @@ describe('storefront API', () => {
   it('rejects unsigned Stripe webhooks in production when the webhook secret is missing', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('STRIPE_WEBHOOK_SECRET', '');
-    const app = buildServer(createInMemoryStore(), { adminAuth });
+    const app = await buildServer(createInMemoryStore(), { adminAuth });
 
     const webhook = await app.inject({
       method: 'POST',
@@ -272,7 +272,7 @@ describe('storefront API', () => {
 
   it('shows a checkout receipt with current order status', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store);
+    const app = await buildServer(store);
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
@@ -285,7 +285,7 @@ describe('storefront API', () => {
 
   it('lists customer order history for the signed-in account only', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { customerAuth });
+    const app = await buildServer(store, { customerAuth });
     await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p2', quantity: 1 }], { email: 'other@example.com' }) });
 
@@ -297,7 +297,7 @@ describe('storefront API', () => {
   });
 
   it('blocks anonymous customer order history access', async () => {
-    const app = buildServer(createInMemoryStore(), { customerAuth });
+    const app = await buildServer(createInMemoryStore(), { customerAuth });
 
     const history = await app.inject({ method: 'GET', url: '/api/orders?email=buyer%40example.com' });
 
@@ -307,7 +307,7 @@ describe('storefront API', () => {
 
   it('lets admins mark paid orders fulfilled', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
@@ -323,7 +323,7 @@ describe('storefront API', () => {
   it('lets admins sync a paid Stripe Checkout Session for pending orders', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -343,7 +343,7 @@ describe('storefront API', () => {
     stripeMock.paymentStatus = 'unpaid';
     stripeMock.sessionStatus = 'open';
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.recordCheckoutSession(orderId, 'cs_test_sync');
@@ -358,7 +358,7 @@ describe('storefront API', () => {
 
   it('lets admins cancel pending payment orders without issuing a refund', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
 
@@ -371,7 +371,7 @@ describe('storefront API', () => {
 
   it('lets admins issue a full refund for paid orders', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
@@ -385,7 +385,7 @@ describe('storefront API', () => {
 
   it('lets admins issue a partial refund for paid orders', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
@@ -398,7 +398,7 @@ describe('storefront API', () => {
 
   it('updates refund state from Stripe refund webhooks', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId, { stripePaymentIntentId: 'pi_test_123' });
@@ -417,7 +417,7 @@ describe('storefront API', () => {
   it('sends an order confirmation email when Stripe confirms checkout completion', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -435,7 +435,7 @@ describe('storefront API', () => {
   it('sends a fulfillment email when admins mark orders fulfilled', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -450,7 +450,7 @@ describe('storefront API', () => {
   it('sends a cancellation email when admins cancel pending payment orders', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -464,7 +464,7 @@ describe('storefront API', () => {
   it('sends a refund email when admins issue a successful refund', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -479,7 +479,7 @@ describe('storefront API', () => {
   it('sends a refund failure email when Stripe reports a failed refund', async () => {
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
@@ -497,7 +497,7 @@ describe('storefront API', () => {
 
   it('emails the shop owner when a customer submits a contact message', async () => {
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+    const app = await buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
 
     const res = await app.inject({
       method: 'POST',
@@ -512,7 +512,7 @@ describe('storefront API', () => {
 
   it('rejects contact messages with invalid email or spam honeypot', async () => {
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+    const app = await buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
 
     const badEmail = await app.inject({ method: 'POST', url: '/api/contact', payload: { name: 'Ari', email: 'not-email', message: 'Hello there' } });
     const bot = await app.inject({ method: 'POST', url: '/api/contact', payload: { name: 'Ari', email: 'buyer@example.com', message: 'Hello there', website: 'https://spam.example' } });
@@ -526,7 +526,7 @@ describe('storefront API', () => {
     vi.stubEnv('NEWSLETTER_COUPON_CODE', 'MIDNIGHT10');
     const store = createInMemoryStore();
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { emailNotifier: emailSpy.notifier });
 
     const res = await app.inject({
       method: 'POST',
@@ -543,7 +543,7 @@ describe('storefront API', () => {
 
   it('rejects newsletter signups without consent or with spam honeypot data', async () => {
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
+    const app = await buildServer(createInMemoryStore(), { emailNotifier: emailSpy.notifier });
 
     const noConsent = await app.inject({ method: 'POST', url: '/api/newsletter', payload: { email: 'buyer@example.com', marketingConsent: false } });
     const bot = await app.inject({ method: 'POST', url: '/api/newsletter', payload: { email: 'buyer@example.com', marketingConsent: true, website: 'https://spam.example' } });
@@ -556,7 +556,7 @@ describe('storefront API', () => {
   it('unsubscribes marketing subscribers by token', async () => {
     const store = createInMemoryStore();
     const signup = await store.subscribeMarketing({ email: 'buyer@example.com', name: 'Ari', source: 'storefront_coupon', couponCode: 'MIDNIGHT10' });
-    const app = buildServer(store);
+    const app = await buildServer(store);
 
     const res = await app.inject({ method: 'POST', url: '/api/newsletter/unsubscribe', payload: { token: signup.subscriber.unsubscribeToken } });
 
@@ -572,7 +572,7 @@ describe('storefront API', () => {
     const inactive = await store.subscribeMarketing({ email: 'inactive@example.com', source: 'storefront_coupon', couponCode: 'MIDNIGHT10' });
     await store.unsubscribeMarketing(inactive.subscriber.unsubscribeToken);
     const emailSpy = createEmailNotifierSpy();
-    const app = buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
+    const app = await buildServer(store, { adminAuth, emailNotifier: emailSpy.notifier });
 
     const list = await app.inject({ method: 'GET', url: '/api/admin/marketing/subscribers', headers: adminHeaders });
     const campaign = await app.inject({ method: 'POST', url: '/api/admin/marketing/campaigns', headers: adminHeaders, payload: { subject: 'New cards are live', message: 'Fresh card listings are ready in the shop.' } });
@@ -587,7 +587,7 @@ describe('storefront API', () => {
 
   it('uploads and saves a product image for an admin listing', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, {
+    const app = await buildServer(store, {
       adminAuth,
       uploadImage: async () => ({ url: 'https://images.example.com/golden.jpg' })
     });
@@ -606,7 +606,7 @@ describe('storefront API', () => {
   });
 
   it('accepts practical product image payload sizes for admin uploads', async () => {
-    const app = buildServer(createInMemoryStore(), {
+    const app = await buildServer(createInMemoryStore(), {
       adminAuth,
       uploadImage: async () => ({ url: 'https://images.example.com/large-golden.jpg' })
     });
@@ -624,7 +624,7 @@ describe('storefront API', () => {
 
   it('creates and updates admin products while keeping inactive products out of the storefront', async () => {
     const store = createInMemoryStore();
-    const app = buildServer(store, { adminAuth });
+    const app = await buildServer(store, { adminAuth });
 
     const create = await app.inject({
       method: 'POST',
@@ -669,7 +669,7 @@ describe('storefront API', () => {
   });
 
   it('blocks anonymous and non-admin access to admin orders', async () => {
-    const app = buildServer(createInMemoryStore(), { adminAuth });
+    const app = await buildServer(createInMemoryStore(), { adminAuth });
 
     const anonymous = await app.inject({ method: 'GET', url: '/api/admin/orders' });
     const nonAdmin = await app.inject({ method: 'GET', url: '/api/admin/orders', headers: { authorization: 'Bearer customer-token' } });
@@ -685,7 +685,7 @@ describe('storefront API', () => {
     await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><html><head><title>Midnight Cardworks</title></head><body><div id="root"></div></body></html>');
 
     try {
-      const app = buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
+      const app = await buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
       const productPage = await app.inject({ method: 'GET', url: '/products/golden-hour-commander-proxy' });
 
       expect(productPage.statusCode).toBe(200);
@@ -704,7 +704,7 @@ describe('storefront API', () => {
     await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>Midnight Cardworks</title><div id="root"></div>');
 
     try {
-      const app = buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
+      const app = await buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
       const home = await app.inject({ method: 'GET', url: '/' });
       const clientRoute = await app.inject({ method: 'GET', url: '/account' });
       const missingApi = await app.inject({ method: 'GET', url: '/api/does-not-exist' });

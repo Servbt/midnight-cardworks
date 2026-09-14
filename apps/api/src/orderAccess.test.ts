@@ -15,7 +15,7 @@ describe('order access', () => {
   it('requires a per-order guest token or the matching verified account, and limits disclosed fields', async () => {
     vi.stubEnv('STRIPE_SECRET_KEY', '');
     const store = createInMemoryStore();
-    const app = buildServer(store, { customerAuth });
+    const app = await buildServer(store, { customerAuth });
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload });
     expect(checkout.statusCode).toBe(201);
     const id = checkout.json().orderId;
@@ -55,7 +55,7 @@ describe('order access', () => {
   it('keeps legacy orders private while allowing their verified owner to read them', async () => {
     const store = createInMemoryStore();
     const legacy = await store.createOrder({ email: 'BUYER@example.com', customerName: 'Buyer', shippingAddress: 'Test address', items: payload.items });
-    const app = buildServer(store, { customerAuth });
+    const app = await buildServer(store, { customerAuth });
     expect((await app.inject({ url: '/api/orders/' + legacy.id, headers: { 'x-receipt-token': 'x'.repeat(43) } })).statusCode).toBe(404);
     expect((await app.inject({ url: '/api/orders/' + legacy.id, headers: { authorization: 'Bearer buyer' } })).statusCode).toBe(200);
     await app.close();

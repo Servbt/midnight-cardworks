@@ -222,7 +222,7 @@ Production deploys should run migrations before the API starts. The included Ren
 npm run render:build
 ```
 
-Seed products are upserted on API startup when Prisma storage is enabled, so the initial catalog is present after deployment.
+Seed products are inserted on API startup when Prisma storage is enabled. Existing product IDs or slugs are skipped, preserving edited titles, prices, images, inventory, visibility, and sale settings across restarts. Missing seed products are inserted; seed data never updates an existing listing.
 
 ## Product Image Uploads
 
@@ -298,3 +298,16 @@ Production behavior:
 8. Create the Stripe promotion code that matches `NEWSLETTER_COUPON_CODE`, then test the signup coupon in Stripe Checkout.
 9. Review the Privacy & Cookies page, analytics preference behavior, marketing email unsubscribe behavior, and any region-specific legal requirements before accepting live orders.
 10. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.
+
+## Phase two production safeguards
+
+Production startup now validates essential runtime settings before opening the database or listening:
+`DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`,
+`CLERK_SECRET_KEY`, `CLERK_ISSUER_URL`, and `ADMIN_EMAILS`.
+`CLERK_AUTHORIZED_PARTIES` remains optional and defaults to `APP_BASE_URL`; if supplied, all entries must be valid HTTPS origins. Invalid or missing values stop startup with the setting names, without logging secret values. Stripe/Clerk test keys are allowed for staging; use live keys when accepting real payments. Optional email, marketing, and image-upload settings do not block startup. The broader `check:production-env` script remains a launch checklist, not the runtime validator.
+
+Production cannot fall back to in-memory storage, demo checkout, or simulated refunds. Development/test mode retains those local workflows. Checkout/refund helpers also reject missing or placeholder Stripe keys when invoked directly in production.
+
+The API now waits for raw-body registration before defining routes and verifies Stripe signatures with the real SDK. Stripe must deliver events to `/api/stripe/webhook`, and `STRIPE_WEBHOOK_SECRET` must be the signing secret for that endpoint and environment (a Stripe CLI secret is for CLI-forwarded requests). Invalid, missing, stale, or tampered signatures are rejected before changing orders or sending email.
+
+Deploy this phase with the existing Render build, pre-deploy migration, and start commands; it adds no new database migration. Confirm the required settings before merging into Render's deployed branch. After deployment, check `/health`, verify edited listings survived the restart, and use Stripe test mode in a staging environment to verify webhook delivery. This phase fixes signature delivery and startup safety; payment-state transitions, event deduplication, discount reconciliation, and inventory reservations are subsequent phases.
