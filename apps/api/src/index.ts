@@ -1,10 +1,13 @@
+import { assertProductionConfig } from './productionConfig.js';
 import { buildServer } from './server.js';
 import { createStoreFromEnv } from './storeFactory.js';
+
+assertProductionConfig();
 
 const port = Number(process.env.PORT ?? 4000);
 const serveStaticRoot = process.env.SERVE_STATIC_ROOT ?? (process.env.NODE_ENV === 'production' ? 'apps/web/dist' : undefined);
 const { store, disconnect } = await createStoreFromEnv();
-const app = buildServer(store, { serveStaticRoot });
+const app = await buildServer(store, { serveStaticRoot });
 
 const shutdown = async () => {
   await disconnect?.();

@@ -1,3 +1,4 @@
+import { stripeSecret as configuredStripeSecret } from './productionConfig.js';
 import type { Order } from './types.js';
 
 function stripeId(value: unknown) {
@@ -8,7 +9,7 @@ function stripeId(value: unknown) {
 
 export async function createCheckoutResponse(order: Order, receiptToken: string) {
   const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  const stripeSecret = configuredStripeSecret();
   const receiptPath = `/checkout/success?order=${encodeURIComponent(order.id)}#receiptToken=${encodeURIComponent(receiptToken)}`;
 
   if (stripeSecret && !stripeSecret.includes('replace_me')) {

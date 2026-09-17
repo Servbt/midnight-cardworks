@@ -24,13 +24,12 @@ export async function parseStripeWebhookEvent(request: FastifyRequest): Promise<
   const isProduction = process.env.NODE_ENV === 'production';
 
   if (webhookSecret) {
-    if (!signature || !('rawBody' in request) || !request.rawBody) {
+    if (typeof signature !== 'string' || !signature || !('rawBody' in request) || !request.rawBody) {
       throw new Error('Stripe webhook signature required');
     }
-    const stripeModule = await import('stripe');
-    const StripeClient = stripeModule as unknown as { new (key: string): { webhooks: { constructEvent(rawBody: string | Buffer, signature: string | string[], secret: string): StripeWebhookEvent } } };
-    const stripe = new StripeClient(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder');
-    return stripe.webhooks.constructEvent(request.rawBody as string | Buffer, signature, webhookSecret);
+    const { default: Stripe } = await import('stripe');
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_signature_verification');
+    return stripe.webhooks.constructEvent(request.rawBody as string | Buffer, signature, webhookSecret) as unknown as StripeWebhookEvent;
   }
 
   if (isProduction) {

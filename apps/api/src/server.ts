@@ -138,14 +138,14 @@ async function productSeoHtml(staticRoot: string, product: Product) {
 
 type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier };
 
-export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
+export async function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
   const customerAuth = options.customerAuth ?? createCustomerAuthFromEnv();
   const adminAuth = options.adminAuth ?? createAdminAuthFromEnv(process.env, customerAuth);
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
   app.register(cors, { origin: true });
-  app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
+  await app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
   if (options.serveStaticRoot) {
     const staticRoot = path.resolve(options.serveStaticRoot);
     if (existsSync(staticRoot)) {

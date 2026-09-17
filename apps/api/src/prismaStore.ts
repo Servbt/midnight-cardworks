@@ -106,13 +106,8 @@ function toBlogPost(post: PrismaBlogPost): BlogPost {
 }
 
 export async function seedPrismaProducts(prisma: PrismaClient, products: Product[] = seedProducts) {
-  for (const product of products) {
-    await prisma.product.upsert({
-      where: { slug: product.slug },
-      update: product,
-      create: product
-    });
-  }
+  // Both IDs and slugs are unique. Skip either collision, including renamed seed listings.
+  await prisma.product.createMany({ data: products, skipDuplicates: true });
 }
 
 export async function seedPrismaContent(prisma: PrismaClient, faqItems: FaqItem[] = seedFaqItems, blogPosts: BlogPost[] = seedBlogPosts) {
