@@ -1,3 +1,5 @@
+import { paymentMethods } from './paymentState.js';
+import type { JournalRecord } from './types.js';
 import { nanoid } from 'nanoid';
 import type { BlogPost, BlogPostInput, FaqItem, FaqItemInput, MarketingSubscriber, MarketingSubscribeInput, Order, Product, Store } from './types.js';
 import { seedBlogPosts, seedFaqItems, seedProducts } from './seed.js';
@@ -40,26 +42,36 @@ function decrementInventoryForOrder(products: Map<string, Product>, order: Order
   }
 }
 
-function applyRefund(order: Order, refund: { amount: number; refundId?: string; reason?: string }) {
-  if (refund.refundId && order.stripeRefundId === refund.refundId && (order.status === 'refunded' || order.status === 'partially_refunded')) {
-    return order;
-  }
-  const refundedAmount = Math.min(order.total, order.refundedAmount + refund.amount);
-  order.refundedAmount = refundedAmount;
-  order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
-  order.refundReason = refund.reason ?? order.refundReason;
-  order.status = refundedAmount >= order.total ? 'refunded' : 'partially_refunded';
-  order.refundedAt = now();
-  return order;
-}
-
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
   const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
   const orders: Order[] = [];
   const marketingSubscribers = new Map<string, MarketingSubscriber>();
   const faqItems = new Map(seedFaqItems.map((item) => [item.id, { ...item }]));
   const blogPosts = new Map(seedBlogPosts.map((post) => [post.slug, { ...post }]));
-  return {
+  const records = new Map<string, JournalRecord>();
+  let tail: Promise<unknown> = Promise.resolve();
+  const scoped = (): Store => { const tx: Store = { ...store, atomic: async work => work(tx) }; Object.assign(tx, paymentMethods(() => tx)); return tx; };
+  const store: Store = {
+    ...paymentMethods(() => store),
+    async atomic(work) {
+      const run = tail.then(async () => {
+        const snapshot = structuredClone({ orders, products, records });
+        try { return await work(scoped()); }
+        catch (error) {
+          orders.splice(0, orders.length, ...snapshot.orders);
+          products.clear(); for (const [key, value] of snapshot.products) products.set(key, value);
+          records.clear(); for (const [key, value] of snapshot.records) records.set(key, value);
+          throw error;
+        }
+      });
+      tail = run.catch(() => undefined);
+      return run;
+    },
+    async getRecord(id) { return structuredClone(records.get(id)); },
+    async putRecord(record) { records.set(record.id, structuredClone(record)); },
+    async listRecords(kind, orderId) { return structuredClone([...records.values()].filter(r => r.kind === kind && (!orderId || r.orderId === orderId))); },
+    async saveOrder(order) { const index = orders.findIndex(o => o.id === order.id); if (index < 0) throw new Error('Order not found'); orders[index] = structuredClone(order); return order; },
+    async decrementOrderInventory(order) { decrementInventoryForOrder(products, order); },
     async healthCheck() {},
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async listAdminProducts() { return [...products.values()]; },
@@ -74,7 +86,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     },
     async listOrders() { return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async listOrdersByEmail(email) { return [...orders].filter((order) => order.email.toLowerCase() === email.toLowerCase()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
-    async getOrder(orderId) { return orders.find((order) => order.id === orderId); },
+    async getOrder(orderId) { return structuredClone(orders.find((order) => order.id === orderId)); },
     async createOrder(input) {
       const productList = [...products.values()];
       const items = input.items.map((item) => {
@@ -92,50 +104,6 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       const order = orders.find((candidate) => candidate.id === orderId);
       if (!order) return undefined;
       order.stripeSessionId = stripeSessionId;
-      return order;
-    },
-    async markOrderPaid(orderId, payment = {}) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      if (order.status === 'pending_payment') decrementInventoryForOrder(products, order);
-      order.status = 'paid';
-      order.stripeSessionId = payment.stripeSessionId ?? order.stripeSessionId;
-      order.stripePaymentIntentId = payment.stripePaymentIntentId ?? order.stripePaymentIntentId;
-      return order;
-    },
-    async markOrderFulfilled(orderId) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      order.status = 'fulfilled';
-      return order;
-    },
-    async cancelOrder(orderId, reason) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      order.status = 'canceled';
-      order.refundReason = reason ?? order.refundReason;
-      order.canceledAt = now();
-      return order;
-    },
-    async markOrderRefundPending(orderId, refund) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      order.status = 'refund_pending';
-      order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
-      order.refundReason = refund.reason ?? order.refundReason;
-      return order;
-    },
-    async markOrderRefunded(orderId, refund) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      return applyRefund(order, refund);
-    },
-    async markOrderRefundFailed(orderId, refund) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      order.status = 'refund_failed';
-      order.stripeRefundId = refund.refundId ?? order.stripeRefundId;
-      order.refundReason = refund.reason ?? order.refundReason;
       return order;
     },
     async subscribeMarketing(input) {
@@ -219,4 +187,5 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       return saved;
     }
   };
+  return store;
 }

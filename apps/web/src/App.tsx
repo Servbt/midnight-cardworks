@@ -251,7 +251,7 @@ export default function App() {
     receipt.then((order) => {
       if (!active) return;
       setReceiptOrder(order);
-      setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
+      setReceiptMessage(order.status === 'pending_payment' ? 'Payment is processing' : order.status === 'canceled' ? 'Order canceled' : 'Payment verified');
     }).catch(() => {
       if (active) setReceiptMessage('Open your private receipt link or sign in with the email used for this order.');
     });
@@ -946,7 +946,7 @@ export default function App() {
       const token = await getAdminToken();
       if (!token) throw new Error('Admin token required');
       const amountValue = refundAmounts[order.id]?.trim();
-      const amount = fullRefund || !amountValue ? refundableAmount(order) : moneyToCents(amountValue);
+      const amount = fullRefund || !amountValue ? undefined : moneyToCents(amountValue);
       const updated = await refundAdminOrder(order.id, { amount, reason: refundReasons[order.id] ?? '' }, token);
       rememberUpdatedOrder(updated);
       setAdminMessage(`Refund updated for ${updated.id}.`);
@@ -1448,7 +1448,7 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : receiptOrder.status === 'pending_payment' ? 'Waiting for Stripe confirmation' : receiptOrder.status.replaceAll('_', ' ')}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p>{Boolean(receiptOrder.discountAmount) && <p>Discount: -{formatMoney(receiptOrder.discountAmount ?? 0)}</p>}<h3>{receiptOrder.paidAt || ['paid', 'fulfilled', 'partially_refunded', 'refunded', 'refund_pending', 'refund_failed'].includes(receiptOrder.status) ? 'Total paid' : 'Order total'}: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul>{receiptOrder.refundedAmount > 0 && <p>Refunded: {formatMoney(receiptOrder.refundedAmount)}</p>}<h3>What happens next</h3><p>{receiptOrder.status === 'paid' ? 'We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.' : receiptOrder.status === 'pending_payment' ? 'We’ll prepare your order once payment is confirmed.' : receiptOrder.status === 'canceled' ? 'This checkout was canceled. You can start a new order from the shop.' : 'Contact support if you have questions about fulfillment or refunds.'}</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">

@@ -1,3 +1,4 @@
+import { startNotificationWorker } from './notificationWorker.js';
 import { assertProductionConfig } from './productionConfig.js';
 import { buildServer } from './server.js';
 import { createStoreFromEnv } from './storeFactory.js';
@@ -9,9 +10,12 @@ const serveStaticRoot = process.env.SERVE_STATIC_ROOT ?? (process.env.NODE_ENV =
 const { store, disconnect } = await createStoreFromEnv();
 const app = await buildServer(store, { serveStaticRoot });
 
+const stopNotifications = startNotificationWorker(store, error => console.error('Notification worker failed', error instanceof Error ? error.message : 'Unknown error'));
+
 const shutdown = async () => {
-  await disconnect?.();
   await app.close();
+  await stopNotifications();
+  await disconnect?.();
   process.exit(0);
 };
 process.on('SIGINT', shutdown);

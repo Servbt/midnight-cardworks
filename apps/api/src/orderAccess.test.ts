@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from './server.js';
 import { createInMemoryStore } from './store.js';
@@ -16,14 +17,14 @@ describe('order access', () => {
     vi.stubEnv('STRIPE_SECRET_KEY', '');
     const store = createInMemoryStore();
     const app = await buildServer(store, { customerAuth });
-    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload });
+    const checkout = await app.inject({ method: 'POST', url: '/api/checkout', headers: { 'idempotency-key': randomUUID() }, payload });
     expect(checkout.statusCode).toBe(201);
     const id = checkout.json().orderId;
     const token = new URLSearchParams(new URL(checkout.json().checkoutUrl, 'http://localhost').hash.slice(1)).get('receiptToken')!;
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(await store.getOrder(id)).toMatchObject({ email: 'buyer@example.com', receiptTokenHash: hashReceiptToken(token) });
     expect(checkout.body).not.toContain('receiptTokenHash');
-    const second = await app.inject({ method: 'POST', url: '/api/checkout', payload });
+    const second = await app.inject({ method: 'POST', url: '/api/checkout', headers: { 'idempotency-key': randomUUID() }, payload });
     const otherId = second.json().orderId;
     expect(second.json().checkoutUrl).not.toContain(token);
     await store.markOrderPaid(id, { stripeSessionId: 'cs_private', stripePaymentIntentId: 'pi_private' });

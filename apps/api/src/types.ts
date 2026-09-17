@@ -16,6 +16,9 @@ export type Order = {
   stripePaymentIntentId?: string;
   stripeRefundId?: string;
   refundedAmount: number;
+  discountAmount?: number;
+  paidAt?: string;
+  fulfilledAt?: string;
   refundReason?: string;
   canceledAt?: string;
   refundedAt?: string;
@@ -59,7 +62,15 @@ export type CheckoutInput = { receiptTokenHash?: string; email: string; customer
 export type MarketingSubscribeInput = { email: string; name?: string; source: string; couponCode: string };
 export type FaqItemInput = { id?: string; question: string; answer: string; sortOrder: number; active: boolean };
 export type BlogPostInput = { id?: string; slug: string; title: string; excerpt: string; body: string; published: boolean; publishedAt?: string | null };
+export type JournalRecord = { id: string; kind: string; orderId?: string; data: unknown };
+export type PaymentDetails = { stripeSessionId?: string; stripePaymentIntentId?: string; total?: number; discountAmount?: number };
 export type Store = {
+  atomic<T>(work: (transaction: Store) => Promise<T>): Promise<T>;
+  getRecord(id: string): Promise<JournalRecord | undefined>;
+  putRecord(record: JournalRecord): Promise<void>;
+  listRecords(kind: string, orderId?: string): Promise<JournalRecord[]>;
+  saveOrder(order: Order): Promise<Order>;
+  decrementOrderInventory(order: Order): Promise<void>;
   healthCheck(): Promise<void>;
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;
@@ -71,7 +82,7 @@ export type Store = {
   getOrder(orderId: string): Promise<Order | undefined>;
   createOrder(input: CheckoutInput): Promise<Order>;
   recordCheckoutSession(orderId: string, stripeSessionId: string): Promise<Order | undefined>;
-  markOrderPaid(orderId: string, payment?: { stripeSessionId?: string; stripePaymentIntentId?: string }): Promise<Order | undefined>;
+  markOrderPaid(orderId: string, payment?: PaymentDetails): Promise<Order | undefined>;
   markOrderFulfilled(orderId: string): Promise<Order | undefined>;
   cancelOrder(orderId: string, reason?: string): Promise<Order | undefined>;
   markOrderRefundPending(orderId: string, refund: { amount: number; refundId?: string; reason?: string }): Promise<Order | undefined>;
