@@ -6,7 +6,7 @@ import type { EmailNotifier } from './emailNotifications.js';
 
 const secret = 'whsec_local_signature_test';
 const stripe = new Stripe('sk_test_local_signature_test');
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe('signed Stripe webhook HTTP boundary (real SDK)', () => {
   it('accepts the exact signed raw bytes and rejects missing, incorrect, stale and tampered signatures', async () => {
@@ -18,7 +18,8 @@ describe('signed Stripe webhook HTTP boundary (real SDK)', () => {
     const paid = vi.fn(async () => {});
     const app = await buildServer(store, { emailNotifier: { sendOrderPaid: paid } as unknown as EmailNotifier });
     // Whitespace and Unicode exercise raw-byte handling rather than reserialized JSON.
-    const payload = JSON.stringify({ id: 'evt_local', type: 'checkout.session.completed', data: { object: { id: 'cs_local', payment_status: 'paid', payment_intent: 'pi_local', metadata: { orderId: order.id, note: '\u00e9' } } } }, null, 2);
+    const payload = JSON.stringify({ id: 'evt_local', type: 'checkout.session.completed', data: { object: { id: 'cs_local', status: 'complete', currency: 'usd', amount_total: 1798, amount_subtotal: 1798, total_details: { amount_discount: 0 }, payment_status: 'paid', payment_intent: 'pi_local', metadata: { orderId: order.id, note: '\u00e9' } } } }, null, 2);
+    vi.spyOn(Object.getPrototypeOf(stripe.checkout.sessions), 'retrieve').mockResolvedValue(JSON.parse(payload).data.object);
     const sign = (value = payload, signingSecret = secret, timestamp?: number) => stripe.webhooks.generateTestHeaderString({ payload: value, secret: signingSecret, timestamp });
     const post = (body: string, signature?: string) => app.inject({ method: 'POST', url: '/api/stripe/webhook', headers: { 'content-type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}) }, payload: body });
     try {

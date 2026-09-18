@@ -1116,6 +1116,26 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
   });
 
+  it.each([
+    ['pending_payment', 1798, 0, 'Order total: $17.98'],
+    ['paid', 1598, 200, 'Total paid: $15.98'],
+    ['canceled', 1798, 0, 'Order total: $17.98']
+  ])('renders an accurate %s receipt', async (status, total, discountAmount, label) => {
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: {
+        id: 'ord_test', status, total, discountAmount, shippingCost: 499, refundedAmount: 0, items: []
+      } }), { status: 200 });
+      return originalFetch(url, init);
+    }));
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: String(label) })).toBeInTheDocument();
+    if (discountAmount) expect(screen.getByText('Discount: -$2.00')).toBeInTheDocument();
+    if (status !== 'paid') expect(screen.queryByText('Payment verified')).not.toBeInTheDocument();
+    if (status === 'canceled') expect(screen.queryByText('Payment is processing')).not.toBeInTheDocument();
+  });
+
   it('shows signed-in customers their order history in account', async () => {
     mockAuth.isSignedIn = true;
     render(<App />);

@@ -1,5 +1,6 @@
+import { paymentMethods } from './paymentState.js';
 import { nanoid } from 'nanoid';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import type { BlogPost, BlogPostInput, CheckoutInput, FaqItem, FaqItemInput, MarketingSubscriber, MarketingSubscriberStatus, MarketingSubscribeInput, Order, OrderStatus, Product, Store } from './types.js';
 import { seedBlogPosts, seedFaqItems, seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
@@ -50,6 +51,9 @@ function toOrder(order: PrismaOrder): Order {
     stripePaymentIntentId: order.stripePaymentIntentId ?? undefined,
     stripeRefundId: order.stripeRefundId ?? undefined,
     refundedAmount: order.refundedAmount,
+    discountAmount: order.discountAmount,
+    paidAt: order.paidAt?.toISOString(),
+    fulfilledAt: order.fulfilledAt?.toISOString(),
     refundReason: order.refundReason ?? undefined,
     canceledAt: order.canceledAt?.toISOString(),
     refundedAt: order.refundedAt?.toISOString(),
@@ -141,7 +145,7 @@ export async function seedPrismaContent(prisma: PrismaClient, faqItems: FaqItem[
   }
 }
 
-export function createPrismaStore(prisma: PrismaClient): Store {
+export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClient, inTransaction = false): Store {
   async function findOrder(orderId: string) {
     return prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
   }
@@ -151,7 +155,34 @@ export function createPrismaStore(prisma: PrismaClient): Store {
     return order ? toOrder(order) : undefined;
   }
 
-  return {
+  const store: Store = {
+    ...paymentMethods(() => store),
+    async atomic(work) {
+      if (inTransaction) return work(store);
+      return (prisma as PrismaClient).$transaction(async tx => {
+        // All payment mutations use one short DB lock; no network calls inside it.
+        // This also serializes first-time operation IDs before their row exists.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(74192351)::text`;
+        return work(createPrismaStore(tx, true));
+      }, { maxWait: 10000, timeout: 15000 });
+    },
+    async getRecord(id) { const r = await prisma.paymentJournal.findUnique({ where: { id } }); return r ? { ...r, orderId: r.orderId ?? undefined } : undefined; },
+    async putRecord(record) {
+      const data = JSON.parse(JSON.stringify(record.data)) as Prisma.InputJsonValue;
+      await prisma.paymentJournal.upsert({ where: { id: record.id }, create: { ...record, data }, update: { data } });
+    },
+    async listRecords(kind, orderId) { return (await prisma.paymentJournal.findMany({ where: { kind, orderId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(r => ({ ...r, orderId: r.orderId ?? undefined })); },
+    async saveOrder(order) {
+      const { items: _items, createdAt: _createdAt, ...data } = order;
+      const saved = await prisma.order.update({ where: { id: order.id }, data: { ...data, canceledAt: order.canceledAt ? new Date(order.canceledAt) : null }, include: { items: true } });
+      return toOrder(saved);
+    },
+    async decrementOrderInventory(order) {
+      for (const item of [...order.items].sort((a, b) => a.productId.localeCompare(b.productId))) {
+        await prisma.product.update({ where: { id: item.productId }, data: { inventory: { decrement: item.quantity } } });
+        await prisma.product.updateMany({ where: { id: item.productId, inventory: { lt: 0 } }, data: { inventory: 0 } });
+      }
+    },
     async healthCheck() {
       await prisma.$queryRaw`SELECT 1`;
     },
@@ -217,52 +248,6 @@ export function createPrismaStore(prisma: PrismaClient): Store {
     },
     async recordCheckoutSession(orderId, stripeSessionId) {
       return updateOrder(orderId, { stripeSessionId });
-    },
-    async markOrderPaid(orderId, payment = {}) {
-      const data: Record<string, unknown> = { status: 'paid' };
-      if (payment.stripeSessionId) data.stripeSessionId = payment.stripeSessionId;
-      if (payment.stripePaymentIntentId) data.stripePaymentIntentId = payment.stripePaymentIntentId;
-
-      const updated = await prisma.$transaction(async (transaction) => {
-        const order = await transaction.order.findUnique({ where: { id: orderId }, include: { items: true } });
-        if (!order) return undefined;
-        const transition = await transaction.order.updateMany({ where: { id: orderId, status: 'pending_payment' }, data });
-        if (transition.count === 1) {
-          for (const item of order.items) {
-            await transaction.product.update({ where: { id: item.productId }, data: { inventory: { decrement: item.quantity } } });
-            await transaction.product.updateMany({ where: { id: item.productId, inventory: { lt: 0 } }, data: { inventory: 0 } });
-          }
-        } else {
-          await transaction.order.update({ where: { id: orderId }, data });
-        }
-        return transaction.order.findUnique({ where: { id: orderId }, include: { items: true } });
-      });
-      return updated ? toOrder(updated) : undefined;
-    },
-    async markOrderFulfilled(orderId) {
-      return updateOrder(orderId, { status: 'fulfilled' });
-    },
-    async cancelOrder(orderId, reason) {
-      return updateOrder(orderId, { status: 'canceled', refundReason: reason, canceledAt: new Date() });
-    },
-    async markOrderRefundPending(orderId, refund) {
-      return updateOrder(orderId, { status: 'refund_pending', stripeRefundId: refund.refundId, refundReason: refund.reason });
-    },
-    async markOrderRefunded(orderId, refund) {
-      const order = await findOrder(orderId);
-      if (!order) return undefined;
-      const alreadyApplied = refund.refundId && order.stripeRefundId === refund.refundId && (order.status === 'refunded' || order.status === 'partially_refunded');
-      const refundedAmount = alreadyApplied ? order.refundedAmount : Math.min(order.total, order.refundedAmount + refund.amount);
-      return updateOrder(orderId, {
-        status: refundedAmount >= order.total ? 'refunded' : 'partially_refunded',
-        refundedAmount,
-        stripeRefundId: refund.refundId ?? order.stripeRefundId,
-        refundReason: refund.reason ?? order.refundReason,
-        refundedAt: new Date()
-      });
-    },
-    async markOrderRefundFailed(orderId, refund) {
-      return updateOrder(orderId, { status: 'refund_failed', stripeRefundId: refund.refundId, refundReason: refund.reason });
     },
     async subscribeMarketing(input: MarketingSubscribeInput) {
       const email = normalizeEmail(input.email);
@@ -341,4 +326,5 @@ export function createPrismaStore(prisma: PrismaClient): Store {
       return toBlogPost(saved);
     }
   };
+  return store;
 }

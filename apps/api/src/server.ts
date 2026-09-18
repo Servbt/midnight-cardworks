@@ -1,3 +1,5 @@
+import { startCheckout, requestKey, processPaymentEvent, syncPayment, cancelCheckout, requestRefund } from './paymentService.js';
+import { flushNotifications, notificationHealth } from './notificationWorker.js';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
@@ -6,18 +8,15 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
-import { createCheckoutResponse } from './checkout.js';
-import { retrieveCheckoutPaymentStatus } from './stripeCheckoutStatus.js';
-import { createOrderRefund } from './stripeRefunds.js';
 import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
 import { createInMemoryStore } from './store.js';
-import { getCompletedCheckout, getRefundUpdate, parseStripeWebhookEvent } from './stripeWebhook.js';
+import { parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { MarketingSubscriber, Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
-import { canReadReceipt, createReceiptAccess, customerOrder } from './orderAccess.js';
+import { canReadReceipt, customerOrder } from './orderAccess.js';
 import { effectiveProductPrice } from './pricing.js';
 
 const shippingAddressFieldsSchema = z.object({
@@ -144,6 +143,7 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
   const adminAuth = options.adminAuth ?? createAdminAuthFromEnv(process.env, customerAuth);
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
+  const flushTestNotifications = async () => { if (options.emailNotifier) await flushNotifications(store, options.emailNotifier); };
   app.register(cors, { origin: true });
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
   if (options.serveStaticRoot) {
@@ -204,14 +204,10 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
-      const access = createReceiptAccess();
-      const order = await store.createOrder({ ...parsed.data, receiptTokenHash: access.hash });
-      const checkout = await createCheckoutResponse(order, access.token);
-      const notificationOrder = checkout.stripeSessionId ? await store.recordCheckoutSession(order.id, checkout.stripeSessionId) : order;
-      await emailNotifier.sendOrderPending(notificationOrder ?? order).catch(() => undefined);
+      const checkout = await startCheckout(store, parsed.data, requestKey(request.headers['idempotency-key']));
+      await flushTestNotifications();
       reply.header('Cache-Control', 'no-store');
-      const { stripeSessionId: _session, stripePaymentIntentId: _payment, ...publicCheckout } = checkout;
-      return reply.code(201).send(publicCheckout);
+      return reply.code(201).send(checkout);
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
@@ -235,39 +231,16 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     return { order: customerOrder(order) };
   });
   app.post('/api/stripe/webhook', async (request, reply) => {
+    let event;
+    try { event = await parseStripeWebhookEvent(request); }
+    catch { return reply.code(400).send({ error: 'Invalid Stripe signature or payload' }); }
     try {
-      const event = await parseStripeWebhookEvent(request);
-      const checkout = getCompletedCheckout(event);
-      if (checkout) {
-        const order = await store.markOrderPaid(checkout.orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
-        if (!order) return reply.code(404).send({ error: 'Order not found' });
-        await emailNotifier.sendOrderPaid(order);
-      }
-      const refund = getRefundUpdate(event);
-      if (refund) {
-        if (refund.status === 'failed') {
-          const previousOrder = await store.getOrder(refund.orderId);
-          const previousStatus = previousOrder?.status;
-          const previousRefundId = previousOrder?.stripeRefundId;
-          const order = await store.markOrderRefundFailed(refund.orderId, { refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-          if (previousStatus !== 'refund_failed' || previousRefundId !== refund.refundId) await emailNotifier.sendOrderRefundFailed(order);
-        } else if (refund.status === 'succeeded') {
-          const previousOrder = await store.getOrder(refund.orderId);
-          const previousStatus = previousOrder?.status;
-          const previousRefundId = previousOrder?.stripeRefundId;
-          const order = await store.markOrderRefunded(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-          const alreadyNotified = previousRefundId === refund.refundId && previousStatus !== undefined && ['refunded', 'partially_refunded'].includes(previousStatus);
-          if (!alreadyNotified) await emailNotifier.sendOrderRefunded(order);
-        } else {
-          const order = await store.markOrderRefundPending(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-        }
-      }
+      await processPaymentEvent(store, event);
+      await flushTestNotifications();
       return { received: true };
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
+      console.error('Stripe event processing failed', { eventId: event.id, type: event.type, errorType: error instanceof Error ? error.name : 'Error' });
+      return reply.code(503).send({ error: 'Payment event processing failed; retry required' });
     }
   });
   app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit, preHandler: requireAdmin }, async (request, reply) => {
@@ -304,62 +277,48 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     for (const subscriber of subscribers) await emailNotifier.sendMarketingCampaign(subscriber, parsed.data);
     return { sent: subscribers.length };
   });
+  app.get('/api/admin/payment-health', { preHandler: requireAdmin }, async () => ({
+    notifications: await notificationHealth(store),
+    unresolvedOperations: [...await store.listRecords('checkout'), ...await store.listRecords('refund-request')]
+      .filter(r => !(r.data as { done?: boolean }).done).map(r => ({ id: r.id, orderId: r.orderId, kind: r.kind }))
+  }));
   app.post('/api/admin/orders/:orderId/sync-payment', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be synced' });
     try {
-      const checkout = await retrieveCheckoutPaymentStatus(order);
-      if (!checkout.paid) {
-        return reply.code(400).send({ error: `Stripe still reports this Checkout Session as ${checkout.paymentStatus ?? checkout.sessionStatus ?? 'unpaid'}` });
-      }
-      const updated = await store.markOrderPaid(orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
-      if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      await emailNotifier.sendOrderPaid(updated);
-      return { order: updated, checkout };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' });
-    }
+      const updated = await syncPayment(store, order);
+      await flushTestNotifications();
+      return { order: updated };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' }); }
   });
-
   app.post('/api/admin/orders/:orderId/fulfill', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
-    const order = await store.markOrderFulfilled(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    await emailNotifier.sendOrderFulfilled(order);
-    return { order };
+    try {
+      const order = await store.markOrderFulfilled((request.params as { orderId: string }).orderId);
+      if (!order) return reply.code(404).send({ error: 'Order not found' });
+      await flushTestNotifications();
+      return { order };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Fulfillment failed' }); }
   });
   app.post('/api/admin/orders/:orderId/cancel', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
     const parsed = orderActionSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'Valid cancellation details required' });
-    const order = await store.getOrder(orderId);
+    const order = await store.getOrder((request.params as { orderId: string }).orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be canceled without a refund' });
-    const canceled = await store.cancelOrder(orderId, parsed.data.reason);
-    if (!canceled) return reply.code(404).send({ error: 'Order not found' });
-    await emailNotifier.sendOrderCanceled(canceled);
-    return { order: canceled };
+    try {
+      const updated = await cancelCheckout(store, order, parsed.data.reason);
+      await flushTestNotifications();
+      return { order: updated };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Cancellation failed' }); }
   });
   app.post('/api/admin/orders/:orderId/refund', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
     const parsed = refundSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'Valid refund details required' });
-    const order = await store.getOrder(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (!['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status)) return reply.code(400).send({ error: 'Only paid or fulfilled orders can be refunded' });
     try {
-      const refund = await createOrderRefund(order, parsed.data);
-      const updated = refund.status === 'succeeded'
-        ? await store.markOrderRefunded(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
-        : await store.markOrderRefundPending(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-      if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      if (refund.status === 'succeeded') await emailNotifier.sendOrderRefunded(updated);
-      return { order: updated, refund };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' });
-    }
+      const result = await requestRefund(store, (request.params as { orderId: string }).orderId, parsed.data, requestKey(request.headers['idempotency-key']));
+      await flushTestNotifications();
+      return result;
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' }); }
   });
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = productSchema.safeParse(request.body);

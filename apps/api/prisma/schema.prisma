@@ -56,6 +56,9 @@ model Order {
   stripeSessionId       String?
   stripePaymentIntentId String?
   stripeRefundId        String?
+  discountAmount        Int         @default(0)
+  paidAt                DateTime?
+  fulfilledAt           DateTime?
   refundedAmount        Int         @default(0)
   refundReason          String?
   canceledAt            DateTime?
@@ -111,4 +114,17 @@ model BlogPost {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// Durable event IDs, individual refunds, API operations and notification jobs.
+// Prefix-qualified IDs are unique across all instances. Changes share the order transaction.
+model PaymentJournal {
+  id        String   @id
+  kind      String
+  orderId   String?
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, orderId])
 }

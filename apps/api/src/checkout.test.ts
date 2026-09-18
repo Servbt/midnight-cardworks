@@ -42,6 +42,6 @@ describe('createCheckoutResponse', () => {
     expect(response.orderId).toBe('ord_test');
     expect(response.stripeSessionId).toBe('cs_test_123');
     expect(response.stripePaymentIntentId).toBe('pi_test_123');
-    expect(stripeCreate).toHaveBeenCalledWith(expect.objectContaining({ allow_promotion_codes: true, success_url: 'https://midnight-cardworks.onrender.com/checkout/success?order=ord_test#receiptToken=' + 'a'.repeat(43) }));
+    expect(stripeCreate).toHaveBeenCalledWith(expect.objectContaining({ allow_promotion_codes: true, success_url: 'https://midnight-cardworks.onrender.com/checkout/success?order=ord_test#receiptToken=' + 'a'.repeat(43) }), { idempotencyKey: 'checkout:ord_test' });
   });
 });
