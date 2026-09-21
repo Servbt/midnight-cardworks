@@ -95,8 +95,8 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
     expect(screen.getByText('Premium commander centerpiece')).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
-    expect(screen.getByText('/products/golden')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
+    expect(screen.getByText('Casual play only')).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks'));
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
   });
@@ -107,7 +107,7 @@ describe('Midnight Cardworks storefront', () => {
     const listingCard = await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
     await userEvent.click(listingCard);
 
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
@@ -120,7 +120,7 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.click(detailLink);
 
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
@@ -128,13 +128,13 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
 
     window.history.pushState({}, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
@@ -142,14 +142,14 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
 
     const brandHomeLink = screen.getByRole('link', { name: 'Midnight Cardworks home' });
     expect(brandHomeLink).toHaveAttribute('href', '/');
     await userEvent.click(brandHomeLink);
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
@@ -289,7 +289,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /cards made for the midnight table/i })).toBeInTheDocument();
-    expect(screen.getByText('Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.')).toBeInTheDocument();
+    expect(screen.getByText('Custom proxies, token packs, and display cards — hand-finished for commander nights, gifts, and display binders.')).toBeInTheDocument();
     
     expect(screen.getAllByRole('button', { name: 'Start a commission' })[0]).toBeInTheDocument();
     
@@ -407,7 +407,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(within(cardEl).getByRole('status'));
 
     expect(screen.getByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cart, 1/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
@@ -426,7 +426,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(confirmation).toHaveTextContent('Added 3 Golden Hour Commander Proxy to your cart.');
     expect(confirmation.compareDocumentPosition(addAgainButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: /cart, 3/i })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
 
@@ -496,7 +496,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /cart, 0/i }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cart');
@@ -505,7 +505,7 @@ describe('Midnight Cardworks storefront', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
@@ -513,7 +513,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
     await userEvent.click(screen.getByRole('button', { name: /cart, 1/i }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
@@ -523,7 +523,7 @@ describe('Midnight Cardworks storefront', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
@@ -536,7 +536,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' }));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
   });
 

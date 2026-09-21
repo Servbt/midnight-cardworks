@@ -49,6 +49,8 @@ export default function App() {
   const [cartNotice, setCartNotice] = useState('');
   const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
+  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Category', 'Search']);
+  const [shareNotice, setShareNotice] = useState('');
   const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('home');
   const [query, setQuery] = useState('');
@@ -380,6 +382,17 @@ export default function App() {
     setProductScrollSignal((signal) => signal + 1);
   }
 
+  async function copyListingLink(slug: string) {
+    const url = `${window.location.origin}/products/${slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNotice('Link copied');
+    } catch {
+      setShareNotice(url);
+    }
+    window.setTimeout(() => setShareNotice(''), 2200);
+  }
+
   function rememberRecentlyViewed(product: Product) {
     setRecentlyViewed((items) => [product, ...items.filter((item) => item.id !== product.id)].slice(0, 3));
   }
@@ -601,6 +614,7 @@ export default function App() {
   function removeFromCart(productId: string) {
     const removed = cart.find((line) => line.product.id === productId);
     setCart((lines) => lines.filter((line) => line.product.id !== productId));
+    setAddedProductIds((ids) => ids.filter((id) => id !== productId));
     setRemovedCartLine(removed ?? null);
     setCartNotice(removed ? `Removed ${removed.product.title} from your cart.` : 'Removed item from your cart.');
     setClearCartRequested(false);
@@ -622,6 +636,7 @@ export default function App() {
   function confirmClearCart() {
     const clearedCount = itemCount;
     setCart([]);
+    setAddedProductIds([]);
     setRemovedCartLine(null);
     setClearCartRequested(false);
     setCartNotice(`Cleared ${clearedCount} ${clearedCount === 1 ? 'item' : 'items'} from your cart.`);
@@ -672,12 +687,21 @@ export default function App() {
       setCheckoutValidationMessage(`Shipping ${missingShipping.join(', ')} required before payment.`);
       return;
     }
-    const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
-    trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
-    setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
-    setCart([]);
-    setView('account');
-    redirectToCheckout(checkout.checkoutUrl);
+    try {
+      const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+      trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
+      setCheckoutValidationMessage('');
+      setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
+      setView('account');
+      // Hand off to Stripe first. The cart is only emptied once the redirect has been
+      // initiated, so an unreachable Stripe never strands the shopper with no cart and no message.
+      redirectToCheckout(checkout.checkoutUrl);
+      setCart([]);
+      setAddedProductIds([]);
+    } catch (error) {
+      const detail = error instanceof Error && error.message && error.message !== 'Checkout failed' ? ` ${error.message}.` : '';
+      setCheckoutValidationMessage(`Could not start secure checkout.${detail} Your cart is still saved — please try again.`);
+    }
   }
 
   async function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1072,6 +1096,8 @@ export default function App() {
     </section>
   </div> : null;
 
+  const heroFeature = useMemo(() => products.find((p) => p.featured) ?? products[0], [products]);
+
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
       <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>Midnight Cardworks</a>
@@ -1117,23 +1143,24 @@ export default function App() {
         <div className="hero-copy">
           <span className="eyebrow">Midnight Collector Studio</span>
           <h1>Cards made for the midnight table.</h1>
-          <p className="hero-sub">Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.</p>
+          <p className="hero-sub">Custom proxies, token packs, and display cards — hand-finished for commander nights, gifts, and display binders.</p>
           <div className="cta-row">
             <button onClick={() => showShop({ category: 'All', query: '' })}>Shop the collection</button>
             <button className="ghost" onClick={startOrder}>Start a commission</button>
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="hero-card-glow" />
-          <div className="hero-card">
-            <div className="hero-card-inner">
-              <span className="hero-card-label">Featured</span>
-              <span className="hero-card-title">Golden Hour<br />Commander Proxy</span>
-              <span className="hero-card-price">From $12.99</span>
-            </div>
-          </div>
-          <p className="hero-art-caption">Made-to-order · Casual play · Dark collector finish</p>
+        <div className="hero-art">
+          {heroFeature ? <button type="button" className="hero-feature" onClick={() => showProduct(heroFeature)} aria-label={`View ${heroFeature.title}`}>
+            <span className="hero-feature-frame">
+              <img src={heroFeature.image} alt={`${heroFeature.title} card art`} />
+            </span>
+            <span className="hero-feature-meta">
+              <span className="hero-feature-label">Featured</span>
+              <span className="hero-feature-title">{heroFeature.title}</span>
+              <span className="hero-feature-price">From {formatMoney(effectiveProductPrice(heroFeature))}</span>
+            </span>
+          </button> : null}
         </div>
       </div>
     </header> : null}
@@ -1144,7 +1171,7 @@ export default function App() {
         <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>Commander proxies, token packs, and display cards — all with a dark collector finish.</p></div>
         <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => {
           const catClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : 'badge badge-display';
-          return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
+          return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
             <div className="card-img-frame"><img src={product.image} alt={`${product.title} card preview`} loading="lazy" /></div>
             <div className="card-info"><span className={catClass}>{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div>
           </article>;
@@ -1158,21 +1185,33 @@ export default function App() {
         <aside className="shop-sidebar" aria-label="Shop filters">
           <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => showShop({ category: 'All', query: '' })}>Clear</button>}</div>
           <div className="filter-section">
-            <button className="filter-section-toggle" type="button" aria-expanded="true">Category<span className="filter-chevron open">▾</span></button>
-            <div className="filter-options">
+            <button
+              className="filter-section-toggle"
+              type="button"
+              aria-expanded={openFilterSections.includes('Category')}
+              aria-controls="filter-category-options"
+              onClick={() => setOpenFilterSections((sections) => sections.includes('Category') ? sections.filter((s) => s !== 'Category') : [...sections, 'Category'])}
+            >Category<span className={`filter-chevron${openFilterSections.includes('Category') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Category') && <div className="filter-options" id="filter-category-options">
               {categories.map((c) => (
                 <label key={c} className="filter-option">
                   <input type="checkbox" checked={category === c} onChange={() => showShop({ category: c })} />
                   {c}
                 </label>
               ))}
-            </div>
+            </div>}
           </div>
           <div className="filter-section">
-            <button className="filter-section-toggle" type="button" aria-expanded="true">Search<span className="filter-chevron open">▾</span></button>
-            <div className="filter-options" style={{ paddingTop: '.35rem' }}>
+            <button
+              className="filter-section-toggle"
+              type="button"
+              aria-expanded={openFilterSections.includes('Search')}
+              aria-controls="filter-search-options"
+              onClick={() => setOpenFilterSections((sections) => sections.includes('Search') ? sections.filter((s) => s !== 'Search') : [...sections, 'Search'])}
+            >Search<span className={`filter-chevron${openFilterSections.includes('Search') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Search') && <div className="filter-options" id="filter-search-options" style={{ paddingTop: '.35rem' }}>
               <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => showShop({ query: e.target.value })} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
-            </div>
+            </div>}
           </div>
           <div className="sidebar-cta">
             <button type="button" onClick={startOrder}>Request custom card</button>
@@ -1181,10 +1220,7 @@ export default function App() {
         <div className="shop-results">
           <div className="results-bar">
             <span className="results-count">{visibleProducts.length} {visibleProducts.length === 1 ? 'item' : 'items'}</span>
-            <div className="results-controls">
-              <span style={{ fontSize: '.8rem', color: 'var(--text-3)', fontWeight: 600 }}>Sort</span>
-              <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)} style={{ display: 'none' }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
-            </div>
+            {category !== 'All' && <button className="results-clear" type="button" onClick={() => showShop({ category: 'All' })}>Show all</button>}
           </div>
           {visibleProducts.length === 0
             ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => showShop({ category: 'All', query: '' })}>Clear filters</button></div>
@@ -1267,14 +1303,13 @@ export default function App() {
                 : `Sold out: ${selectedProduct.title}`}
             </button>
             <div className="trust-strip">
-              <span>ðŸ”’ Secure Stripe checkout</span>
-              <span>✦ Made-to-order</span>
-              <span>⚠ Casual play only</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Secure Stripe checkout</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>Made to order</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>Casual play only</span>
             </div>
-            <div className="seo-share-box">
-              <strong>Shareable listing URL</strong>
-              <code>{`/products/${selectedProduct.slug}`}</code>
-              <p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p>
+            <div className="share-listing">
+              <button className="share-listing-btn ghost" type="button" onClick={() => void copyListingLink(selectedProduct.slug)}>Copy link to this card</button>
+              {shareNotice && <span className="share-notice" role="status">{shareNotice}</span>}
             </div>
           </div>
         </div>
