@@ -1,7 +1,7 @@
 import { retryKey, finishRequest } from './requestRetry';
-export type Product = { id:string; slug:string; title:string; description:string; price:number; saleActive:boolean; salePrice:number|null; category:string; tags:string[]; image:string; inventory:number; active:boolean; featured?:boolean };
-export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; subtotal?:number; shippingCost?:number; total:number; status:string; stripeSessionId?:string; stripePaymentIntentId?:string; stripeRefundId?:string; refundedAmount:number; discountAmount?:number; paidAt?:string; refundReason?:string; canceledAt?:string; refundedAt?:string; items:Array<{title:string;quantity:number;price:number}> };
-export type CustomerOrder = Pick<Order, 'id' | 'shippingAddress' | 'subtotal' | 'shippingCost' | 'total' | 'status' | 'refundedAmount' | 'discountAmount' | 'paidAt' | 'canceledAt' | 'refundedAt' | 'items'>;
+export type Product = { id:string; slug:string; title:string; description:string; price:number; saleActive:boolean; salePrice:number|null; category:string; tags:string[]; image:string; inventory:number; reservedInventory?:number; inventoryVersion?:number; active:boolean; featured?:boolean };
+export type Order = { id:string; email:string; customerName?:string; shippingAddress?:string; subtotal?:number; shippingCost?:number; total:number; status:string; stripeSessionId?:string; stripePaymentIntentId?:string; stripeRefundId?:string; refundedAmount:number; inventoryIssue?:string; fulfillmentOnHold?:boolean; discountAmount?:number; paidAt?:string; refundReason?:string; canceledAt?:string; refundedAt?:string; items:Array<{title:string;quantity:number;price:number}> };
+export type CustomerOrder = Pick<Order, 'id' | 'shippingAddress' | 'subtotal' | 'shippingCost' | 'total' | 'status' | 'refundedAmount' | 'fulfillmentOnHold' | 'discountAmount' | 'paidAt' | 'canceledAt' | 'refundedAt' | 'items'>;
 export type ContactPayload = { name:string; email:string; orderNumber?:string; message:string; website?:string };
 export type ShippingAddressFields = { streetAddress:string; apartment:string; city:string; zipCode:string };
 export type MarketingSubscriber = { id:string; email:string; name?:string; status:'subscribed'|'unsubscribed'; source:string; couponCode:string; consentedAt:string; unsubscribedAt?:string; createdAt:string; updatedAt:string };
@@ -39,7 +39,11 @@ export async function createCheckout(email:string, customerName:string, shipping
   const payload = { email, customerName, shippingAddressFields, items };
   const key = retryKey('checkout', payload);
   const r = await fetch(API + '/api/checkout', { method:'POST', headers:{'Content-Type':'application/json', 'Idempotency-Key': key}, body: JSON.stringify(payload) });
-  if (!r.ok) throw new Error(await errorMessage(r, 'Checkout failed'));
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    if (body.code === 'CHECKOUT_CLOSED') finishRequest('checkout', key);
+    throw new Error(body.error ?? 'Checkout failed');
+  }
   const result = await r.json();
   finishRequest('checkout', key);
   return result;

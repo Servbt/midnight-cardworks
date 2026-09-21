@@ -1,3 +1,4 @@
+import { inventoryMethods } from './inventory.js';
 import { paymentMethods } from './paymentState.js';
 import type { JournalRecord } from './types.js';
 import { nanoid } from 'nanoid';
@@ -30,29 +31,18 @@ function createMarketingSubscriber(input: MarketingSubscribeInput): MarketingSub
   };
 }
 
-function decrementInventoryForOrder(products: Map<string, Product>, order: Order) {
-  const quantitiesByProductId = new Map<string, number>();
-  for (const item of order.items) {
-    quantitiesByProductId.set(item.productId, (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity);
-  }
-  for (const [slug, product] of products) {
-    const quantity = quantitiesByProductId.get(product.id);
-    if (!quantity) continue;
-    products.set(slug, { ...product, inventory: Math.max(0, product.inventory - quantity) });
-  }
-}
-
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
-  const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
+  const products = new Map(initialProducts.map((p) => [p.slug, { ...p, reservedInventory: p.reservedInventory ?? 0, inventoryVersion: p.inventoryVersion ?? 0 }]));
   const orders: Order[] = [];
   const marketingSubscribers = new Map<string, MarketingSubscriber>();
   const faqItems = new Map(seedFaqItems.map((item) => [item.id, { ...item }]));
   const blogPosts = new Map(seedBlogPosts.map((post) => [post.slug, { ...post }]));
   const records = new Map<string, JournalRecord>();
   let tail: Promise<unknown> = Promise.resolve();
-  const scoped = (): Store => { const tx: Store = { ...store, atomic: async work => work(tx) }; Object.assign(tx, paymentMethods(() => tx)); return tx; };
+  const scoped = (): Store => { const tx: Store = { ...store, atomic: async work => work(tx) }; Object.assign(tx, paymentMethods(() => tx), inventoryMethods(() => tx)); return tx; };
   const store: Store = {
     ...paymentMethods(() => store),
+    ...inventoryMethods(() => store),
     async atomic(work) {
       const run = tail.then(async () => {
         const snapshot = structuredClone({ orders, products, records });
@@ -71,12 +61,26 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     async putRecord(record) { records.set(record.id, structuredClone(record)); },
     async listRecords(kind, orderId) { return structuredClone([...records.values()].filter(r => r.kind === kind && (!orderId || r.orderId === orderId))); },
     async saveOrder(order) { const index = orders.findIndex(o => o.id === order.id); if (index < 0) throw new Error('Order not found'); orders[index] = structuredClone(order); return order; },
-    async decrementOrderInventory(order) { decrementInventoryForOrder(products, order); },
+    async adjustInventory(productId, quantity, action) {
+      const product = [...products.values()].find(p => p.id === productId);
+      if (!product) return false;
+      const reserved = product.reservedInventory;
+      if (action === 'reserve' && (!product.active || product.inventory - reserved < quantity)) return false;
+      if (action === 'purchase' && product.inventory - reserved < quantity) return false;
+      if (['release', 'consume'].includes(action) && reserved < quantity) return false;
+      if (action === 'consume' && product.inventory < quantity) return false;
+      products.set(product.slug, { ...product,
+        inventory: product.inventory - (['consume', 'purchase'].includes(action) ? quantity : 0),
+        reservedInventory: reserved + (action === 'reserve' ? quantity : ['release', 'consume'].includes(action) ? -quantity : 0),
+        inventoryVersion: product.inventoryVersion + 1
+      }); return true;
+    },
+    async listReservationOrders() { return structuredClone(orders.filter(o => ['held', 'legacy_held'].includes(o.inventoryState ?? ''))); },
     async healthCheck() {},
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async listAdminProducts() { return [...products.values()]; },
     async getProduct(slug) { return products.get(slug); },
-    async upsertProduct(product) { products.set(product.slug, { ...product }); return product; },
+    async writeProduct(product) { products.set(product.slug, { ...product, reservedInventory: product.reservedInventory ?? 0, inventoryVersion: product.inventoryVersion ?? 0 }); return product; },
     async updateProductImage(slug, image) {
       const product = products.get(slug);
       if (!product) return undefined;
@@ -87,7 +91,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     async listOrders() { return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async listOrdersByEmail(email) { return [...orders].filter((order) => order.email.toLowerCase() === email.toLowerCase()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async getOrder(orderId) { return structuredClone(orders.find((order) => order.id === orderId)); },
-    async createOrder(input) {
+    async createUnreservedOrder(input) {
       const productList = [...products.values()];
       const items = input.items.map((item) => {
         const product = productList.find((p) => p.id === item.productId);

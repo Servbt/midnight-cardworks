@@ -17,6 +17,7 @@ export async function createCheckoutResponse(order: Order, receiptToken: string,
     const stripe = new Stripe(stripeSecret, { timeout: 20000, maxNetworkRetries: 1 });
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      ...(order.reservationExpiresAt ? { expires_at: Math.floor(new Date(order.reservationExpiresAt).getTime() / 1000) } : {}),
       customer_email: order.email,
       line_items: [
         ...order.items.map((item) => ({

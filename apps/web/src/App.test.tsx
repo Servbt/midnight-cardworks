@@ -1116,6 +1116,21 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
   });
 
+  it('explains a paid stock hold without promising fulfillment', async () => {
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: {
+        id: 'ord_test', status: 'paid', total: 1798, fulfillmentOnHold: true, refundedAmount: 0, items: []
+      } }), { status: 200 });
+      return originalFetch(url, init);
+    }));
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
+    render(<App />);
+    expect(await screen.findByText('Payment received; stock review pending')).toBeInTheDocument();
+    expect(screen.getByText('Paid; fulfillment on hold')).toBeInTheDocument();
+    expect(screen.queryByText('Paid and confirmed')).not.toBeInTheDocument();
+  });
+
   it.each([
     ['pending_payment', 1798, 0, 'Order total: $17.98'],
     ['paid', 1598, 200, 'Total paid: $15.98'],

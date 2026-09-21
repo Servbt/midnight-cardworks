@@ -1,3 +1,4 @@
+import { inventoryMethods } from './inventory.js';
 import { paymentMethods } from './paymentState.js';
 import { nanoid } from 'nanoid';
 import type { Prisma, PrismaClient } from '@prisma/client';
@@ -31,6 +32,8 @@ function toProduct(product: PrismaProduct): Product {
     tags: product.tags,
     image: product.image,
     inventory: product.inventory,
+    reservedInventory: product.reservedInventory,
+    inventoryVersion: product.inventoryVersion,
     active: product.active,
     featured: product.featured
   };
@@ -52,6 +55,9 @@ function toOrder(order: PrismaOrder): Order {
     stripeRefundId: order.stripeRefundId ?? undefined,
     refundedAmount: order.refundedAmount,
     discountAmount: order.discountAmount,
+    inventoryState: order.inventoryState as Order['inventoryState'],
+    reservationExpiresAt: order.reservationExpiresAt?.toISOString(),
+    inventoryIssue: order.inventoryIssue ?? undefined,
     paidAt: order.paidAt?.toISOString(),
     fulfilledAt: order.fulfilledAt?.toISOString(),
     refundReason: order.refundReason ?? undefined,
@@ -157,6 +163,7 @@ export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClien
 
   const store: Store = {
     ...paymentMethods(() => store),
+    ...inventoryMethods(() => store),
     async atomic(work) {
       if (inTransaction) return work(store);
       return (prisma as PrismaClient).$transaction(async tx => {
@@ -174,15 +181,24 @@ export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClien
     async listRecords(kind, orderId) { return (await prisma.paymentJournal.findMany({ where: { kind, orderId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(r => ({ ...r, orderId: r.orderId ?? undefined })); },
     async saveOrder(order) {
       const { items: _items, createdAt: _createdAt, ...data } = order;
-      const saved = await prisma.order.update({ where: { id: order.id }, data: { ...data, canceledAt: order.canceledAt ? new Date(order.canceledAt) : null }, include: { items: true } });
+      const saved = await prisma.order.update({ where: { id: order.id }, data: { ...data, inventoryIssue: order.inventoryIssue ?? null, canceledAt: order.canceledAt ? new Date(order.canceledAt) : null }, include: { items: true } });
       return toOrder(saved);
     },
-    async decrementOrderInventory(order) {
-      for (const item of [...order.items].sort((a, b) => a.productId.localeCompare(b.productId))) {
-        await prisma.product.update({ where: { id: item.productId }, data: { inventory: { decrement: item.quantity } } });
-        await prisma.product.updateMany({ where: { id: item.productId, inventory: { lt: 0 } }, data: { inventory: 0 } });
-      }
+    async adjustInventory(productId, quantity, action) {
+      const reservedDelta = action === 'reserve' ? quantity : ['release', 'consume'].includes(action) ? -quantity : 0;
+      const stockDelta = ['consume', 'purchase'].includes(action) ? -quantity : 0;
+      const count = await prisma.$executeRaw`
+        UPDATE "Product" SET "inventory" = "inventory" + ${stockDelta},
+          "reservedInventory" = "reservedInventory" + ${reservedDelta},
+          "inventoryVersion" = "inventoryVersion" + 1, "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "id" = ${productId}
+          AND (${action} <> 'reserve' OR ("active" = true AND "inventory" - "reservedInventory" >= ${quantity}))
+          AND (${action} <> 'purchase' OR "inventory" - "reservedInventory" >= ${quantity})
+          AND (${action} NOT IN ('release', 'consume') OR "reservedInventory" >= ${quantity})
+          AND (${action} <> 'consume' OR "inventory" >= ${quantity})`;
+      return count === 1;
     },
+    async listReservationOrders() { return (await prisma.order.findMany({ where: { inventoryState: { in: ['held', 'legacy_held'] } }, include: { items: true }, orderBy: { reservationExpiresAt: 'asc' } })).map(toOrder); },
     async healthCheck() {
       await prisma.$queryRaw`SELECT 1`;
     },
@@ -198,7 +214,7 @@ export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClien
       const product = await prisma.product.findUnique({ where: { slug } });
       return product ? toProduct(product) : undefined;
     },
-    async upsertProduct(product) {
+    async writeProduct(product) {
       const saved = await prisma.product.upsert({ where: { slug: product.slug }, update: product, create: product });
       return toProduct(saved);
     },
@@ -218,7 +234,7 @@ export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClien
       const order = await findOrder(orderId);
       return order ? toOrder(order) : undefined;
     },
-    async createOrder(input: CheckoutInput) {
+    async createUnreservedOrder(input: CheckoutInput) {
       const productIds = input.items.map((item) => item.productId);
       const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
       const orderItems = input.items.map((item) => {

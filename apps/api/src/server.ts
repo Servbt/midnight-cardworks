@@ -1,4 +1,5 @@
-import { startCheckout, requestKey, processPaymentEvent, syncPayment, cancelCheckout, requestRefund } from './paymentService.js';
+import { availableProduct, InventoryError } from './inventory.js';
+import { startCheckout, CheckoutClosedError, requestKey, processPaymentEvent, syncPayment, cancelCheckout, requestRefund } from './paymentService.js';
 import { flushNotifications, notificationHealth } from './notificationWorker.js';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -29,7 +30,7 @@ const checkoutSchema = z.object({
   email: z.string().trim().email(),
   customerName: z.string().trim().min(1).max(120),
   shippingAddressFields: shippingAddressFieldsSchema,
-  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1)
+  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1).max(100)
 }).transform(({ shippingAddressFields, ...checkout }) => ({
   ...checkout,
   shippingAddress: [
@@ -68,6 +69,7 @@ const productSchema = z.object({
   tags: z.array(z.string()).default([]),
   image: z.string().min(1),
   inventory: z.number().int().nonnegative(),
+  inventoryVersion: z.number().int().nonnegative().optional(),
   active: z.boolean(),
   featured: z.boolean().optional()
 }).superRefine((product, context) => {
@@ -164,12 +166,12 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     const result = await adminAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });
   }
-  app.get('/api/products', async () => ({ products: await store.listProducts() }));
+  app.get('/api/products', async () => ({ products: (await store.listProducts()).map(availableProduct) }));
   app.get('/api/products/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const product = await store.getProduct(slug);
     if (!product) return reply.code(404).send({ error: 'Product not found' });
-    return { product };
+    return { product: availableProduct(product) };
   });
   app.get('/api/content/faqs', async () => ({ faqItems: await store.listFaqItems() }));
   app.get('/api/content/blog-posts', async () => ({ blogPosts: await store.listBlogPosts() }));
@@ -209,7 +211,7 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
       reply.header('Cache-Control', 'no-store');
       return reply.code(201).send(checkout);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
+      return reply.code(error instanceof InventoryError ? 409 : 400).send({ error: error instanceof Error ? error.message : 'Checkout failed', ...(error instanceof CheckoutClosedError ? { code: error.code } : {}) });
     }
   });
   app.get('/api/orders', async (request, reply) => {
@@ -279,6 +281,9 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
   });
   app.get('/api/admin/payment-health', { preHandler: requireAdmin }, async () => ({
     notifications: await notificationHealth(store),
+    inventoryHolds: (await store.listReservationOrders()).map(o => ({ orderId: o.id, state: o.inventoryState, expiresAt: o.reservationExpiresAt })),
+    inventoryIssues: (await store.listOrders()).filter(o => o.inventoryIssue).map(o => ({ orderId: o.id, issue: o.inventoryIssue })),
+    inventoryRecovery: (await store.listRecords('inventory-recovery')).filter(r => (r.data as { state: string }).state === 'attention').map(r => ({ orderId: r.orderId })),
     unresolvedOperations: [...await store.listRecords('checkout'), ...await store.listRecords('refund-request')]
       .filter(r => !(r.data as { done?: boolean }).done).map(r => ({ id: r.id, orderId: r.orderId, kind: r.kind }))
   }));
@@ -333,7 +338,7 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
       const productMatch = request.url.split('?')[0].match(/^\/products\/([a-z0-9-]+)$/);
       if (productMatch) {
         const product = await store.getProduct(productMatch[1]);
-        if (product?.active) return reply.type('text/html').send(await productSeoHtml(staticRoot, product));
+        if (product?.active) return reply.type('text/html').send(await productSeoHtml(staticRoot, availableProduct(product)));
       }
       return reply.sendFile('index.html');
     });

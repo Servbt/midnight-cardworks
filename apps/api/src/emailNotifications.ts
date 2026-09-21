@@ -92,11 +92,11 @@ function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEm
     '',
     orderLines(order),
     '',
-    'We will prepare it for fulfillment.'
+    order.inventoryIssue ? 'We received your payment and are reviewing stock availability. We will contact you before fulfillment.' : 'We will prepare it for fulfillment.'
   ].filter(Boolean).join(newline);
   const customer: ResendEmail = { from, to: [order.email], subject: 'Order ' + order.id + ' confirmed', text };
   const adminTo = ownerNotificationEmails();
-  const admin = adminTo.length > 0 ? { from, to: adminTo, subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
+  const admin = adminTo.length > 0 ? { from, to: adminTo, subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.inventoryIssue ? 'ACTION REQUIRED: ' + order.inventoryIssue : undefined, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
   return { customer, admin };
 }
 

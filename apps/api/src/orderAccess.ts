@@ -17,7 +17,7 @@ export function canReadReceipt(order: Order, token: unknown) {
 /** Explicit allowlist: payment identifiers, access hashes and internal notes stay private. */
 export function customerOrder(order: Order) {
   return {
-    id: order.id, status: order.status, shippingAddress: order.shippingAddress,
+    id: order.id, status: order.status, fulfillmentOnHold: !!order.inventoryIssue, shippingAddress: order.shippingAddress,
     items: order.items.map(({ title, price, quantity }) => ({ title, price, quantity })),
     subtotal: order.subtotal, shippingCost: order.shippingCost, total: order.total, discountAmount: order.discountAmount ?? 0, paidAt: order.paidAt,
     refundedAmount: order.refundedAmount, createdAt: order.createdAt,

@@ -1,4 +1,4 @@
-export type Product = { id: string; slug: string; title: string; description: string; price: number; saleActive: boolean; salePrice: number | null; category: string; tags: string[]; image: string; inventory: number; active: boolean; featured?: boolean; };
+export type Product = { id: string; slug: string; title: string; description: string; price: number; saleActive: boolean; salePrice: number | null; category: string; tags: string[]; image: string; inventory: number; reservedInventory?: number; inventoryVersion?: number; active: boolean; featured?: boolean; };
 export type CartItemInput = { productId: string; quantity: number };
 export type OrderStatus = 'pending_payment' | 'paid' | 'fulfilled' | 'canceled' | 'refund_pending' | 'partially_refunded' | 'refunded' | 'refund_failed';
 export type Order = {
@@ -19,6 +19,9 @@ export type Order = {
   discountAmount?: number;
   paidAt?: string;
   fulfilledAt?: string;
+  inventoryState?: 'legacy' | 'legacy_held' | 'held' | 'consumed' | 'released' | 'attention';
+  reservationExpiresAt?: string;
+  inventoryIssue?: string;
   refundReason?: string;
   canceledAt?: string;
   refundedAt?: string;
@@ -70,7 +73,10 @@ export type Store = {
   putRecord(record: JournalRecord): Promise<void>;
   listRecords(kind: string, orderId?: string): Promise<JournalRecord[]>;
   saveOrder(order: Order): Promise<Order>;
-  decrementOrderInventory(order: Order): Promise<void>;
+  adjustInventory(productId: string, quantity: number, action: 'reserve' | 'release' | 'consume' | 'purchase'): Promise<boolean>;
+  createUnreservedOrder(input: CheckoutInput): Promise<Order>;
+  writeProduct(product: Product): Promise<Product>;
+  listReservationOrders(): Promise<Order[]>;
   healthCheck(): Promise<void>;
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;

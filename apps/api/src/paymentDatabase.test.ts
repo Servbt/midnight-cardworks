@@ -73,7 +73,7 @@ describe.skipIf(!url)('payment transactions on PostgreSQL', () => {
       await tx.$executeRawUnsafe('SET LOCAL search_path TO payment_upgrade_test');
       await tx.$executeRawUnsafe(`CREATE TABLE "Order" ("id" TEXT PRIMARY KEY, "status" TEXT, "createdAt" TIMESTAMP DEFAULT now(), "updatedAt" TIMESTAMP DEFAULT now(), "refundedAmount" INTEGER DEFAULT 0, "stripeRefundId" TEXT)`);
       await tx.$executeRawUnsafe(`INSERT INTO "Order" ("id", "status", "refundedAmount", "stripeRefundId") VALUES ('legacy_paid', 'paid', 0, NULL), ('legacy_fulfilled', 'fulfilled', 0, NULL), ('legacy_refund', 'partially_refunded', 700, 're_old'), ('pending', 'pending_payment', 0, NULL)`);
-      for (const statement of migration.split(';').map(s => s.trim()).filter(Boolean)) await tx.$executeRawUnsafe(statement);
+      for (const statement of migration.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean)) await tx.$executeRawUnsafe(statement);
       const rows = await tx.$queryRawUnsafe<Array<{ id: string; paidAt: Date | null; fulfilledAt: Date | null }>>('SELECT * FROM "Order" ORDER BY "id"');
       expect(rows.filter(r => r.paidAt)).toHaveLength(3);
       expect(rows.find(r => r.id === 'legacy_fulfilled')!.fulfilledAt).not.toBeNull();
@@ -82,4 +82,50 @@ describe.skipIf(!url)('payment transactions on PostgreSQL', () => {
       await tx.$executeRawUnsafe('DROP SCHEMA payment_upgrade_test CASCADE');
     });
   });
+  it('reserves the last unit across independent clients and reconnects without overselling', async () => {
+    const a = createPrismaStore(connect()); const b = createPrismaStore(connect());
+    const product = (await a.getProduct('golden-hour-commander-proxy'))!;
+    await a.upsertProduct({ ...product, inventory: 1 });
+    const results = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => (i % 2 ? a : b).createOrder(input)));
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(await b.listOrders()).toHaveLength(1);
+    const order = (await a.listOrders())[0];
+    const restarted = createPrismaStore(connect());
+    expect(await restarted.getProduct(product.slug)).toMatchObject({ inventory: 1, reservedInventory: 1 });
+    await expect(a.upsertProduct({ ...product, inventory: 20 })).rejects.toThrow('Stock changed');
+    await Promise.all([a.markOrderPaid(order.id), b.markOrderPaid(order.id)]);
+    expect(await restarted.getProduct(product.slug)).toMatchObject({ inventory: 0, reservedInventory: 0 });
+  });
+  it('rolls back a partial cart reservation and releases a hold once across independent clients', async () => {
+    const a = createPrismaStore(connect()); const b = createPrismaStore(connect());
+    await expect(a.createOrder({ ...input, items: [...input.items, { productId: 'p2', quantity: 99 }] })).rejects.toThrow();
+    expect(await a.listOrders()).toHaveLength(0);
+    expect((await a.getProduct('golden-hour-commander-proxy'))!.reservedInventory).toBe(0);
+    const order = await a.createOrder(input);
+    await Promise.all([a.cancelOrder(order.id), b.cancelOrder(order.id)]);
+    expect(await b.getProduct('golden-hour-commander-proxy')).toMatchObject({ inventory: 20, reservedInventory: 0 });
+  });
+  it('migrates duplicate pending lines and overbooked legacy stock without deducting paid orders twice', async () => {
+    const prisma = connect();
+    const migration = await readFile(new URL('../prisma/migrations/20260918000000_inventory_reservations/migration.sql', import.meta.url), 'utf8');
+    await prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('CREATE SCHEMA inventory_upgrade_test');
+      await tx.$executeRawUnsafe('SET LOCAL search_path TO inventory_upgrade_test');
+      await tx.$executeRawUnsafe('CREATE TABLE "Product" (id TEXT PRIMARY KEY, inventory INTEGER NOT NULL)');
+      await tx.$executeRawUnsafe('CREATE TABLE "Order" (id TEXT PRIMARY KEY, status TEXT, "paidAt" TIMESTAMP, "createdAt" TIMESTAMP DEFAULT now())');
+      await tx.$executeRawUnsafe('CREATE TABLE "OrderItem" ("productId" TEXT, "orderId" TEXT, quantity INTEGER)');
+      await tx.$executeRawUnsafe(`INSERT INTO "Product" VALUES ('p', 1)`);
+      await tx.$executeRawUnsafe(`INSERT INTO "Order" (id, status, "paidAt") VALUES ('pending', 'pending_payment', NULL), ('paid', 'paid', now()), ('canceled', 'canceled', NULL)`);
+      await tx.$executeRawUnsafe(`INSERT INTO "OrderItem" VALUES ('p', 'pending', 1), ('p', 'pending', 2), ('p', 'paid', 1), ('p', 'canceled', 4)`);
+      for (const statement of migration.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean)) await tx.$executeRawUnsafe(statement);
+      const products = await tx.$queryRawUnsafe<Array<{ inventory: number; reservedInventory: number }>>('SELECT * FROM "Product"');
+      expect(products[0]).toMatchObject({ inventory: 1, reservedInventory: 3 });
+      const rows = await tx.$queryRawUnsafe<Array<{ id: string; inventoryState: string; reservationExpiresAt: Date | null }>>('SELECT * FROM "Order"');
+      expect(rows.find(r => r.id === 'paid')!.inventoryState).toBe('consumed');
+      expect(rows.find(r => r.id === 'pending')).toMatchObject({ inventoryState: 'legacy_held', reservationExpiresAt: expect.any(Date) });
+      expect(rows.find(r => r.id === 'canceled')!.inventoryState).toBe('legacy');
+      await tx.$executeRawUnsafe('DROP SCHEMA inventory_upgrade_test CASCADE');
+    });
+  });
+
 });
