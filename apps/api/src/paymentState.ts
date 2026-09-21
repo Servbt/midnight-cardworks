@@ -1,3 +1,4 @@
+import { commitStock, releaseStock } from './inventory.js';
 import type { Order, PaymentDetails, Store } from './types.js';
 
 export type NotificationKind = 'Pending' | 'Paid' | 'Fulfilled' | 'Canceled' | 'Refunded' | 'RefundFailed';
@@ -22,6 +23,7 @@ export async function payOrder(tx: Store, order: Order, payment: PaymentDetails)
     // without regressing fulfillment/refund state or decrementing inventory again.
     order.stripeSessionId = payment.stripeSessionId ?? order.stripeSessionId;
     order.stripePaymentIntentId = payment.stripePaymentIntentId ?? order.stripePaymentIntentId;
+    await commitStock(tx, order, true);
     return tx.saveOrder(order);
   }
   order.paidAt = new Date().toISOString();
@@ -30,12 +32,13 @@ export async function payOrder(tx: Store, order: Order, payment: PaymentDetails)
   order.status = 'paid';
   // A verified late payment wins over an earlier expiration/failure. Never lose captured money.
   order.canceledAt = undefined;
-  await tx.decrementOrderInventory(order);
+  await commitStock(tx, order);
   await tx.saveOrder(order);
   await queueNotification(tx, order, 'Paid');
   return order;
 }
 export async function fulfillOrder(tx: Store, order: Order) {
+  if (order.inventoryIssue || order.inventoryState === 'attention') throw new Error('Resolve inventory allocation before fulfillment');
   if (order.fulfilledAt) return order;
   if (!['paid', 'partially_refunded', 'refund_failed'].includes(order.status)) throw new Error('Only paid orders can be fulfilled');
   order.fulfilledAt = new Date().toISOString();
@@ -45,8 +48,9 @@ export async function fulfillOrder(tx: Store, order: Order) {
   return order;
 }
 export async function cancelOrder(tx: Store, order: Order, reason?: string) {
-  if (order.status === 'canceled') return order;
+  if (order.status === 'canceled') { await releaseStock(tx, order); return tx.saveOrder(order); }
   if (order.paidAt || order.status !== 'pending_payment') throw new Error('Only unpaid orders can be canceled');
+  await releaseStock(tx, order);
   order.status = 'canceled';
   order.canceledAt = new Date().toISOString();
   order.refundReason = reason;
@@ -80,6 +84,11 @@ export async function refundOrder(tx: Store, order: Order, refund: RefundEntry, 
     : order.refundedAmount > 0 ? 'partially_refunded'
     : ['failed', 'canceled'].includes(refund.status) ? 'refund_failed'
     : order.fulfilledAt ? 'fulfilled' : 'paid';
+  if (order.status !== 'refunded' && order.inventoryState === 'released') {
+    order.inventoryState = 'attention';
+    order.inventoryIssue = 'Refund failed for an unallocated payment. Replenish and sync payment, or retry the refund; do not fulfill.';
+  }
+  if (order.status === 'refunded' && order.inventoryState === 'attention') { order.inventoryState = 'released'; order.inventoryIssue = undefined; }
   if (refund.status === 'succeeded') order.refundedAt = new Date().toISOString();
   await tx.saveOrder(order);
   if (notify && refund.status === 'succeeded') await queueNotification(tx, order, 'Refunded', refund.refundId);

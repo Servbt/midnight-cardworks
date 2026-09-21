@@ -1,5 +1,7 @@
 # Payment reliability (phase 3)
 
+Phase four adds [inventory reservations and its deployment handoff](INVENTORY_RESERVATIONS.md). Follow that runbook when deploying the reservation migration.
+
 This change covers order transitions, durable Stripe event/refund records, final
 Checkout amounts and discounts, retry-safe checkout/refund requests, cancellation
 races, and durable order notifications. Inventory reservation and overselling

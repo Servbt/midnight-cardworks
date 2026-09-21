@@ -666,6 +666,7 @@ describe('storefront API', () => {
         tags: ['commander'],
         image: 'https://images.example.com/secret.jpg',
         inventory: 7,
+        inventoryVersion: create.json().product.inventoryVersion,
         active: true
       }
     });

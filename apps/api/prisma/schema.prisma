@@ -34,6 +34,8 @@ model Product {
   category    String
   tags        String[]
   image       String
+  reservedInventory Int @default(0)
+  inventoryVersion Int @default(0)
   inventory   Int
   active      Boolean  @default(true)
   featured    Boolean  @default(false)
@@ -66,7 +68,12 @@ model Order {
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
+  inventoryState String @default("legacy")
+  reservationExpiresAt DateTime?
+  inventoryIssue String?
+
   items OrderItem[]
+  @@index([inventoryState, reservationExpiresAt])
 }
 
 model OrderItem {

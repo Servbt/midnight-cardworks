@@ -1,3 +1,4 @@
+import { InventoryError } from './inventory.js';
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 import { stripeSecret } from './productionConfig.js';
@@ -17,7 +18,8 @@ export function requestKey(value: unknown) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(value)) throw new Error('Invalid Idempotency-Key');
   return value;
 }
-type Operation = { fingerprint: string; startedAt: number; order: Order; done?: boolean; checkoutUrl?: string | null; stripeSessionId?: string; refund?: RefundResult; amount?: number; reason?: string };
+export class CheckoutClosedError extends InventoryError { code = 'CHECKOUT_CLOSED'; }
+type Operation = { fingerprint: string; startedAt: number; order: Order; done?: boolean; terminalError?: string; checkoutUrl?: string | null; stripeSessionId?: string; refund?: RefundResult; amount?: number; reason?: string };
 function verifyOperation(op: Operation, fingerprint: string) {
   if (op.fingerprint !== fingerprint) throw new Error('This request key was already used with different details');
   if (!op.done && Date.now() - op.startedAt >= retryWindow) throw new Error('This payment request needs manual reconciliation in Stripe before retrying');
@@ -28,14 +30,41 @@ export async function startCheckout(store: Store, input: CheckoutInput, key: str
   const receiptToken = createHash('sha256').update(`receipt:${key}`).digest('base64url');
   const op = await store.atomic(async tx => {
     const previous = (await tx.getRecord(id))?.data as Operation | undefined;
-    if (previous) { verifyOperation(previous, fingerprint); return previous; }
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) throw new Error('This request key was already used with different details');
+      const current = await tx.getOrder(previous.order.id);
+      if (previous.terminalError || current?.status === 'canceled') throw new CheckoutClosedError('This checkout has closed. Start a new checkout');
+      verifyOperation(previous, fingerprint);
+      return previous;
+    }
     const order = await tx.createOrder({ ...input, receiptTokenHash: hashReceiptToken(receiptToken) });
     const data: Operation = { fingerprint, order, startedAt: Date.now() };
     await tx.putRecord({ id, kind: 'checkout', orderId: order.id, data });
     return data;
   });
   if (!op.done) {
-    const checkout = await createCheckoutResponse(op.order, receiptToken, id);
+    // Never create a fresh session after its fixed expiration is too close for
+    // Stripe's 30-minute minimum, or recreate a pre-reservation legacy operation.
+    if (!op.order.reservationExpiresAt || Date.now() >= new Date(op.order.reservationExpiresAt).getTime() - 31 * 60000) {
+      throw new InventoryError('Checkout creation needs reconciliation. Its stock remains held until Stripe confirms the outcome');
+    }
+    let checkout;
+    try { checkout = await createCheckoutResponse(op.order, receiptToken, id); }
+    catch (error) {
+      const stripeError = error as { type?: string; code?: string };
+      if (stripeError.type === 'StripeInvalidRequestError' && stripeError.code !== 'idempotency_key_in_use') {
+        await store.atomic(async tx => {
+          const current = (await tx.getRecord(id))!.data as Operation;
+          const order = (await tx.getOrder(op.order.id))!;
+          if (!current.done && !order.stripeSessionId && !order.paidAt) {
+            await cancelOrder(tx, order, 'Stripe rejected checkout creation');
+            await tx.putRecord({ id, kind: 'checkout', orderId: order.id, data: { ...current, done: true, terminalError: 'Checkout creation rejected' } });
+          }
+        });
+        throw new CheckoutClosedError('Checkout could not be created. Please try a new checkout');
+      }
+      throw error;
+    }
     await store.atomic(async tx => {
       const current = (await tx.getRecord(id))!.data as Operation;
       if (current.done) return;
@@ -67,7 +96,7 @@ export function sessionPayment(session: Record<string, unknown>, order: Order): 
   if (session.currency !== 'usd' || typeof session.amount_total !== 'number' || session.amount_subtotal !== order.subtotal + order.shippingCost || !details || typeof details.amount_discount !== 'number' || (details.amount_tax ?? 0) !== 0 || (details.amount_shipping ?? 0) !== 0) throw new Error('Stripe totals do not match the order currency or quoted prices');
   return { stripeSessionId: String(session.id), stripePaymentIntentId: idOf(session.payment_intent), total: session.amount_total, discountAmount: details.amount_discount };
 }
-async function reconcileSession(store: Store, session: Record<string, unknown>, eventId?: string, failure = false) {
+export async function reconcileSession(store: Store, session: Record<string, unknown>, eventId?: string, failure = false) {
   const orderId = (session.metadata as Record<string, string> | undefined)?.orderId;
   if (!orderId) return;
   await store.atomic(async tx => {
@@ -152,7 +181,13 @@ export async function processPaymentEvent(store: Store, event: StripeWebhookEven
   const stripe = client();
   if (['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired'].includes(event.type ?? '')) {
     const session = stripe ? await stripe.checkout.sessions.retrieve(String(object.id)) as unknown as Record<string, unknown> : object;
-    await reconcileSession(store, session, event.id, ['checkout.session.async_payment_failed', 'checkout.session.expired'].includes(event.type!));
+    let failed = session.status === 'expired';
+    if (event.type === 'checkout.session.async_payment_failed' && !failed) {
+      const intentId = idOf(session.payment_intent);
+      if (!stripe) failed = true;
+      else if (intentId && session.status === 'complete') failed = ['canceled', 'requires_payment_method'].includes((await stripe.paymentIntents.retrieve(intentId)).status);
+    }
+    await reconcileSession(store, session, event.id, failed);
     return;
   }
   if (!['refund.created', 'refund.updated', 'refund.failed', 'charge.refunded'].includes(event.type ?? '')) return;

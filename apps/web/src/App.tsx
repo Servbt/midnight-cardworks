@@ -251,7 +251,7 @@ export default function App() {
     receipt.then((order) => {
       if (!active) return;
       setReceiptOrder(order);
-      setReceiptMessage(order.status === 'pending_payment' ? 'Payment is processing' : order.status === 'canceled' ? 'Order canceled' : 'Payment verified');
+      setReceiptMessage(order.fulfillmentOnHold ? 'Payment received; stock review pending' : order.status === 'pending_payment' ? 'Payment is processing' : order.status === 'canceled' ? 'Order canceled' : 'Payment verified');
     }).catch(() => {
       if (active) setReceiptMessage('Open your private receipt link or sign in with the email used for this order.');
     });
@@ -788,7 +788,7 @@ export default function App() {
       const token = await getAdminToken();
       if (!token) throw new Error('Admin token required');
       const updated = await uploadProductImage(product.slug, file, token);
-      setProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
+      setProducts((items) => items.map((item) => item.slug === updated.slug ? { ...updated, inventory: Math.max(0, updated.inventory - (updated.reservedInventory ?? 0)) } : item));
       setAdminProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
       setAdminMessage(`Updated image for ${updated.title}.`);
     } catch {
@@ -815,7 +815,7 @@ export default function App() {
     setAdminProducts((items) => items.some((item) => item.slug === saved.slug) ? items.map((item) => item.slug === saved.slug ? saved : item) : [...items, saved]);
     setProducts((items) => {
       const without = items.filter((item) => item.slug !== saved.slug);
-      return saved.active ? [...without, saved] : without;
+      return saved.active ? [...without, { ...saved, inventory: Math.max(0, saved.inventory - (saved.reservedInventory ?? 0)) }] : without;
     });
   }
 
@@ -957,16 +957,17 @@ export default function App() {
 
   function renderOrderCard(order: Order) {
     const remainingRefund = refundableAmount(order);
-    const canFulfill = order.status === 'paid' || order.status === 'refund_failed';
+    const canFulfill = !order.inventoryIssue && (order.status === 'paid' || order.status === 'refund_failed');
     return <article className="order-card" key={order.id}>
       <div className="order-card-header"><strong>{order.id}: {order.email}</strong><span className="status-badge">{orderStatusLabel(order.status)}</span></div>
       <div className="order-detail-grid"><div><strong>Customer</strong><p>{order.customerName || order.email}</p></div><div><strong>Shipping</strong><p>{order.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(order.total)}</p></div></div>
       <div><strong>Items</strong><ul>{orderItemSummary(order).map((item) => <li key={`${order.id}-${item}`}>{item}</li>)}</ul></div>
       {(order.refundedAmount ?? 0) > 0 && <p>Refunded: {formatMoney(order.refundedAmount)}{order.stripeRefundId ? ` (${order.stripeRefundId})` : ''}</p>}
+      {order.inventoryIssue && <p role="alert">{order.inventoryIssue}</p>}
       {order.refundReason && <p>Refund note: {order.refundReason}</p>}
       <div className="order-actions">
         {canFulfill && <button onClick={() => void handleOrderFulfilled(order)}>Mark {order.id} fulfilled</button>}
-        {order.status === 'pending_payment' && <button onClick={() => void handleOrderPaymentSynced(order)}>Sync Stripe payment</button>}
+        {(order.status === 'pending_payment' || order.inventoryIssue) && <button onClick={() => void handleOrderPaymentSynced(order)}>Sync Stripe payment</button>}
         {order.status === 'pending_payment' && <button className="ghost" onClick={() => void handleOrderCanceled(order)}>Cancel pending order</button>}
         {canRefundOrder(order) && <>
           <label>Refund amount for {order.id}<input aria-label={`Refund amount for ${order.id}`} type="number" step="0.01" min="0.01" max={(remainingRefund / 100).toFixed(2)} placeholder={(remainingRefund / 100).toFixed(2)} value={refundAmounts[order.id] ?? ''} onChange={(event) => setRefundAmounts((amounts) => ({ ...amounts, [order.id]: event.target.value }))} /></label>
@@ -985,6 +986,7 @@ export default function App() {
     const dropzoneClass = `image-dropzone${imageDragSlug === product.slug ? ' is-dragging' : ''}`;
     return <article className={`admin-listing product-editor${isNew ? ' new-product-editor' : ''}`} key={isNew ? 'new-product' : product.id}>
       {!isNew && <img src={product.image} alt="" />}
+      {!isNew && <p>Physical stock: {product.inventory} · Held in checkout: {product.reservedInventory ?? 0} · Available: {Math.max(0, product.inventory - (product.reservedInventory ?? 0))}</p>}
       <div className="editor-grid">
         <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
         <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
@@ -1448,7 +1450,7 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : receiptOrder.status === 'pending_payment' ? 'Waiting for Stripe confirmation' : receiptOrder.status.replaceAll('_', ' ')}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p>{Boolean(receiptOrder.discountAmount) && <p>Discount: -{formatMoney(receiptOrder.discountAmount ?? 0)}</p>}<h3>{receiptOrder.paidAt || ['paid', 'fulfilled', 'partially_refunded', 'refunded', 'refund_pending', 'refund_failed'].includes(receiptOrder.status) ? 'Total paid' : 'Order total'}: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul>{receiptOrder.refundedAmount > 0 && <p>Refunded: {formatMoney(receiptOrder.refundedAmount)}</p>}<h3>What happens next</h3><p>{receiptOrder.status === 'paid' ? 'We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.' : receiptOrder.status === 'pending_payment' ? 'We’ll prepare your order once payment is confirmed.' : receiptOrder.status === 'canceled' ? 'This checkout was canceled. You can start a new order from the shop.' : 'Contact support if you have questions about fulfillment or refunds.'}</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.fulfillmentOnHold ? 'Paid; fulfillment on hold' : receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : receiptOrder.status === 'pending_payment' ? 'Waiting for Stripe confirmation' : receiptOrder.status.replaceAll('_', ' ')}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p>{Boolean(receiptOrder.discountAmount) && <p>Discount: -{formatMoney(receiptOrder.discountAmount ?? 0)}</p>}<h3>{receiptOrder.paidAt || ['paid', 'fulfilled', 'partially_refunded', 'refunded', 'refund_pending', 'refund_failed'].includes(receiptOrder.status) ? 'Total paid' : 'Order total'}: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul>{receiptOrder.refundedAmount > 0 && <p>Refunded: {formatMoney(receiptOrder.refundedAmount)}</p>}<h3>What happens next</h3><p>{receiptOrder.fulfillmentOnHold ? 'We received your payment and are reviewing stock availability. We’ll contact you before fulfillment.' : receiptOrder.status === 'paid' ? 'We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.' : receiptOrder.status === 'pending_payment' ? 'We’ll prepare your order once payment is confirmed.' : receiptOrder.status === 'canceled' ? 'This checkout was canceled. You can start a new order from the shop.' : 'Contact support if you have questions about fulfillment or refunds.'}</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">

@@ -1,3 +1,4 @@
+import { startInventoryWorker } from './inventoryWorker.js';
 import { startNotificationWorker } from './notificationWorker.js';
 import { assertProductionConfig } from './productionConfig.js';
 import { buildServer } from './server.js';
@@ -12,8 +13,11 @@ const app = await buildServer(store, { serveStaticRoot });
 
 const stopNotifications = startNotificationWorker(store, error => console.error('Notification worker failed', error instanceof Error ? error.message : 'Unknown error'));
 
+const stopInventory = startInventoryWorker(store, error => console.error('Inventory reconciliation failed', error instanceof Error ? error.name : 'Error'));
+
 const shutdown = async () => {
   await app.close();
+  await stopInventory();
   await stopNotifications();
   await disconnect?.();
   process.exit(0);
