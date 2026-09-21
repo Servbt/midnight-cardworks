@@ -2403,3 +2403,11 @@ footer {
   .privacy-notice { left: .65rem; right: .65rem; bottom: .65rem; width: auto; transform: none; }
   .privacy-notice-actions button { flex: 1 1 auto; }
 }
+
+.health-summary { display: flex; flex-wrap: wrap; gap: 1rem; margin-block: 1rem; }
+.health-items { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.health-items li { border: 1px solid #555; border-radius: 12px; padding: 1rem; overflow-wrap: anywhere; }
+.health-items li.health-attention { border-left: 4px solid #e9b86e; }
+.health-items li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.health-items h4 { margin: 0; }
+.operations-health select { max-width: 100%; margin-left: .5rem; }

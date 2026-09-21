@@ -1,3 +1,4 @@
+import { operationsHealth } from './operationsHealth.js';
 import { availableProduct, InventoryError } from './inventory.js';
 import { startCheckout, CheckoutClosedError, requestKey, processPaymentEvent, syncPayment, cancelCheckout, requestRefund } from './paymentService.js';
 import { flushNotifications, notificationHealth } from './notificationWorker.js';
@@ -278,6 +279,10 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     const subscribers = (await store.listMarketingSubscribers()).filter((subscriber) => subscriber.status === 'subscribed');
     for (const subscriber of subscribers) await emailNotifier.sendMarketingCampaign(subscriber, parsed.data);
     return { sent: subscribers.length };
+  });
+  app.get('/api/admin/operations-health', { preHandler: requireAdmin }, async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return operationsHealth(store);
   });
   app.get('/api/admin/payment-health', { preHandler: requireAdmin }, async () => ({
     notifications: await notificationHealth(store),
