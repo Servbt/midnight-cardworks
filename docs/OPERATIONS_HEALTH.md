@@ -40,9 +40,11 @@ Read-only inspection of the existing Render workspace showed:
 - Build, pre-deploy and start commands match the repository instructions.
 - Workspace notification destination is Email with Only failure notifications.
   The shop inherits that preference. Actual inbox delivery has not been tested.
-- The shop's Health Check Path is **blank**, despite `healthCheckPath: /health` in
-  `render.yaml`. Fix this dashboard/Blueprint discrepancy before relying on
-  database-aware health monitoring.
+- The shop's Health Check Path was blank despite the Blueprint value. The public
+  `/health` endpoint returned HTTP 200 with `{"ok":true}`. The path was saved as
+  `/health` on 2026-09-21, triggering a configuration redeploy of phase-four commit
+  `02713eb`. Render deployment `dep-daocpl740ujc73eq7k80` succeeded and is live; a subsequent
+  public check again returned HTTP 200 with `{"ok":true}`.
 - No active shop staging service/database was found in the workspace's active
   service inventory or its existing project. Suspended resources were not audited.
 - The database Recovery screen advertises a three-day restore window and offers
@@ -52,10 +54,8 @@ These observations are not claims that production rehearsals passed.
 
 ## Next hosting actions
 
-1. In the shop's Render **Settings > Health Checks**, set the path to `/health`.
-   Confirm the public endpoint returns `{"ok":true}` first, then verify the saved
-   setting and deployment health. This enables an HTTP check of the database-aware
-   endpoint rather than relying on an open TCP port. No new secret is needed.
+1. Keep the shop's Render **Settings > Health Checks** path at `/health`. The configuration redeploy was verified live and the public endpoint healthy. This
+   enables an HTTP check of the database-aware endpoint. No new secret is needed.
 2. Keep the existing failure-email preference. Confirm the account inbox receives
    a staging failure notification; do not intentionally break production.
 3. Create a separate staging web service and empty database after approving their
@@ -123,7 +123,16 @@ Repository tests: 127 API tests passed; eight existing PostgreSQL integration te
 were skipped because no TEST_DATABASE_URL was set. All 89 web tests passed.
 `npm run typecheck` and `npm run render:build` passed. This phase adds no migration.
 
-Still pending: save and verify the production health-check path; verify actual alert
-receipt; approve and provision staging/recovery resources; perform and record the
+Still pending: verify actual alert receipt; approve and provision staging/recovery resources; perform and record the
 restore and end-to-end staging rehearsals. Do not mark phase five fully operational
 until those gates have evidence.
+
+
+## Resource estimate for approval
+
+The public [Render pricing page](https://render.com/pricing), checked 2026-09-21,
+lists $7/month for 512 MB web compute and $6/month for 256 MB Postgres compute.
+A separate staging pair is therefore $13/month in compute. A temporary recovery
+copy adds a $6/month compute rate, prorated while running. Extra storage, bandwidth,
+pipeline usage and taxes can add charges. No workspace upgrade is proposed.
+Creation requires approval of the displayed price; no resources have been created.

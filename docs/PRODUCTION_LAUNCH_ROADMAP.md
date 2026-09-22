@@ -20,7 +20,8 @@ gate complete until its evidence is recorded here.
 - Current service URL: `https://midnight-cardworks.onrender.com`
 - Hosting: Render web service and Render Postgres
 - Hosting verified 2026-09-21: Starter web service and Basic-256mb Postgres.
-- Monitoring gap: Render Health Check Path is blank despite the Blueprint value.
+- Monitoring: Render Health Check Path corrected to `/health` on 2026-09-21;
+  configuration redeploy verified live and public endpoint returned HTTP 200.
 - Payments: Stripe Checkout, webhook processing, cancellation, and refunds exist
 - Authentication: Clerk customer accounts and admin allowlist exist
 - Email: Resend transactional and marketing flows exist
@@ -42,7 +43,7 @@ remain unverified unless this evidence explicitly resolves them.
 - Phase 5 monitoring/recovery: admin Health dashboard implemented locally. See
   [operational health and remaining gates](OPERATIONS_HEALTH.md). Render already
   uses failure notifications via email, but actual delivery, staging and a restore
-  rehearsal remain unverified. No production settings were changed during inspection.
+  rehearsal remain unverified. The blank production Health Check Path was subsequently corrected to `/health`.
 
 ## Gate 1: Production Foundation
 
@@ -383,7 +384,7 @@ SHAs. Never record passwords, API keys, webhook secrets, or database URLs.
 Complete phase five using [the operations runbook](OPERATIONS_HEALTH.md):
 
 1. Review and deploy the admin Health dashboard PR.
-2. Resolve the blank Render Health Check Path by saving `/health`, then verify it.
+2. Keep Render Health Check Path at `/health`; the configuration redeploy and public endpoint passed verification.
 3. Verify delivery of existing failure email notifications using staging.
 4. Approve separate staging/recovery resources and rehearse a restore without
    connecting application workers or changing production database connections.
