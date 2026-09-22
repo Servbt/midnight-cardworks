@@ -1,6 +1,6 @@
 # Midnight Cardworks Production Launch Roadmap
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 This document is the source of truth for taking Midnight Cardworks from a working
 MVP to a public production shop. Work through one gate at a time. Do not mark a
@@ -381,7 +381,11 @@ SHAs. Never record passwords, API keys, webhook secrets, or database URLs.
 
 ## Next Action
 
-Complete phase five using [the operations runbook](OPERATIONS_HEALTH.md):
+The owner deferred additional paid staging/recovery resources on 2026-09-22.
+Keep those rehearsals unverified until explicitly resumed. The Health dashboard
+uses the existing hosting setup. See [the operations runbook](OPERATIONS_HEALTH.md).
+
+Remaining steps (paid items deferred):
 
 1. Review and deploy the admin Health dashboard PR.
 2. Keep Render Health Check Path at `/health`; the configuration redeploy and public endpoint passed verification.

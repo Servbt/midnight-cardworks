@@ -123,16 +123,19 @@ Repository tests: 127 API tests passed; eight existing PostgreSQL integration te
 were skipped because no TEST_DATABASE_URL was set. All 89 web tests passed.
 `npm run typecheck` and `npm run render:build` passed. This phase adds no migration.
 
-Still pending: verify actual alert receipt; approve and provision staging/recovery resources; perform and record the
-restore and end-to-end staging rehearsals. Do not mark phase five fully operational
+Still unverified: actual alert receipt and the restore/end-to-end staging rehearsals.
+The owner deferred additional paid staging and recovery resources on 2026-09-22. Do not mark phase five fully operational
 until those gates have evidence.
 
 
-## Resource estimate for approval
+## Deferred resource estimate
 
 The public [Render pricing page](https://render.com/pricing), checked 2026-09-21,
 lists $7/month for 512 MB web compute and $6/month for 256 MB Postgres compute.
 A separate staging pair is therefore $13/month in compute. A temporary recovery
 copy adds a $6/month compute rate, prorated while running. Extra storage, bandwidth,
 pipeline usage and taxes can add charges. No workspace upgrade is proposed.
-Creation requires approval of the displayed price; no resources have been created.
+On 2026-09-22 the owner chose to defer the additional paid setup. Do not create
+staging or recovery resources or repeatedly request spending approval unless the
+owner explicitly reopens that work. No resources have been created. The dashboard
+can run on the existing service; hosted rehearsals remain unverified, not passed.
