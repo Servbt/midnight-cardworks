@@ -100,3 +100,12 @@ export async function uploadProductImage(slug: string, file: File, token?: strin
   if (!r.ok) throw new Error('Image upload failed');
   return (await r.json()).product;
 }
+export type OperationsHealth = {
+  checkedAt: string; attentionCount: number; waitingCount: number;
+  items: Array<{ id: string; orderId?: string; category: 'payment' | 'email' | 'inventory'; status: 'attention' | 'waiting'; title: string; detail: string; since?: string }>;
+};
+export async function fetchOperationsHealth(token: string, signal?: AbortSignal): Promise<OperationsHealth> {
+  const response = await fetch(API + '/api/admin/operations-health', { headers: { authorization: 'Bearer ' + token }, cache: 'no-store', signal });
+  if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'Admin access expired. Sign in again.' : 'Health information is unavailable. Try refreshing.');
+  return response.json();
+}

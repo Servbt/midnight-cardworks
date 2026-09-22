@@ -1,3 +1,4 @@
+import { OperationsHealthPanel } from './OperationsHealthPanel';
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type CustomerOrder, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
@@ -82,7 +83,7 @@ export default function App() {
   const [newFaqItem, setNewFaqItem] = useState<FaqItem>(blankFaqItem);
   const [newBlogPost, setNewBlogPost] = useState<BlogPost>(blankBlogPost);
   const [adminMessage, setAdminMessage] = useState('');
-  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing' | 'content'>('orders');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing' | 'content' | 'health'>('orders');
   const [contentTab, setContentTab] = useState<'faq' | 'blog'>('faq');
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
   const [saleSelection, setSaleSelection] = useState<string[]>([]);
@@ -1494,12 +1495,14 @@ export default function App() {
       </div>
       {adminMessage && <p className="status-message">{adminMessage}</p>}
       <div className="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button role="tab" aria-selected={adminTab === 'health'} className={adminTab === 'health' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('health')}>Health</button>
         <button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button>
         <button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button>
         <button role="tab" aria-selected={adminTab === 'sales'} className={adminTab === 'sales' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('sales')}>Sales ({adminProducts.filter(isProductOnSale).length})</button>
         <button role="tab" aria-selected={adminTab === 'content'} className={adminTab === 'content' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('content')}>Content ({contentItemCount})</button>
         <button role="tab" aria-selected={adminTab === 'marketing'} className={adminTab === 'marketing' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('marketing')}>Marketing ({activeMarketingSubscribers.length})</button>
       </div>
+      {adminTab === 'health' && <OperationsHealthPanel getToken={getAdminToken} onReviewOrders={() => setAdminTab('orders')} />}
       {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
         <div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>
         {orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map(renderOrderCard)}</div>}
