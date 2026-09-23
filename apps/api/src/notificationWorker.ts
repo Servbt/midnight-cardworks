@@ -59,7 +59,12 @@ export async function flushNotifications(store: Store, notifier?: EmailNotifier)
       if (current.firstAttemptAt && now - current.firstAttemptAt >= 23 * 60 * 60 * 1000) {
         await tx.putRecord({ ...record, data: { ...current, state: 'attention', error: 'Provider deduplication window ending; reconcile delivery before retrying' } }); return;
       }
-      if (!process.env.RESEND_API_KEY) return;
+      // Instead of skipping silently (which let paid-order notifications pile up unseen),
+      // flag the delivery so /api/admin/payment-health surfaces the misconfiguration.
+      if (!process.env.RESEND_API_KEY) {
+        await tx.putRecord({ ...record, data: { ...current, state: 'attention', error: 'RESEND_API_KEY is not configured, so order notifications cannot be delivered' } });
+        return;
+      }
       const data: Delivery = { ...current, firstAttemptAt: current.firstAttemptAt ?? now, attempts: current.attempts + 1, leaseUntil: now + 60000, leaseId: randomUUID() };
       await tx.putRecord({ ...record, data });
       return data;

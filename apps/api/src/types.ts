@@ -5,6 +5,7 @@ export type Order = {
   id: string;
   email: string;
   receiptTokenHash?: string;
+  receiptExpiresAt?: string;
   customerName?: string;
   shippingAddress?: string;
   items: Array<{ productId: string; title: string; price: number; quantity: number }>;
@@ -61,7 +62,7 @@ export type BlogPost = {
   createdAt: string;
   updatedAt: string;
 };
-export type CheckoutInput = { receiptTokenHash?: string; email: string; customerName: string; shippingAddress: string; items: CartItemInput[] };
+export type CheckoutInput = { receiptTokenHash?: string; receiptExpiresAt?: string; email: string; customerName: string; shippingAddress: string; items: CartItemInput[] };
 export type MarketingSubscribeInput = { email: string; name?: string; source: string; couponCode: string };
 export type FaqItemInput = { id?: string; question: string; answer: string; sortOrder: number; active: boolean };
 export type BlogPostInput = { id?: string; slug: string; title: string; excerpt: string; body: string; published: boolean; publishedAt?: string | null };

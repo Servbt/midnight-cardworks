@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
@@ -13,6 +14,7 @@ import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
 import { createInMemoryStore } from './store.js';
 import { parseStripeWebhookEvent } from './stripeWebhook.js';
+import { isPermanentPaymentError } from './paymentErrors.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { MarketingSubscriber, Store, Product } from './types.js';
@@ -99,7 +101,16 @@ const refundSchema = z.object({ amount: z.number().int().positive().optional(), 
 const imageUploadBodyLimit = 16 * 1024 * 1024;
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const productUrl = (slug: string) => `/products/${slug}`;
+/** Product SEO needs absolute URLs; relative canonical/og:url values are ignored by crawlers. */
+const appBaseUrl = (env: NodeJS.ProcessEnv = process.env) => {
+  const value = env.APP_BASE_URL?.trim();
+  if (!value) return '';
+  return value.endsWith('/') ? value : `${value}/`;
+};
+const productUrl = (slug: string) => {
+  const base = appBaseUrl();
+  return base ? `${base}products/${slug}` : `/products/${slug}`;
+};
 const marketingCouponCode = () => (process.env.NEWSLETTER_COUPON_CODE || 'MIDNIGHT10').trim();
 function publicSubscriber(subscriber: MarketingSubscriber) {
   const { unsubscribeToken: _unsubscribeToken, ...safeSubscriber } = subscriber;
@@ -137,7 +148,28 @@ async function productSeoHtml(staticRoot: string, product: Product) {
   return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
 }
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier; rateLimit?: { globalMax?: number; checkoutMax?: number; publicFormMax?: number } | false };
+
+/**
+ * CORS is scoped to the shop's own origins. Previously any origin was reflected, which let
+ * arbitrary sites call the API from a browser. Requests without an Origin header (same-origin
+ * and server-to-server calls) are allowed by @fastify/cors regardless of this list.
+ * Outside production an empty list falls back to reflection so local development keeps working.
+ */
+function allowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] | boolean {
+  const candidates = [env.APP_BASE_URL, ...(env.CLERK_AUTHORIZED_PARTIES ?? '').split(',')];
+  const origins = new Set<string>();
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:') origins.add(url.origin);
+    } catch { /* ignore malformed entries */ }
+  }
+  if (origins.size) return [...origins];
+  return env.NODE_ENV === 'production' ? [] : true;
+}
 
 export async function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
@@ -146,7 +178,26 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
   const flushTestNotifications = async () => { if (options.emailNotifier) await flushNotifications(store, options.emailNotifier); };
-  app.register(cors, { origin: true });
+  await app.register(cors, { origin: allowedOrigins() });
+  // /api/checkout reserves stock for an hour before payment is captured, so an unthrottled
+  // caller can hold the whole catalogue without paying. Tests run with the limiter off so
+  // suites that issue many checkouts stay deterministic; passing `rateLimit` explicitly
+  // (even as {}) turns it back on, which is how rateLimit.test.ts covers it.
+  const rateLimits = options.rateLimit === false ? undefined
+    : options.rateLimit ? {
+        globalMax: options.rateLimit.globalMax ?? 600,
+        checkoutMax: options.rateLimit.checkoutMax ?? 20,
+        publicFormMax: options.rateLimit.publicFormMax ?? 10
+      }
+    : process.env.NODE_ENV === 'test' ? undefined
+    : {
+        globalMax: Number(process.env.RATE_LIMIT_MAX ?? 600),
+        checkoutMax: Number(process.env.RATE_LIMIT_CHECKOUT_MAX ?? 20),
+        publicFormMax: Number(process.env.RATE_LIMIT_PUBLIC_FORM_MAX ?? 10)
+      };
+  if (rateLimits) await app.register(rateLimit, { global: true, max: rateLimits.globalMax, timeWindow: '1 minute' });
+  /** Per-route throttle metadata. Inert when the limiter is not registered (tests). */
+  const rateLimited = (max?: number) => max === undefined ? {} : { config: { rateLimit: { max, timeWindow: '1 minute' } } };
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
   if (options.serveStaticRoot) {
     const staticRoot = path.resolve(options.serveStaticRoot);
@@ -181,14 +232,14 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     if (!post) return reply.code(404).send({ error: 'Blog post not found' });
     return { post };
   });
-  app.post('/api/contact', async (request, reply) => {
+  app.post('/api/contact', rateLimited(rateLimits?.publicFormMax), async (request, reply) => {
     const parsed = contactSchema.safeParse(request.body);
     if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid contact details required' });
     const { website: _website, ...message } = parsed.data;
     await emailNotifier.sendContactMessage(message);
     return { ok: true };
   });
-  app.post('/api/newsletter', async (request, reply) => {
+  app.post('/api/newsletter', rateLimited(rateLimits?.publicFormMax), async (request, reply) => {
     const parsed = newsletterSchema.safeParse(request.body);
     if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid newsletter signup and consent required' });
     const result = await store.subscribeMarketing({ email: parsed.data.email, name: parsed.data.name, source: 'storefront_coupon', couponCode: marketingCouponCode() });
@@ -202,7 +253,7 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     if (!subscriber) return reply.code(404).send({ error: 'Subscriber not found' });
     return { subscriber: publicSubscriber(subscriber) };
   });
-  app.post('/api/checkout', async (request, reply) => {
+  app.post('/api/checkout', rateLimited(rateLimits?.checkoutMax), async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
@@ -241,6 +292,22 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
       await flushTestNotifications();
       return { received: true };
     } catch (error) {
+      // A permanent failure can never succeed on redelivery. Record it against the event and
+      // acknowledge, so one bad event cannot make Stripe retry forever and disable the whole
+      // endpoint (which would stall every payment event, not just this one).
+      if (isPermanentPaymentError(error)) {
+        const reason = error instanceof Error ? error.message : 'Unreconcilable payment event';
+        if (event.id) {
+          try {
+            await store.putRecord({ id: `event:${event.id}`, kind: 'event', data: { type: event.type, outcome: 'quarantined', reason } });
+          } catch (recordError) {
+            console.error('Could not record quarantined Stripe event', { eventId: event.id, errorType: recordError instanceof Error ? recordError.name : 'Error' });
+            return reply.code(503).send({ error: 'Payment event processing failed; retry required' });
+          }
+        }
+        console.error('Stripe event quarantined for manual reconciliation', { eventId: event.id, type: event.type, reason });
+        return reply.code(200).send({ received: true, quarantined: true, reason });
+      }
       console.error('Stripe event processing failed', { eventId: event.id, type: event.type, errorType: error instanceof Error ? error.name : 'Error' });
       return reply.code(503).send({ error: 'Payment event processing failed; retry required' });
     }
@@ -330,6 +397,28 @@ export async function buildServer(store: Store = createInMemoryStore(), options:
     if (!parsed.success) return reply.code(400).send({ error: 'Valid product details required' });
     const existing = await store.getProduct(parsed.data.slug);
     return { product: await store.upsertProduct({ ...parsed.data, id: parsed.data.id ?? existing?.id ?? `prod_${parsed.data.slug}` }) };
+  });
+  // Without these routes the SPA not-found handler served index.html for /robots.txt and
+  // /sitemap.xml, so crawlers saw HTML instead of a robots file.
+  app.get('/robots.txt', async (_request, reply) => reply.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /cart',
+    'Disallow: /checkout/',
+    'Disallow: /account',
+    '',
+    `Sitemap: ${appBaseUrl() || 'https://servbotshop.com/'}sitemap.xml`
+  ].join('\n')));
+  app.get('/sitemap.xml', async (_request, reply) => {
+    const base = appBaseUrl() || 'https://servbotshop.com/';
+    const paths = ['', 'shop', 'faq', 'blog', 'privacy', 'contact', ...(await store.listProducts()).map((product) => `products/${product.slug}`)];
+    return reply.type('application/xml').send([
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...paths.map((path) => `  <url><loc>${escapeHtml(`${base}${path}`)}</loc></url>`),
+      '</urlset>'
+    ].join('\n'));
   });
   if (options.serveStaticRoot) {
     const staticRoot = path.resolve(options.serveStaticRoot);

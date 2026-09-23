@@ -1,4 +1,5 @@
 import { commitStock, releaseStock } from './inventory.js';
+import { PermanentPaymentError } from './paymentErrors.js';
 import type { Order, PaymentDetails, Store } from './types.js';
 
 export type NotificationKind = 'Pending' | 'Paid' | 'Fulfilled' | 'Canceled' | 'Refunded' | 'RefundFailed';
@@ -8,12 +9,12 @@ export async function queueNotification(tx: Store, order: Order, kind: Notificat
   if (!await tx.getRecord(id)) await tx.putRecord({ id, kind: 'notification', orderId: order.id, data: { kind, order, state: 'pending' } });
 }
 export async function payOrder(tx: Store, order: Order, payment: PaymentDetails) {
-  if (order.stripeSessionId && payment.stripeSessionId && order.stripeSessionId !== payment.stripeSessionId) throw new Error('Checkout session does not match order');
-  if (order.stripePaymentIntentId && payment.stripePaymentIntentId && order.stripePaymentIntentId !== payment.stripePaymentIntentId) throw new Error('Payment does not match order');
+  if (order.stripeSessionId && payment.stripeSessionId && order.stripeSessionId !== payment.stripeSessionId) throw new PermanentPaymentError('Checkout session does not match order');
+  if (order.stripePaymentIntentId && payment.stripePaymentIntentId && order.stripePaymentIntentId !== payment.stripePaymentIntentId) throw new PermanentPaymentError('Payment does not match order');
   if (payment.total !== undefined) {
-    if (!Number.isSafeInteger(payment.total) || payment.total < 0 || payment.total > order.subtotal + order.shippingCost) throw new Error('Invalid final payment total');
+    if (!Number.isSafeInteger(payment.total) || payment.total < 0 || payment.total > order.subtotal + order.shippingCost) throw new PermanentPaymentError('Invalid final payment total');
     const discount = payment.discountAmount ?? 0;
-    if (!Number.isSafeInteger(discount) || discount < 0 || payment.total + discount !== order.subtotal + order.shippingCost) throw new Error('Payment totals do not reconcile');
+    if (!Number.isSafeInteger(discount) || discount < 0 || payment.total + discount !== order.subtotal + order.shippingCost) throw new PermanentPaymentError('Payment totals do not reconcile');
     order.total = payment.total;
     order.discountAmount = discount;
   }
@@ -59,13 +60,13 @@ export async function cancelOrder(tx: Store, order: Order, reason?: string) {
   return order;
 }
 export async function refundOrder(tx: Store, order: Order, refund: RefundEntry, notify = true) {
-  if (!order.paidAt) throw new Error('Payment must be reconciled before a refund');
-  if (!refund.refundId || !['pending', 'requires_action', 'succeeded', 'failed', 'canceled'].includes(refund.status) || !Number.isSafeInteger(refund.amount) || refund.amount <= 0) throw new Error('Invalid refund');
+  if (!order.paidAt) throw new PermanentPaymentError('Payment must be reconciled before a refund');
+  if (!refund.refundId || !['pending', 'requires_action', 'succeeded', 'failed', 'canceled'].includes(refund.status) || !Number.isSafeInteger(refund.amount) || refund.amount <= 0) throw new PermanentPaymentError('Invalid refund');
   const id = `refund:${refund.refundId}`;
   const existing = await tx.getRecord(id);
-  if (existing && existing.orderId !== order.id) throw new Error('Refund belongs to a different order');
+  if (existing && existing.orderId !== order.id) throw new PermanentPaymentError('Refund belongs to a different order');
   const old = existing?.data as RefundEntry | undefined;
-  if (old && old.amount !== refund.amount) throw new Error('Refund amount changed');
+  if (old && old.amount !== refund.amount) throw new PermanentPaymentError('Refund amount changed');
   // Refunds can fail after appearing successful. The webhook handler retrieves current
   // Stripe state, and failed/canceled records cannot be resurrected by an older response.
   if (old && (old.status === refund.status || ['failed', 'canceled'].includes(old.status) || (old.status === 'succeeded' && !['failed', 'canceled'].includes(refund.status)))) return order;
@@ -76,7 +77,7 @@ export async function refundOrder(tx: Store, order: Order, refund: RefundEntry, 
   await tx.putRecord({ id, kind: 'refund', orderId: order.id, data: refund });
   const entries = (await tx.listRecords('refund', order.id)).map(r => r.data as RefundEntry);
   order.refundedAmount = (baseline?.amount ?? 0) + entries.filter(r => r.status === 'succeeded').reduce((n, r) => n + r.amount, 0);
-  if (order.refundedAmount > order.total) throw new Error('Refund total exceeds captured total; reconcile payment');
+  if (order.refundedAmount > order.total) throw new PermanentPaymentError('Refund total exceeds captured total; reconcile payment');
   order.stripeRefundId = refund.refundId;
   order.refundReason = refund.reason;
   order.status = order.refundedAmount >= order.total ? 'refunded'

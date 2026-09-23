@@ -1,9 +1,10 @@
 import { InventoryError } from './inventory.js';
+import { PermanentPaymentError } from './paymentErrors.js';
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 import { stripeSecret } from './productionConfig.js';
 import { createCheckoutResponse } from './checkout.js';
-import { hashReceiptToken } from './orderAccess.js';
+import { hashReceiptToken, receiptExpiryFrom } from './orderAccess.js';
 import { createOrderRefund, type RefundResult } from './stripeRefunds.js';
 import { cancelOrder, payOrder, queueNotification, refundOrder, type RefundEntry } from './paymentState.js';
 import type { CheckoutInput, Order, PaymentDetails, Store } from './types.js';
@@ -27,6 +28,9 @@ function verifyOperation(op: Operation, fingerprint: string) {
 export async function startCheckout(store: Store, input: CheckoutInput, key: string) {
   const id = `checkout:${digest(key)}`;
   const fingerprint = digest(JSON.stringify(input));
+  // Derived from the caller's idempotency key so a retry reproduces the same receipt link
+  // without the journal ever storing the bearer token. The key is a client-generated v4 UUID,
+  // so it is not guessable; the token's exposure is bounded by receiptExpiresAt instead.
   const receiptToken = createHash('sha256').update(`receipt:${key}`).digest('base64url');
   const op = await store.atomic(async tx => {
     const previous = (await tx.getRecord(id))?.data as Operation | undefined;
@@ -37,7 +41,7 @@ export async function startCheckout(store: Store, input: CheckoutInput, key: str
       verifyOperation(previous, fingerprint);
       return previous;
     }
-    const order = await tx.createOrder({ ...input, receiptTokenHash: hashReceiptToken(receiptToken) });
+    const order = await tx.createOrder({ ...input, receiptTokenHash: hashReceiptToken(receiptToken), receiptExpiresAt: receiptExpiryFrom() });
     const data: Operation = { fingerprint, order, startedAt: Date.now() };
     await tx.putRecord({ id, kind: 'checkout', orderId: order.id, data });
     return data;
@@ -87,9 +91,9 @@ export async function startCheckout(store: Store, input: CheckoutInput, key: str
   return { orderId: op.order.id, checkoutUrl: final.checkoutUrl ?? `/checkout/success?order=${encodeURIComponent(op.order.id)}#receiptToken=${receiptToken}`, status: op.order.status, subtotal: op.order.subtotal, shippingCost: op.order.shippingCost, total: op.order.total };
 }
 export function sessionPayment(session: Record<string, unknown>, order: Order): PaymentDetails | undefined {
-  if (typeof session.id !== 'string' || !session.id || (session.mode !== undefined && session.mode !== 'payment')) throw new Error('Invalid Checkout session');
+  if (typeof session.id !== 'string' || !session.id || (session.mode !== undefined && session.mode !== 'payment')) throw new PermanentPaymentError('Invalid Checkout session');
   const metadata = session.metadata as Record<string, string> | undefined;
-  if (metadata?.orderId !== order.id || (order.stripeSessionId && session.id !== order.stripeSessionId)) throw new Error('Checkout session does not match order');
+  if (metadata?.orderId !== order.id || (order.stripeSessionId && session.id !== order.stripeSessionId)) throw new PermanentPaymentError('Checkout session does not match order');
   const zeroTotal = session.payment_status === 'no_payment_required' && session.amount_total === 0;
   if (session.status !== 'complete' || !(session.payment_status === 'paid' || zeroTotal)) return undefined;
   const details = session.total_details as { amount_discount?: number; amount_tax?: number; amount_shipping?: number } | undefined;
@@ -174,10 +178,10 @@ export async function requestRefund(store: Store, orderId: string, input: { amou
   return { order: await store.getOrder(orderId), refund: ((await store.getRecord(id))!.data as Operation).refund };
 }
 export async function processPaymentEvent(store: Store, event: StripeWebhookEvent) {
-  if (!event.id) throw new Error('Stripe event ID required');
+  if (!event.id) throw new PermanentPaymentError('Stripe event ID required');
   if (await store.getRecord(`event:${event.id}`)) return;
   const object = event.data?.object;
-  if (!object) throw new Error('Stripe event object required');
+  if (!object) throw new PermanentPaymentError('Stripe event object required');
   const stripe = client();
   if (['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired'].includes(event.type ?? '')) {
     const session = stripe ? await stripe.checkout.sessions.retrieve(String(object.id)) as unknown as Record<string, unknown> : object;
@@ -190,7 +194,11 @@ export async function processPaymentEvent(store: Store, event: StripeWebhookEven
     await reconcileSession(store, session, event.id, failed);
     return;
   }
-  if (!['refund.created', 'refund.updated', 'refund.failed', 'charge.refunded'].includes(event.type ?? '')) return;
+  if (!['refund.created', 'refund.updated', 'refund.failed', 'charge.refunded'].includes(event.type ?? '')) {
+    // Record the outcome so the event is auditable and is not reprocessed on redelivery.
+    await store.putRecord({ id: `event:${event.id}`, kind: 'event', data: { type: event.type, outcome: 'skipped', reason: 'Unhandled event type' } });
+    return;
+  }
   // A charge contains aggregate amounts and sometimes a truncated refunds list. Never
   // add those aggregates to the individual-refund ledger.
   const paymentIntent = idOf(object.payment_intent);
@@ -206,12 +214,16 @@ export async function processPaymentEvent(store: Store, event: StripeWebhookEven
       orderId = sessions.data[0]?.metadata?.orderId;
     }
   }
-  if (!orderId) return; // An unrelated payment on the same Stripe account.
+  if (!orderId) {
+    // An unrelated payment on the same Stripe account. Record it and stop redelivery.
+    await store.putRecord({ id: `event:${event.id}`, kind: 'event', data: { type: event.type, outcome: 'skipped', reason: 'No matching order for this payment' } });
+    return;
+  }
 
   let order = await store.getOrder(orderId);
-  if (!order) throw new Error('Order not found');
+  if (!order) throw new PermanentPaymentError('Order not found');
   if (!order.paidAt || (stripe && order.stripeSessionId)) order = await syncPayment(store, order);
-  if (intent && order.stripePaymentIntentId && intent !== order.stripePaymentIntentId) throw new Error('Refund payment mismatch');
+  if (intent && order.stripePaymentIntentId && intent !== order.stripePaymentIntentId) throw new PermanentPaymentError('Refund payment mismatch');
   await store.atomic(async tx => {
     const current = (await tx.getOrder(order!.id))!;
     if (current.refundedAmount > 0 && !await tx.getRecord(`refund-baseline:${current.id}`) && !(await tx.listRecords('refund', current.id)).length) {
@@ -236,7 +248,7 @@ export async function processPaymentEvent(store: Store, event: StripeWebhookEven
     }
     const changed: RefundEntry[] = [];
     for (const r of refunds) {
-      if (r.currency && r.currency !== 'usd') throw new Error('Refund currency mismatch');
+      if (r.currency && r.currency !== 'usd') throw new PermanentPaymentError('Refund currency mismatch');
       const entry: RefundEntry = { refundId: String(r.id), amount: Number(r.amount), status: String(r.status), reason: (r.metadata as Record<string, string> | undefined)?.reason ?? (typeof r.failure_reason === 'string' ? r.failure_reason : undefined) };
       const before = (await tx.getRecord(`refund:${entry.refundId}`))?.data as RefundEntry | undefined;
       current = await refundOrder(tx, current, entry, false);

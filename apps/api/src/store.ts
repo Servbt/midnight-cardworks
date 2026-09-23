@@ -100,7 +100,7 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
-      const order: Order = { id: 'ord_' + nanoid(8), email: normalizeEmail(input.email), receiptTokenHash: input.receiptTokenHash, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
+      const order: Order = { id: 'ord_' + nanoid(8), email: normalizeEmail(input.email), receiptTokenHash: input.receiptTokenHash, receiptExpiresAt: input.receiptExpiresAt, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
       orders.push(order);
       return order;
     },
