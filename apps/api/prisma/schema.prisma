@@ -49,6 +49,7 @@ model Order {
   id        String      @id
   email           String
   receiptTokenHash String?
+  receiptExpiresAt DateTime?
   customerName    String?
   shippingAddress String?
   subtotal        Int
