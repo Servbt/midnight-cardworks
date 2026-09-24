@@ -124,6 +124,88 @@ describe('Midnight Cardworks storefront', () => {
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
+  it('opens the whole product image from the detail image and closes on Escape', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
+
+    // Nothing overlays the page until the artwork is actually activated.
+    expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    // The viewer renders its own copy of the art, uncropped, and opens at fit.
+    const fullImage = within(dialog).getByAltText('Golden Hour Commander Proxy card art, full size');
+    expect(fullImage).toHaveAttribute('src', 'x');
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Click the image or scroll to zoom in/)).toBeInTheDocument();
+    // aria-modal: the page behind is not scrollable while the viewer is open.
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument());
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('zooms the full product image, reports the level, and clamps at both ends', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    const zoomIn = within(dialog).getByRole('button', { name: 'Zoom in' });
+    const zoomOut = within(dialog).getByRole('button', { name: 'Zoom out' });
+
+    // At fit there is nothing to zoom out of.
+    expect(zoomOut).toBeDisabled();
+
+    await userEvent.click(zoomIn);
+    expect(within(dialog).getByText('135%')).toBeInTheDocument();
+    expect(zoomOut).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reset zoom to fit the whole image' }));
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+
+    // Drive it past the ceiling: the level stops at 400% and the control switches off.
+    // These are native DOM clicks, not fireEvent: fireEvent wraps each dispatch in act(),
+    // which flushes a re-render between clicks and would hide a stale-closure bug entirely.
+    // Dispatching all of them in one synchronous loop is what makes React batch the updates,
+    // which is exactly the case that stalled at 182% when the handler read the rendered value.
+    for (let i = 0; i < 12; i += 1) zoomIn.click();
+    await waitFor(() => expect(within(dialog).getByText('400%')).toBeInTheDocument());
+    expect(zoomIn).toBeDisabled();
+    expect(zoomOut).toBeEnabled();
+
+    for (let i = 0; i < 20; i += 1) await userEvent.click(zoomOut);
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+    expect(zoomOut).toBeDisabled();
+  });
+
+  it('toggles zoom by clicking the image and closes when the backdrop is clicked', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    const fullImage = within(dialog).getByAltText('Golden Hour Commander Proxy card art, full size');
+
+    // Clicking the art zooms in without dismissing the viewer.
+    await userEvent.click(fullImage);
+    expect(within(dialog).getByText('200%')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+
+    await userEvent.click(fullImage);
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+
+    // Clicking outside the panel closes it.
+    await userEvent.click(document.querySelector('.image-viewer-backdrop') as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument());
+  });
+
   it('returns from a listing detail to the shop when browser back navigation fires', async () => {
     render(<App />);
 
