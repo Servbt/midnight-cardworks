@@ -2778,15 +2778,98 @@ footer {
 
 .admin-panel :is(.product-editor.new-product-editor) { grid-template-columns: minmax(0, 1fr); }
 
-.admin-panel :is(.admin-listing) { padding: 1rem 1.1rem; border: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg-surface); margin-bottom: .6rem; }
+/* Cards sit one step up from the panel so five of them read as five things rather
+   than one long column of fields. */
+.admin-panel :is(.admin-listing) { padding: 1.1rem 1.2rem; border: 1px solid var(--border-2); background: var(--bg-raised); margin-bottom: .75rem; }
 
 .admin-panel :is(.admin-listing img) { width: 92px; height: 129px; }
 
-.admin-panel :is(.admin-listing > p) {
+/* 14. Listing cards, reorganised. Each card now leads with the product name and its
+   state so you can identify it without reading the inputs, and the fields sit under
+   four named groups instead of one arbitrary run that left a hole in every card. */
+.admin-panel :is(.listing-head) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .3rem 1rem;
+  align-items: baseline;
+  align-content: start;
+}
+.admin-panel :is(.listing-head h4) {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: .94rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.admin-panel :is(.listing-stock) {
+  grid-column: 1 / -1;
+  margin: 0;
   color: var(--text-3);
-  font-weight: 650;
+  font-size: .82rem;
   letter-spacing: .02em;
 }
+.admin-panel :is(.listing-flags) { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+.admin-panel :is(.listing-flag) {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-pill);
+  padding: .22rem .55rem;
+  color: var(--text-2);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.admin-panel :is(.listing-flag.is-live, .listing-flag.is-sale) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.admin-panel :is(.listing-flag.is-hidden) { color: var(--text-3); border-color: var(--border); }
+/* The groups sit two-up, and each label carries a hairline so the form reads as
+   sections rather than a field soup. */
+.admin-panel :is(.editor-grid) {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+.admin-panel :is(.listing-group) { display: grid; gap: .55rem; align-content: start; min-width: 0; }
+.admin-panel :is(.listing-group-label) {
+  display: block;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.admin-panel :is(.field-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: .55rem 1rem;
+  align-items: start;
+}
+/* Spans chosen so no group ends on a short row of empty cells, which is what the first
+   pass produced: Identity and Pricing both trailed off with two blank cells. Two columns
+   also lets the long labels ("Title for Golden Hour Commander Proxy") sit on one line
+   instead of wrapping at 193px. The textarea and the active toggle take the full width;
+   the image URL sits beside the uploader. */
+.admin-panel :is(.field-grid > label:has(textarea)) { grid-column: 1 / -1; }
+.admin-panel :is(.field-grid > .checkbox-row) { grid-column: 1 / -1; }
+.admin-panel :is(.field-grid > .image-dropzone) { grid-column: auto; }
+.admin-panel :is(.listing-actions) {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+.admin-panel :is(.listing-actions button) { min-width: min(260px, 100%); white-space: normal; }
 
 
 /* 10. Order cards: the primary action leads, the destructive one stops shouting as
@@ -2866,28 +2949,11 @@ footer {
 }
 
 
-/* 13. The listing form at 6 columns of 180px squeezed verbose labels into two lines
-   and clipped the save button: `Save Golden Hour Commander Proxy` inherited the base
-   button rule's white-space: nowrap, so the label could not wrap and overflowed its
-   cell — it rendered as "e Golden Hour Commander Pr", cut off at both ends. Wider
-   columns, a wrapping button, and spans that match how much room each field needs. */
-.admin-panel :is(.product-editor .editor-grid) {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.admin-panel :is(.product-editor .editor-grid > label:has(textarea)) { grid-column: span 2; }
-
-.admin-panel :is(.product-editor .editor-grid > label:has(input[type='file']), .image-dropzone) { grid-column: span 2; }
-
-.admin-panel :is(.product-editor .editor-grid > button) {
-  grid-column: 1 / -1;
-  justify-self: end;
-  min-width: min(260px, 100%);
-  white-space: normal;
-}
-
-/* The base button rule is nowrap; on the console any long admin label clipped the same
-   way, so wrapping is the default here and short labels are unaffected. */
+/* 13. Admin buttons wrap rather than truncate. `Save Golden Hour Commander Proxy`
+   inherited the base button rule's white-space: nowrap, so the label could not wrap
+   and overflowed its cell — it rendered as "e Golden Hour Commander Pr", cut off at
+   both ends. The listing field geometry this section used to carry now lives in 14,
+   which matches the grouped card; leaving it here would have overridden that grid. */
 .admin-panel :is(button) { white-space: normal; }
 
-.admin-panel :is(.product-editor .editor-grid > label:has(textarea) textarea) { min-height: 120px; }
+.admin-panel :is(.field-grid textarea) { min-height: 120px; }

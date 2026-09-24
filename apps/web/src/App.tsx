@@ -1084,30 +1084,70 @@ export default function App() {
     const setProduct = (patch: Partial<Product>) => isNew ? setNewProduct((item) => ({ ...item, ...patch })) : updateAdminProduct(product.slug, patch);
     const saveLabel = isNew ? 'Create product listing' : `Save ${originalTitle}`;
     const dropzoneClass = `image-dropzone${imageDragSlug === product.slug ? ' is-dragging' : ''}`;
+    const available = Math.max(0, product.inventory - (product.reservedInventory ?? 0));
+    // Grouped instead of one flat grid. The fields ran slug, title, description, price, category,
+    // tags, inventory, image, active in arbitrary order, which left a hole in every card and meant
+    // reading the inputs to work out which product you were editing. The card now leads with the
+    // product name and its state, and the fields sit under named groups in the order you think
+    // about them: what it is, what it costs, what it says, what it looks like.
     return <article className={`admin-listing product-editor${isNew ? ' new-product-editor' : ''}`} key={isNew ? 'new-product' : product.id}>
       {!isNew && <img src={product.image} alt="" />}
-      {!isNew && <p>Physical stock: {product.inventory} · Held in checkout: {product.reservedInventory ?? 0} · Available: {Math.max(0, product.inventory - (product.reservedInventory ?? 0))}</p>}
+      <header className="listing-head">
+        <h4>{isNew ? 'New listing' : product.title || product.slug}</h4>
+        <p className="listing-stock">
+          {isNew
+            ? 'Fill in the details below, then create the listing.'
+            : `Physical stock: ${product.inventory} · Held in checkout: ${product.reservedInventory ?? 0} · Available: ${available}`}
+        </p>
+        {!isNew && <div className="listing-flags">
+          <span className={`listing-flag${product.active ? ' is-live' : ' is-hidden'}`}>{product.active ? 'Live' : 'Hidden'}</span>
+          <span className="listing-flag">{formatMoney(effectiveProductPrice(product))}</span>
+          {isProductOnSale(product) && <span className="listing-flag is-sale">On sale</span>}
+        </div>}
+      </header>
       <div className="editor-grid">
-        <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
-        <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
-        <label>{isNew ? 'New product description' : `Description for ${originalTitle}`}<textarea aria-label={isNew ? 'New product description' : `Description for ${originalTitle}`} value={product.description} onChange={(e) => setProduct({ description: e.target.value })} /></label>
-        <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
-        <label>{isNew ? 'New product category' : `Category for ${originalTitle}`}<input aria-label={isNew ? 'New product category' : `Category for ${originalTitle}`} value={product.category} onChange={(e) => setProduct({ category: e.target.value })} /></label>
-        <label>{isNew ? 'New product tags' : `Tags for ${originalTitle}`}<input aria-label={isNew ? 'New product tags' : `Tags for ${originalTitle}`} value={product.tags.join(', ')} onChange={(e) => setProduct({ tags: e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} /></label>
-        <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
-        <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
-        <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
-        {!isNew && <label
-          className={dropzoneClass}
-          onDragEnter={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
-          onDragOver={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
-          onDragLeave={(event) => { event.preventDefault(); setImageDragSlug(null); }}
-          onDrop={(event) => handleImageDrop(product, event)}
-        >
-          <span>Upload image for {originalTitle}</span>
-          <input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} />
-          <small>Drop image here or choose a file</small>
-        </label>}
+        <div className="listing-group">
+          <span className="listing-group-label">Identity</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
+            <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
+            <label>{isNew ? 'New product category' : `Category for ${originalTitle}`}<input aria-label={isNew ? 'New product category' : `Category for ${originalTitle}`} value={product.category} onChange={(e) => setProduct({ category: e.target.value })} /></label>
+            <label>{isNew ? 'New product tags' : `Tags for ${originalTitle}`}<input aria-label={isNew ? 'New product tags' : `Tags for ${originalTitle}`} value={product.tags.join(', ')} onChange={(e) => setProduct({ tags: e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} /></label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Pricing &amp; stock</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
+            <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
+            <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Description</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product description' : `Description for ${originalTitle}`}<textarea aria-label={isNew ? 'New product description' : `Description for ${originalTitle}`} value={product.description} onChange={(e) => setProduct({ description: e.target.value })} /></label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Media</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
+            {!isNew && <label
+              className={dropzoneClass}
+              onDragEnter={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+              onDragOver={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+              onDragLeave={(event) => { event.preventDefault(); setImageDragSlug(null); }}
+              onDrop={(event) => handleImageDrop(product, event)}
+            >
+              <span>Upload image for {originalTitle}</span>
+              <input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} />
+              <small>Drop image here or choose a file</small>
+            </label>}
+          </div>
+        </div>
+      </div>
+      <div className="listing-actions">
         <button onClick={() => void handleProductSave(product)}>{saveLabel}</button>
       </div>
     </article>;
