@@ -58,18 +58,46 @@ describe('launch hardening', () => {
       expect(response.body).toContain('/products/golden-hour-commander-proxy');
     });
 
-    it('emits absolute canonical and og:url values when APP_BASE_URL is configured', async () => {
+    it('replaces the shell head metadata so a product page declares exactly one canonical', async () => {
       vi.stubEnv('APP_BASE_URL', 'https://servbotshop.com');
       const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-hardening-'));
-      await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><html><head><title>Midnight Cardworks</title></head><body><div id="root"></div></body></html>');
+      // Mirrors the real apps/web/index.html head, including the homepage canonical and og
+      // tags that used to survive into product pages and conflict with the injected ones.
+      await writeFile(path.join(staticRoot, 'index.html'), [
+        '<!doctype html><html lang="en"><head>',
+        '<meta charset="UTF-8" />',
+        '<title>Midnight Cardworks | Custom Trading Card Proxies</title>',
+        '<meta name="description" content="Shop premium custom proxies." />',
+        '<link rel="canonical" href="https://servbotshop.com/" />',
+        '<meta property="og:type" content="website" />',
+        '<meta property="og:title" content="Midnight Cardworks | Custom Trading Card Proxies" />',
+        '<meta property="og:url" content="https://servbotshop.com/" />',
+        '<meta name="theme-color" content="#070710" />',
+        '</head><body><div id="root"></div></body></html>'
+      ].join('\n'));
 
       try {
         const app = await buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
         const page = await app.inject({ method: 'GET', url: '/products/golden-hour-commander-proxy' });
+        const productUrl = 'https://servbotshop.com/products/golden-hour-commander-proxy';
 
         expect(page.statusCode).toBe(200);
-        expect(page.body).toContain('rel="canonical" href="https://servbotshop.com/products/golden-hour-commander-proxy"');
-        expect(page.body).toContain('property="og:url" content="https://servbotshop.com/products/golden-hour-commander-proxy"');
+        const canonicals = page.body.match(/<link[^>]*rel="canonical"[^>]*>/g) ?? [];
+        const ogUrls = page.body.match(/<meta[^>]*property="og:url"[^>]*>/g) ?? [];
+        const ogTitles = page.body.match(/<meta[^>]*property="og:title"[^>]*>/g) ?? [];
+        const descriptions = page.body.match(/<meta[^>]*name="description"[^>]*>/g) ?? [];
+        const titles = page.body.match(/<title>/g) ?? [];
+
+        // Exactly one of each — duplicates let the shell's homepage values win.
+        expect(canonicals).toHaveLength(1);
+        expect(ogUrls).toHaveLength(1);
+        expect(ogTitles).toHaveLength(1);
+        expect(descriptions).toHaveLength(1);
+        expect(titles).toHaveLength(1);
+        expect(canonicals[0]).toContain(`href="${productUrl}"`);
+        expect(ogUrls[0]).toContain(`content="${productUrl}"`);
+        // Untouched shell tags must survive the swap.
+        expect(page.body).toContain('name="theme-color"');
       } finally {
         await rm(staticRoot, { recursive: true, force: true });
       }

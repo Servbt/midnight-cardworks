@@ -142,11 +142,27 @@ function productSeoHead(product: Product) {
     `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`
   ].join('');
 }
+/**
+ * Tags a product page fully replaces. The product head was injected *alongside* the shell's
+ * own head rather than in place of it, so every product page shipped two conflicting
+ * canonicals — the shell's `https://servbotshop.com/` came first, which is the one crawlers
+ * honoured, meaning every product page declared the homepage as its canonical and served the
+ * generic homepage share card.
+ */
+const productReplacedTags = [
+  /<title>.*?<\/title>/gi,
+  /<link\b[^>]*\brel=["']canonical["'][^>]*>/gi,
+  /<meta\b[^>]*\bname=["']description["'][^>]*>/gi,
+  /<meta\b[^>]*\bproperty=["']og:[^"']*["'][^>]*>/gi
+];
+function stripProductReplacedTags(html: string) {
+  return productReplacedTags.reduce((current, pattern) => current.replace(pattern, ''), html);
+}
 async function productSeoHtml(staticRoot: string, product: Product) {
   const html = await readFile(path.join(staticRoot, 'index.html'), 'utf8');
-  const withoutTitle = html.replace(/<title>.*?<\/title>/i, '');
+  const withoutReplacedTags = stripProductReplacedTags(html);
   const head = productSeoHead(product);
-  return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
+  return withoutReplacedTags.includes('</head>') ? withoutReplacedTags.replace('</head>', `${head}</head>`) : `${head}${withoutReplacedTags}`;
 }
 
 type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier; rateLimit?: { globalMax?: number; checkoutMax?: number; publicFormMax?: number } | false };
