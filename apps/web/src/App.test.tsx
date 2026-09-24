@@ -302,6 +302,17 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
   });
 
+  it('keeps the consent notice off the admin console so it cannot cover order actions', async () => {
+    // The notice sat directly over the order action buttons on /admin, covering
+    // "Sync Stripe payment" and "Cancel pending order".
+    mockAuth.isAdmin = true;
+    window.history.pushState({}, '', '/admin');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Admin dashboard' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
+  });
+
   it('opens the privacy page from the footer and lets shoppers allow analytics', async () => {
     render(<App />);
 

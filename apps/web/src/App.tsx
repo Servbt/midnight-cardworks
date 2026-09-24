@@ -1790,7 +1790,10 @@ export default function App() {
 
     {productImageViewer}
 
-    {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
+    {/* The consent notice belongs to shoppers. On /admin it sat over the order action
+        buttons — it was physically covering "Sync Stripe payment" and "Cancel pending
+        order" — and an internal seller console has nothing to consent to. */}
+    {view !== 'admin' && analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
       <div>
         <strong>Privacy & cookie choices</strong>
         <p>Necessary storage keeps cart, checkout, sign-in, and security features working. Optional privacy-friendly analytics helps improve the shop after you allow it.</p>
