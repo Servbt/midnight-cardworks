@@ -2558,3 +2558,336 @@ footer {
 :is(.free-shipping-bar, .free-shipping-bar-fill, .nav-cart-count, .status-badge) {
   border-radius: var(--radius-pill);
 }
+
+/* ============================================================================
+   ADMIN SLEEK PASS
+   The storefront was flattened onto one radius language, one type scale and no
+   effects. The seller console is the other half of the product and still carried
+   the old drift: six radius values, ten near-duplicate font sizes, and a mint
+   green used as a second accent that fought the amber brand colour.
+   ============================================================================ */
+
+/* 1. LAYOUT BUG: the listing editor was rendering inside the 110px thumbnail column.
+   `.product-editor` is a 110px/1fr grid; the thumbnail and the stock line fill row
+   one, so the editor grid auto-placed into row two *column one* — a 110px cell. Its
+   own repeat(auto-fit, minmax(180px,1fr)) then could not fit even one column, and
+   every field stacked vertically. Measured: editor grid at x=159 width=110px, tracks
+   "180px 0px", each listing 1063px tall, the page 6574px. Spanning both columns hands
+   the fields the real 1283px and the form collapses to a few rows. */
+.admin-panel :is(.product-editor .editor-grid) { grid-column: 1 / -1; }
+
+
+/* 2. One radius language. Plates square, controls 4px, and status badges keep the
+   pill because the storefront already treats a status indicator as genuinely round. */
+.admin-panel :is(
+  .order-card,
+  .admin-workspace,
+  .admin-grid > div,
+  .admin-tabs,
+  .marketing-card,
+  .subscriber-list article,
+  .sale-toolbar,
+  .sale-row,
+  .content-card,
+  .content-editor-card,
+  .image-dropzone,
+  .listing-tab-panel,
+  .admin-listing img
+) { border-radius: var(--radius-plate); }
+
+.admin-panel :is(
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select
+) { border-radius: var(--radius-control); }
+
+
+/* 3. Tabs: hairline underline, matching the storefront nav, and a 44px hit target.
+   They measured 38px, under the comfortable minimum for a pointer. */
+.admin-panel :is(.admin-tabs) {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: .15rem;
+}
+
+.admin-panel :is(.admin-tabs button) {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 0 .85rem;
+}
+
+.admin-panel :is(.admin-tabs .active-tab) {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.admin-panel :is(.admin-tabs button:hover:not(:disabled):not(.active-tab)) {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.admin-panel :is(.listing-subtabs, .content-subtabs) { background: transparent; }
+
+
+/* 4. Summary chips were pills inside a pill. The storefront settled on tracked
+   micro-labels divided by hairlines, so the console reads as instrumentation. */
+.admin-panel :is(.admin-summary) { gap: 0; align-items: center; }
+
+.admin-panel :is(.admin-summary span) {
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  padding: 0 .8rem;
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.admin-panel :is(.admin-summary span:first-child) { border-left: 0; padding-left: 0; }
+
+
+/* 5. Status colour. The mint green (#6ee7b7) was the only non-amber accent in the
+   system and it read as a different product. Attention states take the brand amber;
+   neutral states stay neutral; genuine failures keep the red token. */
+.admin-panel :is(.status-badge) {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .28rem .55rem;
+}
+
+.admin-panel :is(.sale-status-active, .badge-sale) {
+  background: transparent;
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.admin-panel :is(.sale-status-inactive) {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-3);
+}
+
+
+/* 6. Type scale. Ten sizes (.76 .78 .8 .82 .85 .88 .94 .95 1.06 1.097rem) collapse
+   onto three: micro, body, and card heading. */
+.admin-panel { font-size: .94rem; }
+
+.admin-panel :is(
+  label,
+  p,
+  small,
+  .subscriber-list strong,
+  .subscriber-list small,
+  .subscriber-list span:not(.status-badge),
+  .sale-listing-summary span,
+  .sale-listing-summary strong,
+  .order-card p,
+  .order-card ul,
+  .order-card strong,
+  .marketing-card p,
+  .content-editor-card p,
+  .content-card p,
+  .admin-listing p,
+  .section-heading > p,
+  .sale-toolbar label,
+  .sale-row label,
+  .editor-grid label,
+  .image-dropzone small
+) { font-size: .82rem; }
+
+.admin-panel :is(
+  .marketing-card h4,
+  .content-card h3,
+  .content-editor-card h4,
+  .marketing-card-header span
+) {
+  font-family: var(--font-ui);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+
+/* 7. Section headings: Cinzel, same as the storefront, with a hairline rule so the
+   eye has one line to scan per workspace instead of a plain bold sentence. */
+.admin-panel :is(.listing-tab-panel h3, .section-heading h3, .marketing-card > h4 + *, .admin-workspace > h3) {
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  letter-spacing: .01em;
+  color: var(--text);
+}
+
+.admin-panel :is(.section-heading) {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: .85rem;
+}
+
+
+/* 8. Controls: one height, one radius, an amber focus edge instead of a glow. */
+.admin-panel :is(
+  input:not([type='checkbox']):not([type='radio']),
+  select
+) { min-height: 44px; }
+
+.admin-panel :is(input:not([type='checkbox']):not([type='radio']):focus-visible,
+    textarea:focus-visible,
+    select:focus-visible) {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.admin-panel :is(textarea) { min-height: 96px; }
+
+.admin-panel :is(.marketing-compose textarea) { min-height: 140px; }
+
+.admin-panel :is(.blog-editor-card textarea[aria-label^="Blog body"]) { min-height: 160px; }
+
+.admin-panel :is(.editor-grid) { gap: .7rem 1rem; align-items: start; }
+
+.admin-panel :is(.image-dropzone:hover, .image-dropzone.is-dragging) { box-shadow: none; }
+
+
+/* 9. Listing rows: a 5:7 card thumbnail to match the storefront grid, and the stock
+   line reads as data rather than a sentence. */
+.admin-panel :is(.product-editor) { grid-template-columns: 100px minmax(0, 1fr); }
+
+.admin-panel :is(.product-editor.new-product-editor) { grid-template-columns: minmax(0, 1fr); }
+
+.admin-panel :is(.admin-listing) { padding: 1rem 1.1rem; border: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg-surface); margin-bottom: .6rem; }
+
+.admin-panel :is(.admin-listing img) { width: 92px; height: 129px; }
+
+.admin-panel :is(.admin-listing > p) {
+  color: var(--text-3);
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
+
+/* 10. Order cards: the primary action leads, the destructive one stops shouting as
+   loud as it, and the order id becomes a scannable anchor line. */
+.admin-panel :is(.order-card-header strong) {
+  font-family: var(--font-ui);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text);
+}
+
+.admin-panel :is(.order-actions) {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: .5rem;
+  padding-top: .85rem;
+}
+
+.admin-panel :is(.order-actions button.ghost) {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+}
+
+.admin-panel :is(.order-actions button.ghost:hover:not(:disabled)) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+
+/* 11. Buttons inherited the storefront's .88rem; on the console every button sat a
+   size off the body text it belongs to. */
+.admin-panel :is(button) { font-size: .82rem; }
+
+
+/* 12. Health queue: the last two hardcoded colours in the console were here — a #555
+   border that is in no token and a #e9b86e attention stripe that is a different amber
+   from --accent. Both now resolve through the palette. */
+.admin-panel :is(.health-items li) {
+  border: 1px solid var(--border-2);
+  border-left: 1px solid var(--border-2);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+  padding: .9rem 1rem;
+}
+
+.admin-panel :is(.health-items li.health-attention) { border-left: 3px solid var(--accent); }
+
+.admin-panel :is(.health-items h4) {
+  font-family: var(--font-ui);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text);
+}
+
+.admin-panel :is(.health-summary) { gap: 0; align-items: center; }
+
+.admin-panel :is(.health-summary span) {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  border-left: 1px solid var(--border);
+  padding: 0 .8rem;
+}
+
+.admin-panel :is(.health-summary span:first-child) { border-left: 0; padding-left: 0; }
+
+.admin-panel :is(.sale-toolbar > span) {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+
+/* 13. The listing form at 6 columns of 180px squeezed verbose labels into two lines
+   and clipped the save button: `Save Golden Hour Commander Proxy` inherited the base
+   button rule's white-space: nowrap, so the label could not wrap and overflowed its
+   cell — it rendered as "e Golden Hour Commander Pr", cut off at both ends. Wider
+   columns, a wrapping button, and spans that match how much room each field needs. */
+.admin-panel :is(.product-editor .editor-grid) {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.admin-panel :is(.product-editor .editor-grid > label:has(textarea)) { grid-column: span 2; }
+
+.admin-panel :is(.product-editor .editor-grid > label:has(input[type='file']), .image-dropzone) { grid-column: span 2; }
+
+.admin-panel :is(.product-editor .editor-grid > button) {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-width: min(260px, 100%);
+  white-space: normal;
+}
+
+/* The base button rule is nowrap; on the console any long admin label clipped the same
+   way, so wrapping is the default here and short labels are unaffected. */
+.admin-panel :is(button) { white-space: normal; }
+
+.admin-panel :is(.product-editor .editor-grid > label:has(textarea) textarea) { min-height: 120px; }
