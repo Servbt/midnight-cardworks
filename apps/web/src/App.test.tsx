@@ -239,6 +239,10 @@ describe('Midnight Cardworks storefront', () => {
   it('lets shoppers sign up for the launch coupon email', async () => {
     render(<App />);
 
+    // The offer waits for engagement instead of covering the storefront on load.
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+    fireEvent.scroll(window);
+
     expect(await screen.findByRole('heading', { name: 'Get a coupon for the first drop.' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Newsletter name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Newsletter email'), 'buyer@example.com');
@@ -249,8 +253,14 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/newsletter'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('buyer@example.com') }));
   });
 
-  it('shows the launch coupon as a popup only on the first home visit', async () => {
+  it('does not block the storefront with the coupon popup, then shows it once after engagement', async () => {
     render(<App />);
+
+    // Nothing covers the page before the shopper has looked at anything.
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('midnight-cardworks.newsletterOfferHomeSeen')).toBeNull();
+
+    fireEvent.scroll(window);
 
     const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
     expect(within(dialog).getByText('Launch list')).toBeInTheDocument();
@@ -263,7 +273,20 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    fireEvent.scroll(window);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument());
+  });
+
+  it('closes the coupon popup with Escape', async () => {
+    render(<App />);
+    fireEvent.scroll(window);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
+    expect(dialog).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
   });
 
   it('shows the launch coupon as an inline account offer above order history after the home offer was seen', async () => {

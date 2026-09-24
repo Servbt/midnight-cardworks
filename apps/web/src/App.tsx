@@ -301,14 +301,50 @@ export default function App() {
     }
     const homeOfferSeen = readLocalFlag(newsletterOfferHomeSeenKey);
     setNewsletterHomeOfferSeen(homeOfferSeen);
-    if (view === 'home' && !homeOfferSeen) {
+    if (view !== 'home' || homeOfferSeen) {
+      setNewsletterOfferOpen(false);
+      return;
+    }
+    // The offer used to open on the first paint, so it covered the storefront before a
+    // visitor had seen a single product. Wait for real engagement instead: a third of the
+    // way down the page, or a minute on the site, whichever comes first.
+    let opened = false;
+    let timer = 0;
+    function openOffer() {
+      if (opened) return;
+      opened = true;
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
       writeLocalFlag(newsletterOfferHomeSeenKey);
       setNewsletterHomeOfferSeen(true);
       setNewsletterOfferOpen(true);
-      return;
     }
-    setNewsletterOfferOpen(false);
+    function onScroll() {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollable <= 0 || (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight >= 0.35) openOffer();
+    }
+    timer = window.setTimeout(openOffer, 60000);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, [view]);
+  useEffect(() => {
+    if (!newsletterOfferOpen) return;
+    // The dialog is aria-modal, so it has to behave like one: Escape closes it and focus
+    // moves into it (and back out again) rather than staying on the page behind it.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') closeNewsletterOffer();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    document.querySelector<HTMLInputElement>('.newsletter-popup input')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [newsletterOfferOpen]);
   useEffect(() => {
     if (view !== 'unsubscribe') return;
     if (!unsubscribeToken) {
