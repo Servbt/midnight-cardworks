@@ -4,42 +4,55 @@
   --font-display: 'Cinzel', 'Palatino Linotype', Georgia, serif;
   --font-ui:      'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  /* Backgrounds — layered darkness */
-  --bg-void:      #070710;
-  --bg-dark:      #0d0d1a;
-  --bg-surface:   #131320;
-  --bg-surface-2: #1a1a2c;
-  --bg-surface-3: #222236;
+  /* Backgrounds — three steps, not five. Sleek reads as flat: depth comes from type,
+     hairlines and space, not from layered near-identical greys and glow. */
+  --bg-void:      #08080d;
+  --bg-surface:   #101018;
+  --bg-raised:    #16161f;
+  /* Legacy aliases so existing rules keep resolving onto the three-step scale. */
+  --bg-dark:      var(--bg-void);
+  --bg-surface-2: var(--bg-raised);
+  --bg-surface-3: var(--bg-raised);
 
-  /* Accent — warm amber gold */
-  --accent:       #d4a853;
-  --accent-hover: #c49040;
-  --accent-dim:   rgba(212,168,83,.12);
-  --accent-glow:  rgba(212,168,83,.22);
-  --accent-border: rgba(212,168,83,.3);
+  /* Accent — warm amber. Used for text, hairlines and the primary CTA. Never as a glow. */
+  --accent:        #d4a853;
+  --accent-hover:  #c49040;
+  --accent-dim:    rgba(212,168,83,.10);
+  --accent-border: rgba(212,168,83,.34);
+  --accent-glow:   transparent;
 
   /* Text */
   --text:   #f5f4f0;
-  --text-2: rgba(245,244,240,.68);
-  --text-3: rgba(245,244,240,.40);
+  --text-2: rgba(245,244,240,.66);
+  --text-3: rgba(245,244,240,.42);
 
-  /* Borders */
-  --border:       rgba(255,255,255,.07);
-  --border-2:     rgba(255,255,255,.12);
+  /* Borders — hairlines now do the work shadows used to. */
+  --border:   rgba(255,255,255,.08);
+  --border-2: rgba(255,255,255,.14);
 
   /* Semantic */
   --success:      #6ee7b7;
   --danger:       #f87171;
-  --foil-grad:    linear-gradient(135deg, #7b2ff7, #9c44e8);
   --rare-gold:    #c3a438;
   --mythic:       #e05e1c;
   --uncommon:     #6b9db5;
 
-  /* Shadows */
-  --shadow-card:  0 4px 24px rgba(0,0,0,.55), 0 1px 4px rgba(0,0,0,.4);
-  --shadow-hover: 0 20px 60px rgba(212,168,83,.18), 0 6px 20px rgba(0,0,0,.7);
-  --shadow-hero:  0 40px 100px rgba(212,168,83,.28), 0 10px 40px rgba(0,0,0,.85);
-  --shadow-nav:   0 1px 0 rgba(255,255,255,.05);
+  /* Elevation — flat everywhere. One shadow, reserved for overlays. */
+  --shadow-card:  none;
+  --shadow-hover: none;
+  --shadow-hero:  none;
+  --shadow-nav:   none;
+  --shadow-overlay: 0 24px 70px rgba(0,0,0,.62);
+
+  /* Radii — two values only. Mixed radii read as assembled; consistent edges read as designed. */
+  --radius-plate:   0px;
+  --radius-control: 4px;
+  --radius-pill:    999px;
+
+  /* Chrome heights. Sticky offsets referenced the literals 58px/40px directly, so
+     changing the nav height silently broke three of them. Single source now. */
+  --nav-primary-h:   64px;
+  --nav-secondary-h: 40px;
 
   /* Layout */
   --app-w:        1400px;
@@ -97,7 +110,7 @@ button {
   min-height: 44px;
   padding: .65rem 1.35rem;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: #0d0d1a;
   font-family: var(--font-ui);
@@ -160,7 +173,7 @@ input, select, textarea {
   padding: .75rem 1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-2);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text);
   font-family: var(--font-ui);
   transition: border-color .18s ease, box-shadow .18s ease;
@@ -201,7 +214,9 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   text-transform: uppercase;
   white-space: nowrap;
 }
-.badge-foil    { background: var(--foil-grad); color: #fff; }
+/* Hairline outline rather than a fill: the amber gradient with white text it used to
+   carry was the poorest-contrast badge in the set. */
+.badge-foil    { background: transparent; color: var(--accent); border: 1px solid var(--accent-border); }
 .badge-new     { background: var(--accent); color: #0d0d1a; }
 .badge-sold    { background: rgba(255,255,255,.1); color: var(--text-3); border: 1px solid var(--border); }
 .badge-rare    { background: rgba(195,164,56,.15); color: var(--rare-gold); border: 1px solid rgba(195,164,56,.3); }
@@ -217,35 +232,41 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   z-index: 100;
 }
 
+/* Three-column grid so the wordmark can sit dead centre, the way B&O and The Row do it.
+   Background is opaque: the previous translucent + 22px blur let product titles scroll
+   visibly *through* the bar. */
 .nav-primary {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 1rem;
   padding: 0 var(--gutter);
-  height: 58px;
-  background: rgba(7,7,16,.88);
-  backdrop-filter: saturate(180%) blur(22px);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  height: var(--nav-primary-h);
+  background: var(--bg-void);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-nav);
+  box-shadow: none;
 }
 
 .brand {
+  order: 2;
+  justify-self: center;
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: .92rem;
   font-weight: 600;
-  letter-spacing: .04em;
+  letter-spacing: .24em;
+  text-transform: uppercase;
   color: var(--text);
   text-decoration: none;
-  margin-right: auto;
+  margin: 0;
   white-space: nowrap;
-  flex-shrink: 0;
 }
-.brand:hover { color: var(--accent); }
+.brand:hover { color: var(--text-2); }
 
 .nav-search {
-  flex: 1;
-  max-width: 420px;
+  order: 1;
+  justify-self: start;
+  width: 100%;
+  max-width: 300px;
   position: relative;
 }
 .nav-search input {
@@ -253,13 +274,15 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   min-width: 0;
   height: 36px;
   padding: .4rem .9rem .4rem 2.4rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   font-size: .85rem;
   color: var(--text);
 }
-.nav-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.nav-search input::placeholder { color: var(--text-3); }
+/* The global :focus-visible ring covers keyboard focus, so no glow ring here. */
+.nav-search input:focus { border-color: var(--border-2); box-shadow: none; }
 .nav-search-icon {
   position: absolute;
   left: .75rem;
@@ -271,6 +294,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 .nav-actions {
+  order: 3;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: .35rem;
@@ -284,7 +309,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   height: 40px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-2);
   font-size: 1.1rem;
   min-height: unset;
@@ -334,53 +359,53 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   align-items: center;
   gap: 0;
   padding: 0 var(--gutter);
-  height: 40px;
-  background: rgba(13,13,26,.95);
+  height: var(--nav-secondary-h);
+  background: var(--bg-void);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
 }
 .nav-secondary::-webkit-scrollbar { display: none; }
 
+/* Letter-spaced uppercase micro-labels, the way the reference sites label their nav.
+   Active state is a hairline underline plus a lift to full-strength text — not a
+   coloured pill, so the row reads as one quiet line. */
 .nav-tab {
   display: flex;
   align-items: center;
-  padding: 0 1rem;
+  padding: 0 1.05rem;
   height: 100%;
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
   color: var(--text-3);
-  font-size: .8rem;
+  font-size: .7rem;
   font-weight: 600;
-  letter-spacing: .01em;
+  letter-spacing: .13em;
+  text-transform: uppercase;
   white-space: nowrap;
   min-height: unset;
   transition: color .15s ease, border-color .15s ease;
 }
 .nav-tab:hover:not(:disabled) {
-  color: var(--text);
+  color: var(--text-2);
   background: transparent;
   transform: none;
 }
 .nav-tab.active {
-  color: var(--accent);
+  color: var(--text);
   border-bottom-color: var(--accent);
 }
 
 /* ─── HERO ───────────────────────────────────────────────────────────────── */
 .hero {
   position: relative;
-  min-height: clamp(640px, 72svh, 780px);
+  min-height: clamp(520px, 62svh, 660px);
   display: flex;
   align-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 15% 55%, rgba(212,168,83,.14) 0%, transparent 42%),
-    radial-gradient(ellipse at 85% 20%, rgba(139,92,246,.1) 0%, transparent 36%),
-    radial-gradient(ellipse at 50% 100%, rgba(7,7,16,0) 0%, rgba(7,7,16,1) 40%),
-    var(--bg-void);
+  background: var(--bg-void);
 }
 
 .hero-grid {
@@ -428,14 +453,27 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   margin-top: 1.6rem;
 }
 .mini-stats span {
-  border: 1px solid var(--border-2);
-  border-radius: 999px;
+  border: 0;
+  border-radius: 0;
   color: var(--text-3);
-  padding: .35rem .75rem;
-  background: rgba(255,255,255,.04);
-  font-size: .78rem;
+  padding: 0;
+  background: none;
+  font-size: .68rem;
   font-weight: 600;
-  letter-spacing: .03em;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+/* Hairline separators instead of pill outlines — keeps the trust line as one quiet
+   row of labels rather than three competing chrome chips. */
+.mini-stats span + span::before {
+  content: '';
+  width: 1px;
+  height: 10px;
+  margin: 0 .85rem;
+  background: var(--border-2);
 }
 
 /* Hero card art stage */
@@ -446,82 +484,11 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   align-items: center;
   gap: .85rem;
 }
-.hero-card {
-  width: 100%;
-  max-width: 340px;
-  aspect-ratio: 5/7;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at 40% 30%, rgba(212,168,83,.35), transparent 55%),
-    radial-gradient(circle at 70% 75%, rgba(139,92,246,.25), transparent 45%),
-    linear-gradient(160deg, #1a1428 0%, #0d0d1a 40%, #070710 100%);
-  border: 1px solid rgba(212,168,83,.25);
-  box-shadow: var(--shadow-hero);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-}
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(255,255,255,.12) 0%, transparent 55%),
-    linear-gradient(180deg, transparent 55%, rgba(0,0,0,.65));
-}
-.hero-card-inner {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 1.5rem;
-}
-.hero-card-label {
-  font-family: var(--font-display);
-  font-size: clamp(.7rem, 2vw, .9rem);
-  font-weight: 600;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: var(--accent);
-  display: block;
-  margin-bottom: .65rem;
-}
-.hero-card-title {
-  font-family: var(--font-display);
-  font-size: clamp(1.1rem, 3vw, 1.65rem);
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.1;
-  letter-spacing: .01em;
-}
-.hero-card-price {
-  margin-top: .5rem;
-  font-size: .9rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-/* Decorative orb behind card */
-.hero-card-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 110%;
-  height: 110%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,168,83,.18) 0%, transparent 65%);
-  filter: blur(30px);
-  pointer-events: none;
-  z-index: 0;
-}
-.hero-art-caption {
-  font-size: .78rem;
-  color: var(--text-3);
-  letter-spacing: .04em;
-  text-align: center;
-}
+/* Removed: .hero-card, .hero-card::before, .hero-card-inner, .hero-card-label,
+   .hero-card-title, .hero-card-price, .hero-card-glow and .hero-art-caption.
+   Nothing in the JSX has referenced them since the markup moved to .hero-feature,
+   so they were shipping six gradients and a 100px amber glow for no rendered output.
+   .hero-art stays — the hero still uses that wrapper. */
 
 /* ─── HERO FEATURED CARD ─────────────────────────────────────────────────────
    The featured-product button had no styles of its own. The JSX renamed the
@@ -540,10 +507,10 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   min-height: 0;
   padding: 0;
   gap: 0;
-  border: 1px solid rgba(212,168,83,.25);
-  border-radius: 20px;
-  background: linear-gradient(160deg, rgba(26,20,40,.92) 0%, rgba(13,13,26,.94) 45%, #070710 100%);
-  box-shadow: var(--shadow-hero);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+  box-shadow: none;
   overflow: hidden;
   cursor: pointer;
   text-align: left;
@@ -571,6 +538,10 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   padding: .9rem 1.1rem 1.05rem;
   border-top: 1px solid rgba(212,168,83,.18);
   background: rgba(7,7,16,.55);
+  /* The base `button` rule sets white-space:nowrap and this element is inside a
+     button, so the product title inherited it, overflowed the plate and was clipped
+     at narrow widths ("GOLDEN HOUR COMMANDE"). Reset it for the meta block. */
+  white-space: normal;
 }
 .hero-feature-label {
   font-family: var(--font-display);
@@ -652,19 +623,19 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 .gallery-preview-grid article {
-  border-radius: 16px;
+  border-radius: var(--radius-plate);
   overflow: hidden;
-  background: var(--bg-surface);
+  background: var(--bg-raised);
   border: 1px solid var(--border);
   display: grid;
   grid-template-rows: auto 1fr;
-  transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease;
+  transition: border-color .22s ease;
   cursor: pointer;
 }
+/* No lift and no glow — the artwork moves, the card stays put. */
 .gallery-preview-grid article:hover {
-  border-color: var(--accent-border);
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-3px);
+  border-color: var(--border-2);
+  box-shadow: none;
 }
 
 .gallery-preview-grid .card-img-frame {
@@ -749,8 +720,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
 .shop-sidebar {
   position: sticky;
-  top: calc(58px + 40px + 1.25rem);
-  max-height: calc(100vh - 58px - 40px - 2.5rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.25rem);
+  max-height: calc(100vh - var(--nav-primary-h) - var(--nav-secondary-h) - 2.5rem);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;
@@ -883,8 +854,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── PRODUCT GRID & CARDS ──────────────────────────────────────────────── */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2.5rem 2rem;
 }
 
 /* The card — Etsy-clean: no border around the outer wrapper */
@@ -898,27 +869,28 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   border-radius: 0;
   box-shadow: none;
   text-align: left;
-  transition: transform .25s ease;
 }
+/* Feedback comes from the hairline brightening and the art easing in — no lift, no glow. */
 .product-card:hover, .product-card:focus-visible {
-  transform: translateY(-4px);
   outline: none;
 }
-.product-card.sold-out { opacity: .65; }
+.product-card.sold-out { opacity: .6; }
 
-/* Image container — the card shape */
+/* Image container — a flat plate. Hard edges, hairline border, no elevation. */
 .product-card__img-wrap {
   position: relative;
   aspect-ratio: 5/7;
-  border-radius: 14px;
+  border-radius: var(--radius-plate);
   overflow: hidden;
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-card);
-  transition: box-shadow .25s ease;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  transition: border-color .2s ease;
 }
 .product-card:hover .product-card__img-wrap,
 .product-card:focus-visible .product-card__img-wrap {
-  box-shadow: var(--shadow-hover);
+  border-color: var(--border-2);
+  box-shadow: none;
 }
 
 .product-card__img-wrap img {
@@ -954,7 +926,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   font-weight: 800;
   letter-spacing: .04em;
   text-align: center;
-  border-radius: 0 0 14px 14px;
+  border-radius: 0;
   border: 0;
   min-height: unset;
   transform: translateY(100%);
@@ -980,11 +952,11 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   }
 }
 
-/* Info below the image */
+/* Info below the image — plain text, left aligned. The plate above is the whole card. */
 .product-card__info {
-  padding: .75rem 2px 0;
+  padding: .85rem 0 0;
   display: grid;
-  gap: .22rem;
+  gap: .3rem;
 }
 .product-card__name {
   font-size: .88rem;
@@ -1060,7 +1032,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 
 .product-detail-img-col {
   position: sticky;
-  top: calc(58px + 40px + 1.5rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.5rem);
   display: grid;
   gap: .85rem;
 }
@@ -1387,7 +1359,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .cart-items { background: transparent; }
 .cart-summary-card {
   position: sticky;
-  top: calc(58px + 40px + 1.25rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.25rem);
   display: grid;
   gap: .85rem;
   padding: 1rem;
@@ -1423,7 +1395,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .free-shipping-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  background: var(--accent);
   transition: width .4s ease;
 }
 
@@ -1512,8 +1484,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   overflow-y: auto;
   padding: clamp(1rem, 3vw, 1.45rem);
   border: 1px solid rgba(212,168,83,.38);
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(212,168,83,.13), rgba(110,231,183,.07)), var(--bg-surface);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
   box-shadow: 0 28px 90px rgba(0,0,0,.62);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1576,7 +1548,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   justify-items: center;
   text-align: center;
   border-color: rgba(212,168,83,.35);
-  background: linear-gradient(135deg, rgba(212,168,83,.12), rgba(74,144,226,.09)), var(--bg-surface);
+  background: var(--bg-raised);
 }
 .account-newsletter-offer .newsletter-copy,
 .account-newsletter-offer .newsletter-form {
@@ -1733,7 +1705,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   display: grid;
   gap: .45rem;
   border-color: rgba(110,231,183,.28);
-  background: linear-gradient(135deg, rgba(110,231,183,.08), rgba(212,168,83,.06));
+  background: var(--bg-raised);
 }
 .contact-success-card h3 {
   font-family: var(--font-display);
@@ -2396,3 +2368,66 @@ footer {
 .health-items li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
 .health-items h4 { margin: 0; }
 .operations-health select { max-width: 100%; margin-left: .5rem; }
+
+/* ─── SLEEK PASS: SURFACE & RADIUS NORMALISATION ──────────────────────────────
+   The stylesheet had grown twelve distinct border-radius values (5/6/7/8/10/12/14/
+   16/18/20/999px) across the same kinds of surfaces. That inconsistency is what
+   reads as "assembled" rather than "designed", and it is invisible until you count
+   it. These groups collapse everything onto a two-value scale: content surfaces get
+   hard edges, controls get 4px, and only things that are functionally pills keep
+   the full round.
+
+   :is() takes the specificity of its most specific argument (0,1,0 for a single
+   class), so these win against an equal-specificity component rule purely on source
+   order — which is what makes the normalisation actually apply. The first attempt
+   used :where() for safety, but :where() is specificity 0 and therefore *lost* to
+   every `.component { border-radius: … }` it was meant to replace, so only elements
+   with no rule of their own were affected. Admin-only surfaces (admin-tabs, sale-row,
+   image-dropzone, subscriber-list, marketing-card, content-editor-card, health-items)
+   are deliberately left alone — they are internal tooling, not storefront design. */
+
+/* Content surfaces — hard edges. On a dark flat page a rounded panel is the single
+   largest source of visual noise; the image plate itself should be the shape. */
+:is(
+  .panel, .narrow,
+  .shop-sidebar,
+  .listing-layout > div,
+  .product-detail-img-col img,
+  .product-detail-meta-table,
+  .trust-strip,
+  .seo-share-box,
+  .empty-state,
+  .empty-cart-state,
+  .cart-items-card,
+  .cart-summary-card,
+  .recently-viewed,
+  .recently-viewed-list article,
+  .recently-viewed-list img,
+  .sticky-checkout-bar,
+  .contact-form-card,
+  .contact-success-card,
+  .policy-card,
+  .privacy-notice,
+  .gallery-preview-grid article
+) { border-radius: var(--radius-plate); }
+
+/* Controls and small chips — 4px. */
+:is(
+  .tag-row span,
+  .seo-share-box code,
+  .quantity-stepper,
+  .results-controls select,
+  .cart-status,
+  .detail-confirmation,
+  .success,
+  .status-message,
+  .cart-message,
+  .cart-item-link img,
+  .empty-cart-cues span
+) { border-radius: var(--radius-control); }
+
+/* Genuine pills: a progress track, a count bubble and a status dot are round by
+   function, so they keep the full round and are not part of the inconsistency. */
+:is(.free-shipping-bar, .free-shipping-bar-fill, .nav-cart-count, .status-badge) {
+  border-radius: var(--radius-pill);
+}
