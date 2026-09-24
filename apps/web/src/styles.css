@@ -1039,11 +1039,132 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .product-detail-img-col img {
   width: 100%;
   aspect-ratio: 5/7;
-  object-fit: cover;
-  border-radius: 18px;
+  object-fit: cover;   /* cropped here on purpose — the viewer is where the whole art shows */
+  border-radius: var(--radius-plate);
   border: 1px solid var(--border-2);
-  box-shadow: var(--shadow-hero);
+  box-shadow: none;
   background: var(--bg-surface);
+}
+
+/* ─── PRODUCT IMAGE VIEWER ───────────────────────────────────────────────────
+   The detail page crops the art to 5:7 so it sits evenly against the grid. This is
+   the one place the whole image is visible: the stage letterboxes it with
+   object-fit: contain, and zoom is a transform whose origin follows the pointer, so
+   zooming inspects the region under the cursor rather than only the centre. */
+
+.product-detail-img-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: unset;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.product-detail-img-trigger img { display: block; }
+.product-detail-img-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: .42rem .6rem;
+  background: rgba(8,8,13,.85);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: .64rem;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.product-detail-img-trigger:hover .product-detail-img-hint,
+.product-detail-img-trigger:focus-visible .product-detail-img-hint { color: var(--text); }
+
+.image-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: clamp(.75rem, 3vw, 2rem);
+  background: rgba(4,4,8,.92);
+}
+.image-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: .85rem;
+  width: min(1200px, 100%);
+  height: min(92vh, 100%);
+  padding: .9rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-plate);
+  background: var(--bg-void);
+  box-shadow: var(--shadow-overlay);
+}
+.image-viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+}
+.image-viewer-bar h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(.95rem, 2.2vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.image-viewer-controls { display: flex; align-items: center; gap: .35rem; }
+.image-viewer-controls button {
+  min-height: 34px;
+  padding: 0 .65rem;
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.image-viewer-controls button:hover:not(:disabled) { color: var(--text); border-color: var(--text-3); }
+.image-viewer-controls button:disabled { opacity: .35; cursor: default; }
+.image-viewer-level { min-width: 64px; color: var(--accent); border-color: var(--accent-border); }
+
+/* The stage clips, so a zoomed image shows the pointed-at region instead of reflowing. */
+.image-viewer-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+.image-viewer.is-zoomed .image-viewer-stage { cursor: crosshair; }
+.image-viewer-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* the whole image, never a crop */
+  transition: transform .12s ease-out;
+}
+.image-viewer.is-zoomed .image-viewer-stage img { transition: none; }
+.image-viewer-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .image-viewer { height: 94vh; padding: .7rem; }
+  .image-viewer-bar h2 { font-size: .92rem; }
+  .image-viewer-hint { display: none; }
 }
 .product-detail-meta-table {
   border: 1px solid var(--border);

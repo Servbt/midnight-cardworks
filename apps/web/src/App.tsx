@@ -29,6 +29,13 @@ const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
 const newsletterOfferHomeSeenKey = 'midnight-cardworks.newsletterOfferHomeSeen';
 const newsletterSignupCompleteKey = 'midnight-cardworks.newsletterSignupComplete';
+// Product image viewer: bound the zoom so the controls cannot be driven into a state
+// the user has to fight their way out of, and round to whole percents for a stable label.
+const imageViewZoomMin = 1;
+const imageViewZoomMax = 4;
+const imageViewZoomStep = 1.35;
+const clampImageViewZoom = (value: number) =>
+  Math.min(imageViewZoomMax, Math.max(imageViewZoomMin, Math.round(value * 100) / 100));
 const readLocalFlag = (key: string) => {
   try { return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'; } catch { return false; }
 };
@@ -115,6 +122,9 @@ export default function App() {
   const [newsletterSignupComplete, setNewsletterSignupComplete] = useState(() => readLocalFlag(newsletterSignupCompleteKey));
   const [unsubscribeToken, setUnsubscribeToken] = useState('');
   const [unsubscribeMessage, setUnsubscribeMessage] = useState('');
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [imageViewZoom, setImageViewZoom] = useState(1);
+  const [imageViewOrigin, setImageViewOrigin] = useState({ x: 50, y: 50 });
   const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
   const [campaignMessage, setCampaignMessage] = useState('A new Midnight Cardworks update is ready. Add a short note about the deal, new product, or launch coupon here.');
   const { isAdmin, getAdminToken } = useAdminAccess();
@@ -345,6 +355,35 @@ export default function App() {
       previouslyFocused?.focus?.();
     };
   }, [newsletterOfferOpen]);
+  useEffect(() => {
+    if (!imageViewerOpen) return;
+    // Same contract as the coupon dialog: aria-modal means Escape closes it and focus
+    // goes in on open and back to the image on close.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setImageViewerOpen(false);
+    }
+    // Wheel is bound natively rather than through React's onWheel because React attaches
+    // wheel listeners passively, where preventDefault() is ignored — the page would scroll
+    // behind the viewer instead of zooming. The functional updater avoids a stale closure.
+    function onWheel(event: globalThis.WheelEvent) {
+      event.preventDefault();
+      setImageViewZoom((current) => clampImageViewZoom(current * (event.deltaY < 0 ? 1.12 : 0.89)));
+    }
+    const stage = document.querySelector<HTMLElement>('.image-viewer-stage');
+    // aria-modal: the page behind must not scroll while the viewer owns the viewport.
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    stage?.addEventListener('wheel', onWheel, { passive: false });
+    document.querySelector<HTMLButtonElement>('.image-viewer-close')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      stage?.removeEventListener('wheel', onWheel);
+      document.body.style.overflow = previousBodyOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, [imageViewerOpen]);
   useEffect(() => {
     if (view !== 'unsubscribe') return;
     if (!unsubscribeToken) {
@@ -1133,6 +1172,86 @@ export default function App() {
     </section>
   </div> : null;
 
+  const openImageViewer = () => {
+    setImageViewZoom(imageViewZoomMin);
+    setImageViewOrigin({ x: 50, y: 50 });
+    setImageViewerOpen(true);
+  };
+
+  // The product page shows the art in a 5:7 crop so the layout stays even with the grid;
+  // this viewer is where the whole image is actually visible. The scale is applied as a
+  // transform whose origin follows the pointer, so zooming in inspects the region you are
+  // pointing at instead of only the centre.
+  const productImageViewer = imageViewerOpen && selectedProduct ? <div
+    className="image-viewer-backdrop"
+    role="presentation"
+    onClick={() => setImageViewerOpen(false)}
+  >
+    <section
+      className={`image-viewer${imageViewZoom > 1 ? ' is-zoomed' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-viewer-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="image-viewer-bar">
+        <h2 id="image-viewer-title">{selectedProduct.title}</h2>
+        <div className="image-viewer-controls">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={imageViewZoom <= imageViewZoomMin}
+            onClick={() => setImageViewZoom((current) => clampImageViewZoom(current / imageViewZoomStep))}
+          >−</button>
+          <button
+            type="button"
+            className="image-viewer-level"
+            aria-label="Reset zoom to fit the whole image"
+            onClick={() => setImageViewZoom(imageViewZoomMin)}
+          >{Math.round(imageViewZoom * 100)}%</button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={imageViewZoom >= imageViewZoomMax}
+            onClick={() => setImageViewZoom((current) => clampImageViewZoom(current * imageViewZoomStep))}
+          >+</button>
+          <button
+            type="button"
+            className="image-viewer-close"
+            aria-label="Close full image view"
+            onClick={() => setImageViewerOpen(false)}
+          >Close</button>
+        </div>
+      </div>
+      <div
+        className="image-viewer-stage"
+        onMouseMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          setImageViewOrigin({
+            x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+            y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100))
+          });
+        }}
+      >
+        <img
+          src={selectedProduct.image}
+          alt={`${selectedProduct.title} card art, full size`}
+          style={{
+            transform: `scale(${imageViewZoom})`,
+            transformOrigin: `${imageViewOrigin.x}% ${imageViewOrigin.y}%`
+          }}
+          onClick={() => setImageViewZoom((current) => (current > imageViewZoomMin ? imageViewZoomMin : 2))}
+        />
+      </div>
+      <p className="image-viewer-hint">
+        {imageViewZoom > 1
+          ? 'Move the pointer to explore the card, click the image to fit it again. Esc closes.'
+          : 'Click the image or scroll to zoom in. Esc closes.'}
+      </p>
+    </section>
+  </div> : null;
+
   const heroFeature = useMemo(() => products.find((p) => p.featured) ?? products[0], [products]);
 
   const navigation = <div className="top-nav" role="banner">
@@ -1309,7 +1428,15 @@ export default function App() {
         <button className="ghost" onClick={() => showShop()}>← Back to shop</button>
         <div className="product-detail-grid">
           <div className="product-detail-img-col">
-            <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
+            <button
+              className="product-detail-img-trigger"
+              type="button"
+              onClick={openImageViewer}
+              aria-label={`View the full image of ${selectedProduct.title}`}
+            >
+              <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
+              <span className="product-detail-img-hint" aria-hidden="true">See full image</span>
+            </button>
             <table className="product-detail-meta-table">
               <tbody>
                 <tr><td>Category</td><td>{selectedProduct.category}</td></tr>
@@ -1660,6 +1787,8 @@ export default function App() {
     </section>}
 
     {newsletterOfferDialog}
+
+    {productImageViewer}
 
     {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
       <div>
