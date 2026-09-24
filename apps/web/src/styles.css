@@ -523,6 +523,72 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   text-align: center;
 }
 
+/* ─── HERO FEATURED CARD ─────────────────────────────────────────────────────
+   The featured-product button had no styles of its own. The JSX renamed the
+   element to .hero-feature but the CSS below was still written against
+   .hero-card, so the button fell through to the generic `button` rule
+   (inline-flex, min-height 44px, gap .45rem) and every child collapsed:
+   the frame measured 0x0 so the artwork never showed, and the label, title
+   and price sat on one line with no separation. This restores the intended
+   portrait card using the same 5:7 ratio as .hero-card. */
+.hero-feature {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  max-width: 340px;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  border: 1px solid rgba(212,168,83,.25);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(26,20,40,.92) 0%, rgba(13,13,26,.94) 45%, #070710 100%);
+  box-shadow: var(--shadow-hero);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  transition: transform .18s ease, border-color .18s ease;
+}
+.hero-feature:hover { transform: translateY(-3px); border-color: rgba(212,168,83,.5); }
+.hero-feature:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hero-feature-frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5/7;
+  overflow: hidden;
+  background: #0d0d1a;
+}
+.hero-feature-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hero-feature-meta {
+  display: flex;
+  flex-direction: column;
+  gap: .28rem;
+  padding: .9rem 1.1rem 1.05rem;
+  border-top: 1px solid rgba(212,168,83,.18);
+  background: rgba(7,7,16,.55);
+}
+.hero-feature-label {
+  font-family: var(--font-display);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.hero-feature-title {
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+.hero-feature-price { font-size: .88rem; font-weight: 700; color: var(--accent); }
+
 /* ─── STOREFRONT PANEL WRAPPER ──────────────────────────────────────────── */
 .storefront-panel {
   background: var(--bg-void);
