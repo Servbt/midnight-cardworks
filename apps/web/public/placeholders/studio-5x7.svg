@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 840" role="img" aria-label="Placeholder studio artwork">
+  <!-- PLACEHOLDER: replace with a real 5:7 studio photograph before launch.
+       Deliberately looks like placeholder art rather than an empty plate. -->
+  <rect width="600" height="840" fill="#070710"/>
+  <rect x="40" y="40" width="520" height="760" fill="none" stroke="#2b2b3c" stroke-width="1"/>
+  <rect x="56" y="56" width="488" height="728" fill="none" stroke="#d4a853" stroke-opacity=".22" stroke-width="1"/>
+
+  <!-- contact-sheet motif: two rows of card outlines -->
+  <g stroke="#d4a853" stroke-opacity=".3" stroke-width="1" fill="#101018">
+    <rect x="92" y="96" width="128" height="179"/>
+    <rect x="236" y="96" width="128" height="179"/>
+    <rect x="380" y="96" width="128" height="179"/>
+    <rect x="92" y="292" width="128" height="179"/>
+    <rect x="236" y="292" width="128" height="179"/>
+    <rect x="380" y="292" width="128" height="179"/>
+  </g>
+  <g stroke="#d4a853" stroke-opacity=".14" stroke-width="1">
+    <path d="M92 275 L220 96"/><path d="M236 275 L364 96"/><path d="M380 275 L508 96"/>
+    <path d="M92 471 L220 292"/><path d="M236 471 L364 292"/><path d="M380 471 L508 292"/>
+  </g>
+
+  <g transform="translate(300 578)">
+    <circle r="42" fill="#070710" stroke="#d4a853" stroke-opacity=".55" stroke-width="1"/>
+    <path d="M-15 11 L0 -13 L15 11 Z" fill="none" stroke="#d4a853" stroke-width="1.6"/>
+  </g>
+
+  <text x="300" y="682" text-anchor="middle" fill="#c9c9d8"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="5">PLACEHOLDER ART</text>
+  <text x="300" y="712" text-anchor="middle" fill="#7a7a92"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" letter-spacing="3.4">5 : 7 STUDIO IMAGE</text>
+</svg>

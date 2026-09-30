@@ -418,6 +418,32 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('Examples from the collection.')).toBeInTheDocument();
   });
 
+  it('shows the studio story, with placeholder art, after the gallery', async () => {
+    render(<App />);
+
+    const story = await screen.findByRole('region', { name: 'Our studio' });
+    expect(story).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Made in small batches, finished by hand.' })).toBeInTheDocument();
+    expect(screen.getByText('Finished in short runs rather than mass-produced.')).toBeInTheDocument();
+    expect(screen.getByText('Custom cards are unofficial by nature, and we keep that note visible on every page. The difference between a display piece and a tournament-legal card should never be something you have to guess at.')).toBeInTheDocument();
+    // Placeholder art stands in until real 5:7 studio renders exist.
+    expect(screen.getByAltText('Placeholder studio artwork')).toBeInTheDocument();
+    expect(screen.getByAltText('Placeholder workshop artwork')).toBeInTheDocument();
+
+    const gallery = screen.getByRole('region', { name: 'Gallery preview' });
+    expect(gallery.compareDocumentPosition(story) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('hides the reviews section entirely while there are no real reviews', async () => {
+    render(<App />);
+
+    await screen.findByRole('region', { name: 'Our studio' });
+    // customerReviews is empty, so the section must be absent rather than inventing quotes.
+    expect(screen.queryByRole('region', { name: 'Customer reviews' })).not.toBeInTheDocument();
+    expect(screen.queryByText('What buyers say.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Notes from customers who have ordered from the studio.')).not.toBeInTheDocument();
+  });
+
   it('shows launch polish with product metadata', async () => {
     render(<App />);
 

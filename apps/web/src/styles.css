@@ -2872,6 +2872,109 @@ footer {
 .admin-panel :is(.listing-actions button) { min-width: min(260px, 100%); white-space: normal; }
 
 
+/* ============================================================================
+   STOREFRONT: MAKER STORY & REVIEWS
+
+   The storefront had no answer to "who makes this, and why should I trust it" —
+   nothing between the hero and the shop grid. These two sections fill that gap.
+
+   Held to the same storefront rules as the rest of the design language: the three
+   radii only (content surfaces get hard edges), no gradients, no shadows, and font
+   sizes drawn from the existing scale rather than new ones. Placeholder art lives in
+   /public/placeholders and is sized 5:7 and 16:9 so the real renders drop straight in.
+   ============================================================================ */
+.maker-story-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 1.75rem;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+.maker-story-art img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+}
+.maker-story-body { display: grid; gap: .9rem; align-content: start; }
+.maker-story-body p {
+  margin: 0;
+  max-width: 64ch;
+  color: var(--text-2);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+.maker-story-points {
+  list-style: none;
+  margin: .6rem 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.maker-story-points li {
+  display: grid;
+  gap: .2rem;
+  padding: .85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.maker-story-points strong {
+  color: var(--text);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.maker-story-points span { color: var(--text-3); font-size: .82rem; }
+.maker-story-band { margin-top: 1.5rem; }
+/* Capped, not free-running: at full width a 16:9 box is 720px of mostly-empty plate, which
+   made the whole section read as unfinished. Cropping to a band keeps the slot without it. */
+.maker-story-band img {
+  display: block;
+  width: 100%;
+  height: clamp(200px, 24vw, 340px);
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+}
+.reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.review-card {
+  margin: 0;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+  display: grid;
+  gap: .85rem;
+  align-content: start;
+}
+.review-card blockquote { margin: 0; }
+.review-card blockquote p { margin: 0; color: var(--text-2); font-size: 1rem; line-height: 1.6; }
+.review-card figcaption {
+  display: grid;
+  gap: .15rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--border);
+}
+.review-card figcaption strong { color: var(--text); font-size: .82rem; font-weight: 700; letter-spacing: .04em; }
+.review-card figcaption span {
+  color: var(--text-3);
+  font-size: .68rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+@media (max-width: 720px) {
+  .maker-story-grid { grid-template-columns: minmax(0, 1fr); }
+  .maker-story-art img { max-width: 300px; }
+}
+
+
 /* 10. Order cards: the primary action leads, the destructive one stops shouting as
    loud as it, and the order id becomes a scannable anchor line. */
 .admin-panel :is(.order-card-header strong) {

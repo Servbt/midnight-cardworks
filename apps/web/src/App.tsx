@@ -25,6 +25,33 @@ const launchNotes = [
   { title: 'Casual-play clarity', copy: 'Every page keeps the unofficial, not-tournament-legal note visible.' }
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
+
+// The studio story, kept here as data so the whole section follows from one place.
+// Written from what the business actually does — small batches, made to order, hand-checked,
+// and the unofficial note kept visible. It deliberately makes NO claim about age, order
+// volume or customer numbers, because those are facts only you have and inventing them on a
+// live storefront would be a lie. Edit the copy below and the section updates with it.
+const makerStory = {
+  eyebrow: 'The studio',
+  heading: 'Made in small batches, finished by hand.',
+  intro: 'Midnight Cardworks is a small card studio — custom proxies, token packs, and display pieces, built for commander nights and collector binders.',
+  paragraphs: [
+    'Every piece starts as art and ends as a card you can put on a table. We work in small runs, then review, pack and mark each order fulfilled by hand before it goes out.',
+    'The collection is small on purpose. We would rather make fewer pieces properly than run a permanent sale, and we would rather tell you exactly what a card is than let you find out after it arrives.',
+    'Custom cards are unofficial by nature, and we keep that note visible on every page. The difference between a display piece and a tournament-legal card should never be something you have to guess at.'
+  ],
+  points: [
+    { title: 'Made to order', copy: 'Each order is reviewed, packed and marked fulfilled by hand.' },
+    { title: 'Small batches', copy: 'Finished in short runs rather than mass-produced.' },
+    { title: 'Casual-play clarity', copy: 'The unofficial, not-tournament-legal note stays visible.' }
+  ]
+};
+
+// Customer reviews. Deliberately an empty array: when it is empty the section does not
+// render at all, so the storefront can never show invented testimonials. Add real entries
+// as they arrive — { quote, name, detail? } — and the section appears on its own.
+type StorefrontReview = { quote: string; name: string; detail?: string };
+const customerReviews: StorefrontReview[] = [];
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
 const newsletterOfferHomeSeenKey = 'midnight-cardworks.newsletterOfferHomeSeen';
@@ -1373,6 +1400,46 @@ export default function App() {
           </article>;
         })}</div>
       </section>
+    </section>}
+
+    {(view === 'home' || view === 'shop') && <section className="landing-section maker-story" aria-label="Our studio">
+      <div className="section-heading">
+        <div><span className="eyebrow">{makerStory.eyebrow}</span><h2>{makerStory.heading}</h2></div>
+        <p>{makerStory.intro}</p>
+      </div>
+      <div className="maker-story-grid">
+        <div className="maker-story-art">
+          <img src="/placeholders/studio-5x7.svg" alt="Placeholder studio artwork" loading="lazy" />
+        </div>
+        <div className="maker-story-body">
+          {makerStory.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+          <ul className="maker-story-points">
+            {makerStory.points.map((point) => <li key={point.title}>
+              <strong>{point.title}</strong>
+              <span>{point.copy}</span>
+            </li>)}
+          </ul>
+        </div>
+      </div>
+      <div className="maker-story-band">
+        <img src="/placeholders/process-wide.svg" alt="Placeholder workshop artwork" loading="lazy" />
+      </div>
+    </section>}
+
+    {customerReviews.length > 0 && <section className="landing-section reviews" aria-label="Customer reviews">
+      <div className="section-heading">
+        <div><span className="eyebrow">From the table</span><h2>What buyers say.</h2></div>
+        <p>Notes from customers who have ordered from the studio.</p>
+      </div>
+      <div className="reviews-grid">
+        {customerReviews.map((review) => <figure className="review-card" key={`${review.name}-${review.quote}`}>
+          <blockquote><p>{review.quote}</p></blockquote>
+          <figcaption>
+            <strong>{review.name}</strong>
+            {review.detail && <span>{review.detail}</span>}
+          </figcaption>
+        </figure>)}
+      </div>
     </section>}
 
     {(view === 'home' || view === 'shop') && <section className="panel storefront-panel shop-lineup-page" aria-label="Shop the current lineup">

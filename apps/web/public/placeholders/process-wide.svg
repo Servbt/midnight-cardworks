@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" role="img" aria-label="Placeholder workshop artwork">
+  <!-- PLACEHOLDER: replace with a real workshop / process photograph before launch. -->
+  <rect width="1200" height="500" fill="#070710"/>
+  <rect x="40" y="40" width="1120" height="420" fill="none" stroke="#2b2b3c" stroke-width="1"/>
+  <rect x="56" y="56" width="1088" height="388" fill="none" stroke="#d4a853" stroke-opacity=".22" stroke-width="1"/>
+
+  <!-- a row of cards mid-process -->
+  <g stroke="#d4a853" stroke-opacity=".3" stroke-width="1" fill="#101018">
+    <rect x="120" y="130" width="152" height="213"/>
+    <rect x="300" y="130" width="152" height="213"/>
+    <rect x="480" y="130" width="152" height="213"/>
+    <rect x="660" y="130" width="152" height="213"/>
+    <rect x="840" y="130" width="152" height="213"/>
+  </g>
+  <g stroke="#d4a853" stroke-opacity=".13" stroke-width="1">
+    <path d="M120 343 L272 130"/><path d="M300 343 L452 130"/><path d="M480 343 L632 130"/>
+    <path d="M660 343 L812 130"/><path d="M840 343 L992 130"/>
+  </g>
+  <g transform="translate(1022 236)">
+    <circle r="34" fill="#070710" stroke="#d4a853" stroke-opacity=".55" stroke-width="1"/>
+    <path d="M-12 9 L0 -11 L12 9 Z" fill="none" stroke="#d4a853" stroke-width="1.6"/>
+  </g>
+
+  <text x="600" y="404" text-anchor="middle" fill="#c9c9d8"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="5">PLACEHOLDER ART</text>
+  <text x="600" y="434" text-anchor="middle" fill="#7a7a92"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="12" letter-spacing="3.4">WORKSHOP / PROCESS IMAGE</text>
+</svg>
