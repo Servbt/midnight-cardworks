@@ -1,27 +1,27 @@
+import { operationsHealth } from './operationsHealth.js';
+import { availableProduct, InventoryError } from './inventory.js';
+import { startCheckout, CheckoutClosedError, requestKey, processPaymentEvent, syncPayment, cancelCheckout, requestRefund } from './paymentService.js';
+import { flushNotifications, notificationHealth } from './notificationWorker.js';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
-import { createCheckoutResponse, stripeConfigured } from './checkout.js';
-import { retrieveCheckoutPaymentStatus } from './stripeCheckoutStatus.js';
-import { deliverOrderNotifications } from './orderNotifications.js';
-import { retrieveHistoricalRefunds, retrieveCurrentRefund } from './refundReconciliation.js';
-import { createOrderRefund } from './stripeRefunds.js';
 import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
 import { createInMemoryStore } from './store.js';
-import { getCompletedCheckout, getReleasedCheckout, getRefundUpdate, parseStripeWebhookEvent } from './stripeWebhook.js';
+import { parseStripeWebhookEvent } from './stripeWebhook.js';
+import { isPermanentPaymentError } from './paymentErrors.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { MarketingSubscriber, Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
+import { canReadReceipt, customerOrder } from './orderAccess.js';
 import { effectiveProductPrice } from './pricing.js';
-import { cancelCheckout, rejectedCheckoutRequest } from './checkoutLifecycle.js';
-import { newReceiptToken, hashReceiptToken, receiptTokenMatches, publicOrder, orderReceipt } from './receiptAccess.js';
 
 const shippingAddressFieldsSchema = z.object({
   streetAddress: z.string().trim().min(1).max(200),
@@ -72,6 +72,7 @@ const productSchema = z.object({
   tags: z.array(z.string()).default([]),
   image: z.string().min(1),
   inventory: z.number().int().nonnegative(),
+  inventoryVersion: z.number().int().nonnegative().optional(),
   active: z.boolean(),
   featured: z.boolean().optional()
 }).superRefine((product, context) => {
@@ -101,7 +102,16 @@ const refundSchema = z.object({ amount: z.number().int().positive().optional(), 
 const imageUploadBodyLimit = 16 * 1024 * 1024;
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const productUrl = (slug: string) => `/products/${slug}`;
+/** Product SEO needs absolute URLs; relative canonical/og:url values are ignored by crawlers. */
+const appBaseUrl = (env: NodeJS.ProcessEnv = process.env) => {
+  const value = env.APP_BASE_URL?.trim();
+  if (!value) return '';
+  return value.endsWith('/') ? value : `${value}/`;
+};
+const productUrl = (slug: string) => {
+  const base = appBaseUrl();
+  return base ? `${base}products/${slug}` : `/products/${slug}`;
+};
 const marketingCouponCode = () => (process.env.NEWSLETTER_COUPON_CODE || 'MIDNIGHT10').trim();
 function publicSubscriber(subscriber: MarketingSubscriber) {
   const { unsubscribeToken: _unsubscribeToken, ...safeSubscriber } = subscriber;
@@ -132,23 +142,80 @@ function productSeoHead(product: Product) {
     `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`
   ].join('');
 }
+/**
+ * Tags a product page fully replaces. The product head was injected *alongside* the shell's
+ * own head rather than in place of it, so every product page shipped two conflicting
+ * canonicals — the shell's `https://servbotshop.com/` came first, which is the one crawlers
+ * honoured, meaning every product page declared the homepage as its canonical and served the
+ * generic homepage share card.
+ */
+const productReplacedTags = [
+  /<title>.*?<\/title>/gi,
+  /<link\b[^>]*\brel=["']canonical["'][^>]*>/gi,
+  /<meta\b[^>]*\bname=["']description["'][^>]*>/gi,
+  /<meta\b[^>]*\bproperty=["']og:[^"']*["'][^>]*>/gi
+];
+function stripProductReplacedTags(html: string) {
+  return productReplacedTags.reduce((current, pattern) => current.replace(pattern, ''), html);
+}
 async function productSeoHtml(staticRoot: string, product: Product) {
   const html = await readFile(path.join(staticRoot, 'index.html'), 'utf8');
-  const withoutTitle = html.replace(/<title>.*?<\/title>/i, '');
+  const withoutReplacedTags = stripProductReplacedTags(html);
   const head = productSeoHead(product);
-  return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
+  return withoutReplacedTags.includes('</head>') ? withoutReplacedTags.replace('</head>', `${head}</head>`) : `${head}${withoutReplacedTags}`;
 }
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier; retrieveRefund?: typeof retrieveCurrentRefund };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier; rateLimit?: { globalMax?: number; checkoutMax?: number; publicFormMax?: number } | false };
 
-export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
+/**
+ * CORS is scoped to the shop's own origins. Previously any origin was reflected, which let
+ * arbitrary sites call the API from a browser. Requests without an Origin header (same-origin
+ * and server-to-server calls) are allowed by @fastify/cors regardless of this list.
+ * Outside production an empty list falls back to reflection so local development keeps working.
+ */
+function allowedOrigins(env: NodeJS.ProcessEnv = process.env): string[] | boolean {
+  const candidates = [env.APP_BASE_URL, ...(env.CLERK_AUTHORIZED_PARTIES ?? '').split(',')];
+  const origins = new Set<string>();
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol === 'https:') origins.add(url.origin);
+    } catch { /* ignore malformed entries */ }
+  }
+  if (origins.size) return [...origins];
+  return env.NODE_ENV === 'production' ? [] : true;
+}
+
+export async function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
-  const adminAuth = options.adminAuth ?? createAdminAuthFromEnv();
   const customerAuth = options.customerAuth ?? createCustomerAuthFromEnv();
+  const adminAuth = options.adminAuth ?? createAdminAuthFromEnv(process.env, customerAuth);
   const emailNotifier = options.emailNotifier ?? createEmailNotifierFromEnv();
   const app = Fastify({ logger: false });
-  app.register(cors, { origin: true });
-  app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
+  const flushTestNotifications = async () => { if (options.emailNotifier) await flushNotifications(store, options.emailNotifier); };
+  await app.register(cors, { origin: allowedOrigins() });
+  // /api/checkout reserves stock for an hour before payment is captured, so an unthrottled
+  // caller can hold the whole catalogue without paying. Tests run with the limiter off so
+  // suites that issue many checkouts stay deterministic; passing `rateLimit` explicitly
+  // (even as {}) turns it back on, which is how rateLimit.test.ts covers it.
+  const rateLimits = options.rateLimit === false ? undefined
+    : options.rateLimit ? {
+        globalMax: options.rateLimit.globalMax ?? 600,
+        checkoutMax: options.rateLimit.checkoutMax ?? 20,
+        publicFormMax: options.rateLimit.publicFormMax ?? 10
+      }
+    : process.env.NODE_ENV === 'test' ? undefined
+    : {
+        globalMax: Number(process.env.RATE_LIMIT_MAX ?? 600),
+        checkoutMax: Number(process.env.RATE_LIMIT_CHECKOUT_MAX ?? 20),
+        publicFormMax: Number(process.env.RATE_LIMIT_PUBLIC_FORM_MAX ?? 10)
+      };
+  if (rateLimits) await app.register(rateLimit, { global: true, max: rateLimits.globalMax, timeWindow: '1 minute' });
+  /** Per-route throttle metadata. Inert when the limiter is not registered (tests). */
+  const rateLimited = (max?: number) => max === undefined ? {} : { config: { rateLimit: { max, timeWindow: '1 minute' } } };
+  await app.register(rawBody, { field: 'rawBody', global: false, encoding: false, runFirst: true, routes: ['/api/stripe/webhook'] });
   if (options.serveStaticRoot) {
     const staticRoot = path.resolve(options.serveStaticRoot);
     if (existsSync(staticRoot)) {
@@ -167,12 +234,12 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const result = await adminAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });
   }
-  app.get('/api/products', async () => ({ products: await store.listProducts() }));
+  app.get('/api/products', async () => ({ products: (await store.listProducts()).map(availableProduct) }));
   app.get('/api/products/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const product = await store.getProduct(slug);
-    if (!product?.active) return reply.code(404).send({ error: 'Product not found' });
-    return { product };
+    if (!product) return reply.code(404).send({ error: 'Product not found' });
+    return { product: availableProduct(product) };
   });
   app.get('/api/content/faqs', async () => ({ faqItems: await store.listFaqItems() }));
   app.get('/api/content/blog-posts', async () => ({ blogPosts: await store.listBlogPosts() }));
@@ -182,14 +249,14 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     if (!post) return reply.code(404).send({ error: 'Blog post not found' });
     return { post };
   });
-  app.post('/api/contact', async (request, reply) => {
+  app.post('/api/contact', rateLimited(rateLimits?.publicFormMax), async (request, reply) => {
     const parsed = contactSchema.safeParse(request.body);
     if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid contact details required' });
     const { website: _website, ...message } = parsed.data;
     await emailNotifier.sendContactMessage(message);
     return { ok: true };
   });
-  app.post('/api/newsletter', async (request, reply) => {
+  app.post('/api/newsletter', rateLimited(rateLimits?.publicFormMax), async (request, reply) => {
     const parsed = newsletterSchema.safeParse(request.body);
     if (!parsed.success || parsed.data.website) return reply.code(400).send({ error: 'Valid newsletter signup and consent required' });
     const result = await store.subscribeMarketing({ email: parsed.data.email, name: parsed.data.name, source: 'storefront_coupon', couponCode: marketingCouponCode() });
@@ -203,99 +270,64 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     if (!subscriber) return reply.code(404).send({ error: 'Subscriber not found' });
     return { subscriber: publicSubscriber(subscriber) };
   });
-  app.post('/api/checkout', async (request, reply) => {
+  app.post('/api/checkout', rateLimited(rateLimits?.checkoutMax), async (request, reply) => {
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
-      const receiptToken = newReceiptToken();
-      const order = await store.createOrder({ ...parsed.data, receiptTokenHash: hashReceiptToken(receiptToken), useStripe: stripeConfigured(), checkoutBaseUrl: process.env.APP_BASE_URL });
-      let checkout;
-      try {
-        checkout = await createCheckoutResponse(order);
-      } catch (error) {
-        // Network/server errors are ambiguous: keep the reservation for recovery.
-        if (rejectedCheckoutRequest(error)) await store.cancelOrder(order.id, 'Checkout request rejected');
-        throw error;
-      }
-      const notificationOrder = checkout.stripeSessionId ? await store.recordCheckoutSession(order.id, checkout.stripeSessionId) : order;
-      await emailNotifier.sendOrderPending(notificationOrder ?? order).catch(() => undefined);
-      return reply.header('Cache-Control', 'no-store').code(201).send({ ...checkout, receiptToken });
+      const checkout = await startCheckout(store, parsed.data, requestKey(request.headers['idempotency-key']));
+      await flushTestNotifications();
+      reply.header('Cache-Control', 'no-store');
+      return reply.code(201).send(checkout);
     } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
+      return reply.code(error instanceof InventoryError ? 409 : 400).send({ error: error instanceof Error ? error.message : 'Checkout failed', ...(error instanceof CheckoutClosedError ? { code: error.code } : {}) });
     }
   });
   app.get('/api/orders', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const result = await customerAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });
-    return reply.header('Cache-Control', 'no-store').send({ orders: (await store.listOrdersByEmail(result.email)).map(publicOrder) });
+    return { orders: (await store.listOrdersByEmail(result.email)).map(customerOrder) };
   });
   app.get('/api/orders/:orderId', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const { orderId } = request.params as { orderId: string };
+    const receiptToken = request.headers['x-receipt-token'];
+    const identity = request.headers.authorization ? await customerAuth.authorize(request.headers.authorization) : undefined;
+    if (identity && !identity.ok) return reply.code(identity.status).send({ error: identity.error });
+    if (!identity && !receiptToken) return reply.code(401).send({ error: 'Sign-in or receipt access required' });
     const order = await store.getOrder(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    let authorized = receiptTokenMatches(request.headers['x-receipt-token'], order.receiptTokenHash);
-    if (!authorized && request.headers.authorization) {
-      const customer = await customerAuth.authorize(request.headers.authorization);
-      authorized = customer.ok && customer.email.toLowerCase() === order.email.trim().toLowerCase();
-      if (!authorized) authorized = (await adminAuth.authorize(request.headers.authorization)).ok;
-    }
-    if (!authorized) return reply.code(404).send({ error: 'Order not found' });
-    return { order: orderReceipt(order) };
+    const ownsOrder = order && identity?.ok && order.email.trim().toLowerCase() === identity.email.trim().toLowerCase();
+    if (!order || (!ownsOrder && !canReadReceipt(order, receiptToken))) return reply.code(404).send({ error: 'Order not found' });
+    return { order: customerOrder(order) };
   });
-  // Register after the raw-body plugin has installed its onRoute hook.
-  app.register(async (webhookApp) => {
-    webhookApp.post('/api/stripe/webhook', async (request, reply) => {
-      try {
-        const event = await parseStripeWebhookEvent(request);
-        const release = getReleasedCheckout(event);
-        if (release) {
-          let pending = await store.getOrder(release.orderId);
-          if (!pending) return reply.code(404).send({ error: 'Order not found' });
-          if (pending.stripeSessionId && pending.stripeSessionId !== release.sessionId) throw new Error('Stripe session does not match this order');
-          if (pending.status === 'pending_payment') {
-            if (!pending.stripeSessionId) {
-              if (!pending.checkoutRequestJson) throw new Error('Order has no Stripe checkout request');
-              pending = await store.recordCheckoutSession(pending.id, release.sessionId) ?? pending;
-            }
-            await cancelCheckout(store, pending, release.failedPayment ? 'Payment failed' : 'Checkout expired', release.failedPayment);
+  app.post('/api/stripe/webhook', async (request, reply) => {
+    let event;
+    try { event = await parseStripeWebhookEvent(request); }
+    catch { return reply.code(400).send({ error: 'Invalid Stripe signature or payload' }); }
+    try {
+      await processPaymentEvent(store, event);
+      await flushTestNotifications();
+      return { received: true };
+    } catch (error) {
+      // A permanent failure can never succeed on redelivery. Record it against the event and
+      // acknowledge, so one bad event cannot make Stripe retry forever and disable the whole
+      // endpoint (which would stall every payment event, not just this one).
+      if (isPermanentPaymentError(error)) {
+        const reason = error instanceof Error ? error.message : 'Unreconcilable payment event';
+        if (event.id) {
+          try {
+            await store.putRecord({ id: `event:${event.id}`, kind: 'event', data: { type: event.type, outcome: 'quarantined', reason } });
+          } catch (recordError) {
+            console.error('Could not record quarantined Stripe event', { eventId: event.id, errorType: recordError instanceof Error ? recordError.name : 'Error' });
+            return reply.code(503).send({ error: 'Payment event processing failed; retry required' });
           }
         }
-        const checkout = getCompletedCheckout(event);
-        if (checkout) {
-          const order = await store.markOrderPaid(checkout.orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-          await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'paid');
-        }
-        const refund = getRefundUpdate(event);
-        if (refund) {
-          if (stripeConfigured()) {
-            let kind: 'refunded' | 'refund_failed' | undefined;
-            const order = await store.syncRefund(refund.orderId, async (currentOrder) => {
-              const current = await (options.retrieveRefund ?? retrieveCurrentRefund)(currentOrder, refund.refundId!);
-              kind = current.status === 'succeeded' ? 'refunded' : current.status === 'failed' ? 'refund_failed' : undefined;
-              return current;
-            });
-            if (!order) return reply.code(404).send({ error: 'Order not found' });
-            if (kind) await deliverOrderNotifications(store, emailNotifier, order.id, undefined, kind);
-          } else if (refund.status === 'failed') {
-            const order = await store.markOrderRefundFailed(refund.orderId, { refundId: refund.refundId, amount: refund.amount, reason: refund.reason });
-            if (!order) return reply.code(404).send({ error: 'Order not found' });
-            await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'refund_failed');
-          } else if (refund.status === 'succeeded') {
-            const order = await store.markOrderRefunded(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-            if (!order) return reply.code(404).send({ error: 'Order not found' });
-            await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'refunded');
-          } else {
-            const order = await store.markOrderRefundPending(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-            if (!order) return reply.code(404).send({ error: 'Order not found' });
-          }
-        }
-        return { received: true };
-      } catch (error) {
-        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
+        console.error('Stripe event quarantined for manual reconciliation', { eventId: event.id, type: event.type, reason });
+        return reply.code(200).send({ received: true, quarantined: true, reason });
       }
-    });
+      console.error('Stripe event processing failed', { eventId: event.id, type: event.type, errorType: error instanceof Error ? error.name : 'Error' });
+      return reply.code(503).send({ error: 'Payment event processing failed; retry required' });
+    }
   });
   app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit, preHandler: requireAdmin }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
@@ -310,7 +342,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Image upload failed' });
     }
   });
-  app.get('/api/admin/orders', { preHandler: requireAdmin }, async (_request, reply) => reply.header('Cache-Control', 'no-store').send({ orders: (await store.listOrders()).map(publicOrder) }));
+  app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
   app.get('/api/admin/content', { preHandler: requireAdmin }, async () => ({ faqItems: await store.listFaqItems({ includeInactive: true }), blogPosts: await store.listBlogPosts({ includeDrafts: true }) }));
   app.post('/api/admin/content/faqs', { preHandler: requireAdmin }, async (request, reply) => {
@@ -331,95 +363,83 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     for (const subscriber of subscribers) await emailNotifier.sendMarketingCampaign(subscriber, parsed.data);
     return { sent: subscribers.length };
   });
+  app.get('/api/admin/operations-health', { preHandler: requireAdmin }, async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return operationsHealth(store);
+  });
+  app.get('/api/admin/payment-health', { preHandler: requireAdmin }, async () => ({
+    notifications: await notificationHealth(store),
+    inventoryHolds: (await store.listReservationOrders()).map(o => ({ orderId: o.id, state: o.inventoryState, expiresAt: o.reservationExpiresAt })),
+    inventoryIssues: (await store.listOrders()).filter(o => o.inventoryIssue).map(o => ({ orderId: o.id, issue: o.inventoryIssue })),
+    inventoryRecovery: (await store.listRecords('inventory-recovery')).filter(r => (r.data as { state: string }).state === 'attention').map(r => ({ orderId: r.orderId })),
+    unresolvedOperations: [...await store.listRecords('checkout'), ...await store.listRecords('refund-request')]
+      .filter(r => !(r.data as { done?: boolean }).done).map(r => ({ id: r.id, orderId: r.orderId, kind: r.kind }))
+  }));
   app.post('/api/admin/orders/:orderId/sync-payment', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be synced' });
     try {
-      const checkout = await retrieveCheckoutPaymentStatus(order);
-      if (!checkout.paid) {
-        return reply.code(400).send({ error: `Stripe still reports this Checkout Session as ${checkout.paymentStatus ?? checkout.sessionStatus ?? 'unpaid'}` });
-      }
-      const updated = await store.markOrderPaid(orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
-      if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      await deliverOrderNotifications(store, emailNotifier, updated.id);
-      return { order: publicOrder(updated), checkout };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' });
-    }
+      const updated = await syncPayment(store, order);
+      await flushTestNotifications();
+      return { order: updated };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' }); }
   });
-
   app.post('/api/admin/orders/:orderId/fulfill', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
-    const order = await store.markOrderFulfilled(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    await emailNotifier.sendOrderFulfilled(order);
-    return { order: publicOrder(order) };
+    try {
+      const order = await store.markOrderFulfilled((request.params as { orderId: string }).orderId);
+      if (!order) return reply.code(404).send({ error: 'Order not found' });
+      await flushTestNotifications();
+      return { order };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Fulfillment failed' }); }
   });
   app.post('/api/admin/orders/:orderId/cancel', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
     const parsed = orderActionSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'Valid cancellation details required' });
-    const order = await store.getOrder(orderId);
+    const order = await store.getOrder((request.params as { orderId: string }).orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be canceled without a refund' });
-    let canceled;
     try {
-      canceled = await cancelCheckout(store, order, parsed.data.reason ?? 'Canceled by administrator');
-    } catch (error) {
-      return reply.code(409).send({ error: error instanceof Error ? error.message : 'Could not safely cancel checkout' });
-    }
-    if (!canceled) return reply.code(404).send({ error: 'Order not found' });
-    await emailNotifier.sendOrderCanceled(canceled);
-    return { order: publicOrder(canceled) };
+      const updated = await cancelCheckout(store, order, parsed.data.reason);
+      await flushTestNotifications();
+      return { order: updated };
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Cancellation failed' }); }
   });
   app.post('/api/admin/orders/:orderId/refund', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
     const parsed = refundSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: 'Valid refund details required' });
-    const order = await store.getOrder(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (!['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status)) return reply.code(400).send({ error: 'Only paid or fulfilled orders can be refunded' });
-    if (order.refundReconciliationRequired) return reply.code(400).send({ error: 'Historical refunds require reconciliation before creating another refund' });
     try {
-      const refund = await createOrderRefund(order, parsed.data);
-      let notificationKind: 'refunded' | 'refund_failed' | undefined = refund.status === 'succeeded' ? 'refunded' : ['failed', 'canceled'].includes(refund.status) ? 'refund_failed' : undefined;
-      const updated = stripeConfigured()
-        ? await store.syncRefund(orderId, async (currentOrder) => {
-          const current = await (options.retrieveRefund ?? retrieveCurrentRefund)(currentOrder, refund.refundId);
-          notificationKind = current.status === 'succeeded' ? 'refunded' : current.status === 'failed' ? 'refund_failed' : undefined;
-          return current;
-        })
-        : refund.status === 'succeeded'
-        ? await store.markOrderRefunded(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
-        : ['failed', 'canceled'].includes(refund.status)
-        ? await store.markOrderRefundFailed(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
-        : await store.markOrderRefundPending(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-      if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      if (notificationKind) await deliverOrderNotifications(store, emailNotifier, updated.id, undefined, notificationKind);
-      return { order: publicOrder(updated), refund };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' });
-    }
-  });
-  app.post('/api/admin/orders/:orderId/reconcile-refunds', { preHandler: requireAdmin }, async (request, reply) => {
-    const { orderId } = request.params as { orderId: string };
-    const order = await store.getOrder(orderId);
-    if (!order) return reply.code(404).send({ error: 'Order not found' });
-    if (!order.refundReconciliationRequired) return reply.code(400).send({ error: 'Order does not require historical reconciliation' });
-    try {
-      const updated = await store.reconcileHistoricalRefunds(orderId, await retrieveHistoricalRefunds(order));
-      return { order: updated ? publicOrder(updated) : undefined };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund reconciliation failed' });
-    }
+      const result = await requestRefund(store, (request.params as { orderId: string }).orderId, parsed.data, requestKey(request.headers['idempotency-key']));
+      await flushTestNotifications();
+      return result;
+    } catch (error) { return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' }); }
   });
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {
     const parsed = productSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Valid product details required' });
     const existing = await store.getProduct(parsed.data.slug);
     return { product: await store.upsertProduct({ ...parsed.data, id: parsed.data.id ?? existing?.id ?? `prod_${parsed.data.slug}` }) };
+  });
+  // Without these routes the SPA not-found handler served index.html for /robots.txt and
+  // /sitemap.xml, so crawlers saw HTML instead of a robots file.
+  app.get('/robots.txt', async (_request, reply) => reply.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /cart',
+    'Disallow: /checkout/',
+    'Disallow: /account',
+    '',
+    `Sitemap: ${appBaseUrl() || 'https://servbotshop.com/'}sitemap.xml`
+  ].join('\n')));
+  app.get('/sitemap.xml', async (_request, reply) => {
+    const base = appBaseUrl() || 'https://servbotshop.com/';
+    const paths = ['', 'shop', 'faq', 'blog', 'privacy', 'contact', ...(await store.listProducts()).map((product) => `products/${product.slug}`)];
+    return reply.type('application/xml').send([
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      ...paths.map((path) => `  <url><loc>${escapeHtml(`${base}${path}`)}</loc></url>`),
+      '</urlset>'
+    ].join('\n'));
   });
   if (options.serveStaticRoot) {
     const staticRoot = path.resolve(options.serveStaticRoot);
@@ -428,7 +448,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       const productMatch = request.url.split('?')[0].match(/^\/products\/([a-z0-9-]+)$/);
       if (productMatch) {
         const product = await store.getProduct(productMatch[1]);
-        if (product?.active) return reply.type('text/html').send(await productSeoHtml(staticRoot, product));
+        if (product?.active) return reply.type('text/html').send(await productSeoHtml(staticRoot, availableProduct(product)));
       }
       return reply.sendFile('index.html');
     });

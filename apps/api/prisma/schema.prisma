@@ -34,6 +34,8 @@ model Product {
   category    String
   tags        String[]
   image       String
+  reservedInventory Int @default(0)
+  inventoryVersion Int @default(0)
   inventory   Int
   active      Boolean  @default(true)
   featured    Boolean  @default(false)
@@ -46,6 +48,8 @@ model Product {
 model Order {
   id        String      @id
   email           String
+  receiptTokenHash String?
+  receiptExpiresAt DateTime?
   customerName    String?
   shippingAddress String?
   subtotal        Int
@@ -55,48 +59,22 @@ model Order {
   stripeSessionId       String?
   stripePaymentIntentId String?
   stripeRefundId        String?
+  discountAmount        Int         @default(0)
+  paidAt                DateTime?
+  fulfilledAt           DateTime?
   refundedAmount        Int         @default(0)
   refundReason          String?
   canceledAt            DateTime?
   refundedAt            DateTime?
-  inventoryReserved     Boolean     @default(false)
-  reservationExpiresAt  DateTime?
-  checkoutRequestJson   String?
-  receiptTokenHash      String?
-  refundReconciliationRequired Boolean @default(false)
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
+  inventoryState String @default("legacy")
+  reservationExpiresAt DateTime?
+  inventoryIssue String?
+
   items OrderItem[]
-  notifications OrderNotification[]
-  refunds OrderRefund[]
-
-  @@index([status, reservationExpiresAt])
-}
-
-model OrderRefund {
-  id        String @id
-  orderId   String
-  amount    Int
-  status    String
-  reason    String?
-  updatedAt DateTime @updatedAt
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  @@index([orderId])
-}
-
-model OrderNotification {
-  id             String   @id
-  orderId        String
-  payloadJson    String
-  createdAt      DateTime @default(now())
-  firstAttemptAt DateTime?
-  leaseUntil     DateTime?
-  leaseToken     String?
-  sentAt         DateTime?
-  lastError      String?
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  @@index([sentAt, leaseUntil])
+  @@index([inventoryState, reservationExpiresAt])
 }
 
 model OrderItem {
@@ -144,4 +122,17 @@ model BlogPost {
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// Durable event IDs, individual refunds, API operations and notification jobs.
+// Prefix-qualified IDs are unique across all instances. Changes share the order transaction.
+model PaymentJournal {
+  id        String   @id
+  kind      String
+  orderId   String?
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, orderId])
 }

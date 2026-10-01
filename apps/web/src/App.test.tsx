@@ -11,7 +11,7 @@ vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
   AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
   useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token }),
-  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email, getCustomerToken: async () => mockAuth.isSignedIn ? mockAuth.token : undefined })
+  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email, getCustomerToken: async () => mockAuth.token })
 }));
 
 const products = [
@@ -32,7 +32,6 @@ const blogPosts = [
 ];
 
 beforeEach(() => {
-  window.sessionStorage.clear();
   mockAuth.isAdmin = false;
   mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
@@ -65,17 +64,13 @@ beforeEach(() => {
     }
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
-    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', receiptToken: 'receipt-test-token', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
+    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
     if (String(url).includes('/api/admin/orders/ord_test/sync-payment')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', stripeSessionId: 'cs_test_sync', stripePaymentIntentId: 'pi_synced', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/cancel')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'canceled', refundedAmount: 0, refundReason: 'Customer changed their mind', canceledAt: '2026-06-20T00:00:00.000Z', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/refund')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'refunded', refundedAmount: 1798, stripeRefundId: 're_demo_ord_test', refundReason: 'Customer requested cancellation', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
-    if (String(url).includes('/api/orders/ord_test')) {
-      const headers = new Headers(init?.headers);
-      if (headers.get('x-receipt-token') !== 'receipt-test-token' && !headers.get('authorization')) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404 });
-      return new Response(JSON.stringify({ order: { id: 'ord_test', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
-    }
+    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: adminOrderStatus, refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
@@ -100,8 +95,8 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
     expect(screen.getByText('Premium commander centerpiece')).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
-    expect(screen.getByText('/products/golden')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
+    expect(screen.getByText('Casual play only')).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks'));
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
   });
@@ -112,7 +107,7 @@ describe('Midnight Cardworks storefront', () => {
     const listingCard = await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
     await userEvent.click(listingCard);
 
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
@@ -125,21 +120,103 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.click(detailLink);
 
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
+  });
+
+  it('opens the whole product image from the detail image and closes on Escape', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
+
+    // Nothing overlays the page until the artwork is actually activated.
+    expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    // The viewer renders its own copy of the art, uncropped, and opens at fit.
+    const fullImage = within(dialog).getByAltText('Golden Hour Commander Proxy card art, full size');
+    expect(fullImage).toHaveAttribute('src', 'x');
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Click the image or scroll to zoom in/)).toBeInTheDocument();
+    // aria-modal: the page behind is not scrollable while the viewer is open.
+    expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument());
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('zooms the full product image, reports the level, and clamps at both ends', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    const zoomIn = within(dialog).getByRole('button', { name: 'Zoom in' });
+    const zoomOut = within(dialog).getByRole('button', { name: 'Zoom out' });
+
+    // At fit there is nothing to zoom out of.
+    expect(zoomOut).toBeDisabled();
+
+    await userEvent.click(zoomIn);
+    expect(within(dialog).getByText('135%')).toBeInTheDocument();
+    expect(zoomOut).toBeEnabled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reset zoom to fit the whole image' }));
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+
+    // Drive it past the ceiling: the level stops at 400% and the control switches off.
+    // These are native DOM clicks, not fireEvent: fireEvent wraps each dispatch in act(),
+    // which flushes a re-render between clicks and would hide a stale-closure bug entirely.
+    // Dispatching all of them in one synchronous loop is what makes React batch the updates,
+    // which is exactly the case that stalled at 182% when the handler read the rendered value.
+    for (let i = 0; i < 12; i += 1) zoomIn.click();
+    await waitFor(() => expect(within(dialog).getByText('400%')).toBeInTheDocument());
+    expect(zoomIn).toBeDisabled();
+    expect(zoomOut).toBeEnabled();
+
+    for (let i = 0; i < 20; i += 1) await userEvent.click(zoomOut);
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+    expect(zoomOut).toBeDisabled();
+  });
+
+  it('toggles zoom by clicking the image and closes when the backdrop is clicked', async () => {
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('link', { name: 'View details for Golden Hour Commander Proxy' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View the full image of Golden Hour Commander Proxy' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Golden Hour Commander Proxy' });
+    const fullImage = within(dialog).getByAltText('Golden Hour Commander Proxy card art, full size');
+
+    // Clicking the art zooms in without dismissing the viewer.
+    await userEvent.click(fullImage);
+    expect(within(dialog).getByText('200%')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
+
+    await userEvent.click(fullImage);
+    expect(within(dialog).getByText('100%')).toBeInTheDocument();
+
+    // Clicking outside the panel closes it.
+    await userEvent.click(document.querySelector('.image-viewer-backdrop') as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Golden Hour Commander Proxy' })).not.toBeInTheDocument());
   });
 
   it('returns from a listing detail to the shop when browser back navigation fires', async () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
 
     window.history.pushState({}, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
@@ -147,14 +224,14 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
 
     const brandHomeLink = screen.getByRole('link', { name: 'Midnight Cardworks home' });
     expect(brandHomeLink).toHaveAttribute('href', '/');
     await userEvent.click(brandHomeLink);
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
@@ -225,6 +302,17 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
   });
 
+  it('keeps the consent notice off the admin console so it cannot cover order actions', async () => {
+    // The notice sat directly over the order action buttons on /admin, covering
+    // "Sync Stripe payment" and "Cancel pending order".
+    mockAuth.isAdmin = true;
+    window.history.pushState({}, '', '/admin');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Admin dashboard' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
+  });
+
   it('opens the privacy page from the footer and lets shoppers allow analytics', async () => {
     render(<App />);
 
@@ -244,6 +332,10 @@ describe('Midnight Cardworks storefront', () => {
   it('lets shoppers sign up for the launch coupon email', async () => {
     render(<App />);
 
+    // The offer waits for engagement instead of covering the storefront on load.
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+    fireEvent.scroll(window);
+
     expect(await screen.findByRole('heading', { name: 'Get a coupon for the first drop.' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Newsletter name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Newsletter email'), 'buyer@example.com');
@@ -254,8 +346,14 @@ describe('Midnight Cardworks storefront', () => {
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/newsletter'), expect.objectContaining({ method: 'POST', body: expect.stringContaining('buyer@example.com') }));
   });
 
-  it('shows the launch coupon as a popup only on the first home visit', async () => {
+  it('does not block the storefront with the coupon popup, then shows it once after engagement', async () => {
     render(<App />);
+
+    // Nothing covers the page before the shopper has looked at anything.
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('midnight-cardworks.newsletterOfferHomeSeen')).toBeNull();
+
+    fireEvent.scroll(window);
 
     const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
     expect(within(dialog).getByText('Launch list')).toBeInTheDocument();
@@ -268,7 +366,20 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
+    fireEvent.scroll(window);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument());
+  });
+
+  it('closes the coupon popup with Escape', async () => {
+    render(<App />);
+    fireEvent.scroll(window);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Get a coupon for the first drop.' });
+    expect(dialog).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
   });
 
   it('shows the launch coupon as an inline account offer above order history after the home offer was seen', async () => {
@@ -294,7 +405,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /cards made for the midnight table/i })).toBeInTheDocument();
-    expect(screen.getByText('Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.')).toBeInTheDocument();
+    expect(screen.getByText('Custom proxies, token packs, and display cards — hand-finished for commander nights, gifts, and display binders.')).toBeInTheDocument();
     
     expect(screen.getAllByRole('button', { name: 'Start a commission' })[0]).toBeInTheDocument();
     
@@ -412,7 +523,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(within(cardEl).getByRole('status'));
 
     expect(screen.getByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
-    expect(screen.queryByText('Shareable listing URL')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy link to this card')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cart, 1/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
@@ -431,7 +542,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(confirmation).toHaveTextContent('Added 3 Golden Hour Commander Proxy to your cart.');
     expect(confirmation.compareDocumentPosition(addAgainButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: /cart, 3/i })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
 
@@ -501,7 +612,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /cart, 0/i }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cart');
@@ -510,7 +621,7 @@ describe('Midnight Cardworks storefront', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
@@ -518,7 +629,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
-    expect(await screen.findByText('Shareable listing URL')).toBeInTheDocument();
+    expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add to cart' }));
     await userEvent.click(screen.getByRole('button', { name: /cart, 1/i }));
     expect(screen.getByRole('heading', { name: 'Your cart' })).toBeInTheDocument();
@@ -528,7 +639,7 @@ describe('Midnight Cardworks storefront', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Your cart' })).not.toBeInTheDocument();
   });
 
@@ -541,7 +652,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('link', { name: 'View Golden Hour Commander Proxy listing from cart' }));
 
     expect(await screen.findByRole('heading', { name: 'Golden Hour Commander Proxy' })).toBeInTheDocument();
-    expect(screen.getByText('Shareable listing URL')).toBeInTheDocument();
+    expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/products/golden');
   });
 
@@ -1103,13 +1214,14 @@ describe('Midnight Cardworks storefront', () => {
   });
 
   it('shows a verified receipt when returning from Stripe Checkout', async () => {
-    window.sessionStorage.setItem('midnight-cardworks.receipt.ord_test', 'receipt-test-token');
-    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
 
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: 'Order received' })).toBeInTheDocument();
     expect(screen.getByText('Payment verified')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { 'x-receipt-token': 'r'.repeat(43) }, cache: 'no-store' }));
     expect(screen.getByText('Order number: ord_test')).toBeInTheDocument();
     expect(screen.getByText(/1 × Golden Hour Commander Proxy — \$12.99/)).toBeInTheDocument();
     expect(screen.getByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
@@ -1118,31 +1230,41 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getByText('We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { 'x-receipt-token': 'receipt-test-token' }, cache: 'no-store' }));
   });
 
-  it('does not expose a receipt when the browser has only an order ID', async () => {
-    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+  it('explains a paid stock hold without promising fulfillment', async () => {
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: {
+        id: 'ord_test', status: 'paid', total: 1798, fulfillmentOnHold: true, refundedAmount: 0, items: []
+      } }), { status: 200 });
+      return originalFetch(url, init);
+    }));
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
     render(<App />);
-    expect(await screen.findByText(/To view this receipt, return in the checkout tab/)).toBeInTheDocument();
-    expect(screen.queryByText('Ship to: 123 Midnight Lane')).not.toBeInTheDocument();
+    expect(await screen.findByText('Payment received; stock review pending')).toBeInTheDocument();
+    expect(screen.getByText('Paid; fulfillment on hold')).toBeInTheDocument();
+    expect(screen.queryByText('Paid and confirmed')).not.toBeInTheDocument();
   });
 
-  it('uses the signed-in account for receipt access without a guest credential', async () => {
-    mockAuth.isSignedIn = true;
-    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+  it.each([
+    ['pending_payment', 1798, 0, 'Order total: $17.98'],
+    ['paid', 1598, 200, 'Total paid: $15.98'],
+    ['canceled', 1798, 0, 'Order total: $17.98']
+  ])('renders an accurate %s receipt', async (status, total, discountAmount, label) => {
+    const originalFetch = fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: {
+        id: 'ord_test', status, total, discountAmount, shippingCost: 499, refundedAmount: 0, items: []
+      } }), { status: 200 });
+      return originalFetch(url, init);
+    }));
+    window.history.pushState({}, '', '/checkout/success?order=ord_test#receiptToken=' + 'r'.repeat(43));
     render(<App />);
-    expect(await screen.findByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { authorization: 'Bearer admin-token' } }));
-  });
-
-  it('reloads a protected receipt when account sign-in finishes', async () => {
-    window.history.pushState({}, '', '/checkout/success?order=ord_test');
-    const view = render(<App />);
-    expect(await screen.findByText(/To view this receipt, return in the checkout tab/)).toBeInTheDocument();
-    mockAuth.isSignedIn = true;
-    view.rerender(<App />);
-    expect(await screen.findByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: String(label) })).toBeInTheDocument();
+    if (discountAmount) expect(screen.getByText('Discount: -$2.00')).toBeInTheDocument();
+    if (status !== 'paid') expect(screen.queryByText('Payment verified')).not.toBeInTheDocument();
+    if (status === 'canceled') expect(screen.queryByText('Payment is processing')).not.toBeInTheDocument();
   });
 
   it('shows signed-in customers their order history in account', async () => {

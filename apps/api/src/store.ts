@@ -1,12 +1,11 @@
+import { inventoryMethods } from './inventory.js';
+import { paymentMethods } from './paymentState.js';
+import type { JournalRecord } from './types.js';
 import { nanoid } from 'nanoid';
 import type { BlogPost, BlogPostInput, FaqItem, FaqItemInput, MarketingSubscriber, MarketingSubscribeInput, Order, Product, Store } from './types.js';
 import { seedBlogPosts, seedFaqItems, seedProducts } from './seed.js';
 import { calculateShippingCost } from './shipping.js';
 import { effectiveProductPrice } from './pricing.js';
-import { checkoutItems, reservationDurationMs } from './inventory.js';
-import { checkoutRequest } from './checkoutRequest.js';
-import { publicOrder } from './receiptAccess.js';
-import { refundLedgerUpdate, reconciledRefundLedger, type RefundEntry, type RefundUpdate } from './refundLedger.js';
 
 function now() {
   return new Date().toISOString();
@@ -32,102 +31,56 @@ function createMarketingSubscriber(input: MarketingSubscribeInput): MarketingSub
   };
 }
 
-function decrementInventoryForOrder(products: Map<string, Product>, order: Order) {
-  const quantitiesByProductId = new Map<string, number>();
-  for (const item of order.items) {
-    quantitiesByProductId.set(item.productId, (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity);
-  }
-  for (const [slug, product] of products) {
-    const quantity = quantitiesByProductId.get(product.id);
-    if (!quantity) continue;
-    if (product.inventory < quantity) throw new Error('Insufficient inventory for ' + product.id);
-  }
-  for (const [slug, product] of products) {
-    const quantity = quantitiesByProductId.get(product.id);
-    if (quantity) products.set(slug, { ...product, inventory: product.inventory - quantity });
-  }
-}
-
 export function createInMemoryStore(initialProducts: Product[] = seedProducts): Store {
-  const products = new Map(initialProducts.map((p) => [p.slug, { ...p }]));
+  const products = new Map(initialProducts.map((p) => [p.slug, { ...p, reservedInventory: p.reservedInventory ?? 0, inventoryVersion: p.inventoryVersion ?? 0 }]));
   const orders: Order[] = [];
-  const refunds = new Map<string, RefundEntry>();
-  const refundSyncs = new Map<string, Promise<unknown>>();
-  function applyLedger(orderId: string, update: RefundUpdate, status: RefundEntry['status']) {
-    const order = orders.find((candidate) => candidate.id === orderId);
-    if (!order) return undefined;
-    const existing = refunds.get(update.refundId ?? '');
-    if (existing && existing.orderId !== orderId) throw new Error('Refund belongs to another order');
-    const result = refundLedgerUpdate(order, [...refunds.values()].filter((entry) => entry.orderId === orderId), update, status);
-    refunds.set(result.entry.id, result.entry);
-    order.refundedAmount = result.refundedAmount;
-    order.status = result.status;
-    order.stripeRefundId = result.entry.id;
-    order.refundReason = result.entry.reason;
-    if (status === 'succeeded') order.refundedAt = now();
-    if (result.entry.status !== 'pending' && existing?.status !== result.entry.status) {
-      const id = (result.entry.status === 'succeeded' ? 'refunded:' : 'refund_failed:') + order.id + ':' + result.entry.id;
-      if (!notifications.has(id)) notifications.set(id, { payloadJson: JSON.stringify(publicOrder(order)) });
-    }
-    return order;
-  }
-  const notifications = new Map<string, { payloadJson: string; firstAttemptAt?: number; leaseUntil?: number; leaseToken?: string; sentAt?: number; lastError?: string }>();
   const marketingSubscribers = new Map<string, MarketingSubscriber>();
   const faqItems = new Map(seedFaqItems.map((item) => [item.id, { ...item }]));
   const blogPosts = new Map(seedBlogPosts.map((post) => [post.slug, { ...post }]));
-  return {
-    async syncRefund(orderId, retrieve) {
-      const preceding = refundSyncs.get(orderId) ?? Promise.resolve();
-      const operation = preceding.catch(() => {}).then(async () => {
-        const order = orders.find((candidate) => candidate.id === orderId);
-        if (!order) return undefined;
-        if (order.refundReconciliationRequired) throw new Error('Historical refunds require reconciliation before updates');
-        const current = await retrieve(structuredClone(order));
-        if (current.orderId !== orderId) throw new Error('Refund belongs to another order');
-        return applyLedger(orderId, { refundId: current.id, amount: current.amount, reason: current.reason }, current.status);
+  const records = new Map<string, JournalRecord>();
+  let tail: Promise<unknown> = Promise.resolve();
+  const scoped = (): Store => { const tx: Store = { ...store, atomic: async work => work(tx) }; Object.assign(tx, paymentMethods(() => tx), inventoryMethods(() => tx)); return tx; };
+  const store: Store = {
+    ...paymentMethods(() => store),
+    ...inventoryMethods(() => store),
+    async atomic(work) {
+      const run = tail.then(async () => {
+        const snapshot = structuredClone({ orders, products, records });
+        try { return await work(scoped()); }
+        catch (error) {
+          orders.splice(0, orders.length, ...snapshot.orders);
+          products.clear(); for (const [key, value] of snapshot.products) products.set(key, value);
+          records.clear(); for (const [key, value] of snapshot.records) records.set(key, value);
+          throw error;
+        }
       });
-      refundSyncs.set(orderId, operation);
-      try { return await operation; }
-      finally { if (refundSyncs.get(orderId) === operation) refundSyncs.delete(orderId); }
+      tail = run.catch(() => undefined);
+      return run;
     },
-    async reconcileHistoricalRefunds(orderId, entries) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      const result = reconciledRefundLedger(order, entries);
-      for (const entry of entries) {
-        const previous = refunds.get(entry.id);
-        if (previous && previous.orderId !== orderId) throw new Error('Refund belongs to another order');
-      }
-      for (const [id, entry] of refunds) if (entry.orderId === orderId) refunds.delete(id);
-      for (const entry of entries) refunds.set(entry.id, { ...entry });
-      Object.assign(order, result, { refundReconciliationRequired: false });
-      return order;
+    async getRecord(id) { return structuredClone(records.get(id)); },
+    async putRecord(record) { records.set(record.id, structuredClone(record)); },
+    async listRecords(kind, orderId) { return structuredClone([...records.values()].filter(r => r.kind === kind && (!orderId || r.orderId === orderId))); },
+    async saveOrder(order) { const index = orders.findIndex(o => o.id === order.id); if (index < 0) throw new Error('Order not found'); orders[index] = structuredClone(order); return order; },
+    async adjustInventory(productId, quantity, action) {
+      const product = [...products.values()].find(p => p.id === productId);
+      if (!product) return false;
+      const reserved = product.reservedInventory;
+      if (action === 'reserve' && (!product.active || product.inventory - reserved < quantity)) return false;
+      if (action === 'purchase' && product.inventory - reserved < quantity) return false;
+      if (['release', 'consume'].includes(action) && reserved < quantity) return false;
+      if (action === 'consume' && product.inventory < quantity) return false;
+      products.set(product.slug, { ...product,
+        inventory: product.inventory - (['consume', 'purchase'].includes(action) ? quantity : 0),
+        reservedInventory: reserved + (action === 'reserve' ? quantity : ['release', 'consume'].includes(action) ? -quantity : 0),
+        inventoryVersion: product.inventoryVersion + 1
+      }); return true;
     },
-    async pendingNotifications(orderId) {
-      return [...notifications].filter(([id, job]) => !job.sentAt && (!orderId || id === 'paid:' + orderId || id.startsWith('refunded:' + orderId + ':') || id.startsWith('refund_failed:' + orderId + ':'))).map(([id]) => ({ id }));
-    },
-    async claimNotification(id, leaseToken) {
-      const job = notifications.get(id);
-      if (!job || job.sentAt || (job.leaseUntil ?? 0) > Date.now()) return undefined;
-      if (job.firstAttemptAt && Date.now() - job.firstAttemptAt >= 23 * 60 * 60 * 1000) throw new Error('Notification requires manual reconciliation after retry window');
-      job.firstAttemptAt ??= Date.now();
-      job.leaseUntil = Date.now() + 60_000;
-      job.leaseToken = leaseToken;
-      return { payloadJson: job.payloadJson };
-    },
-    async completeNotification(id, leaseToken) {
-      const job = notifications.get(id);
-      if (job?.leaseToken === leaseToken) { job.sentAt = Date.now(); job.leaseToken = undefined; job.leaseUntil = undefined; }
-    },
-    async releaseNotification(id, leaseToken, error) {
-      const job = notifications.get(id);
-      if (job?.leaseToken === leaseToken) { job.leaseToken = undefined; job.leaseUntil = undefined; job.lastError = error; }
-    },
+    async listReservationOrders() { return structuredClone(orders.filter(o => ['held', 'legacy_held'].includes(o.inventoryState ?? ''))); },
     async healthCheck() {},
     async listProducts() { return [...products.values()].filter((p) => p.active); },
     async listAdminProducts() { return [...products.values()]; },
     async getProduct(slug) { return products.get(slug); },
-    async upsertProduct(product) { products.set(product.slug, { ...product }); return product; },
+    async writeProduct(product) { products.set(product.slug, { ...product, reservedInventory: product.reservedInventory ?? 0, inventoryVersion: product.inventoryVersion ?? 0 }); return product; },
     async updateProductImage(slug, image) {
       const product = products.get(slug);
       if (!product) return undefined;
@@ -137,23 +90,17 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
     },
     async listOrders() { return [...orders].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
     async listOrdersByEmail(email) { return [...orders].filter((order) => order.email.toLowerCase() === email.toLowerCase()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); },
-    async getOrder(orderId) { return orders.find((order) => order.id === orderId); },
-    async createOrder(input) {
+    async getOrder(orderId) { return structuredClone(orders.find((order) => order.id === orderId)); },
+    async createUnreservedOrder(input) {
       const productList = [...products.values()];
-      const items = checkoutItems(input.items).map((item) => {
+      const items = input.items.map((item) => {
         const product = productList.find((p) => p.id === item.productId);
         if (!product) throw new Error('Unknown product ' + item.productId);
-        if (!product.active || product.inventory < item.quantity) throw new Error('Product unavailable: ' + item.productId);
         return { productId: product.id, title: product.title, price: effectiveProductPrice(product), quantity: item.quantity };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const shippingCost = calculateShippingCost(subtotal);
-      const order: Order = { id: 'ord_' + nanoid(8), email: input.email, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
-      order.inventoryReserved = true;
-      order.receiptTokenHash = input.receiptTokenHash;
-      order.reservationExpiresAt = new Date(Date.now() + reservationDurationMs).toISOString();
-      if (input.useStripe) order.checkoutRequestJson = JSON.stringify(checkoutRequest(order, input.checkoutBaseUrl ?? 'http://localhost:5173'));
-      decrementInventoryForOrder(products, order);
+      const order: Order = { id: 'ord_' + nanoid(8), email: normalizeEmail(input.email), receiptTokenHash: input.receiptTokenHash, receiptExpiresAt: input.receiptExpiresAt, customerName: input.customerName, shippingAddress: input.shippingAddress, items, subtotal, shippingCost, total: subtotal + shippingCost, status: 'pending_payment', refundedAmount: 0, createdAt: now() };
       orders.push(order);
       return order;
     },
@@ -162,55 +109,6 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       if (!order) return undefined;
       order.stripeSessionId = stripeSessionId;
       return order;
-    },
-    async markOrderPaid(orderId, payment = {}) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      if (order.status === 'canceled') throw new Error('Canceled orders cannot be marked paid');
-      if (payment.stripeSessionId && order.stripeSessionId && payment.stripeSessionId !== order.stripeSessionId) throw new Error('Payment session does not match order');
-      if (payment.stripePaymentIntentId && order.stripePaymentIntentId && payment.stripePaymentIntentId !== order.stripePaymentIntentId) throw new Error('Payment intent does not match order');
-      if (order.status !== 'pending_payment') return order;
-      if (!order.inventoryReserved) decrementInventoryForOrder(products, order);
-      order.inventoryReserved = false;
-      order.status = 'paid';
-      order.stripeSessionId = payment.stripeSessionId ?? order.stripeSessionId;
-      order.stripePaymentIntentId = payment.stripePaymentIntentId ?? order.stripePaymentIntentId;
-      notifications.set('paid:' + order.id, { payloadJson: JSON.stringify(publicOrder(order)) });
-      return order;
-    },
-    async markOrderFulfilled(orderId) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      if (order.status === 'fulfilled') return order;
-      if (order.status !== 'paid') throw new Error('Only paid orders can be fulfilled');
-      order.status = 'fulfilled';
-      return order;
-    },
-    async cancelOrder(orderId, reason) {
-      const order = orders.find((candidate) => candidate.id === orderId);
-      if (!order) return undefined;
-      if (order.status === 'canceled') return order;
-      if (order.status !== 'pending_payment') throw new Error('Only pending payment orders can be canceled');
-      if (order.inventoryReserved) {
-        for (const item of order.items) {
-          const entry = [...products.entries()].find(([, product]) => product.id === item.productId);
-          if (entry) products.set(entry[0], { ...entry[1], inventory: entry[1].inventory + item.quantity });
-        }
-        order.inventoryReserved = false;
-      }
-      order.status = 'canceled';
-      order.refundReason = reason ?? order.refundReason;
-      order.canceledAt = now();
-      return order;
-    },
-    async markOrderRefundPending(orderId, refund) {
-      return applyLedger(orderId, refund, 'pending');
-    },
-    async markOrderRefunded(orderId, refund) {
-      return applyLedger(orderId, refund, 'succeeded');
-    },
-    async markOrderRefundFailed(orderId, refund) {
-      return applyLedger(orderId, refund, 'failed');
     },
     async subscribeMarketing(input) {
       const email = normalizeEmail(input.email);
@@ -293,4 +191,5 @@ export function createInMemoryStore(initialProducts: Product[] = seedProducts): 
       return saved;
     }
   };
+  return store;
 }

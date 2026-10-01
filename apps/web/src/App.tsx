@@ -1,10 +1,10 @@
+import { OperationsHealthPanel } from './OperationsHealthPanel';
 import { useEffect, useLayoutEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react';
-import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
+import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketingSubscribers, fetchAdminOrders, fetchAdminProducts, fetchBlogPost, fetchBlogPosts, fetchCustomerOrders, fetchFaqItems, fetchOrder, fetchProduct, fetchProducts, fulfillAdminOrder, refundAdminOrder, saveAdminBlogPost, saveAdminFaqItem, saveAdminProduct, sendAdminMarketingCampaign, sendContactMessage, subscribeNewsletter, syncAdminOrderPayment, unsubscribeNewsletter, uploadProductImage, type CustomerOrder, type BlogPost, type FaqItem, type MarketingSubscriber, type Order, type Product } from './api';
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
+import { receiptTokenFor } from './receiptAccess';
 import { redirectToCheckout } from './checkoutRedirect';
-import { checkReceiptStorage, readReceiptToken, saveReceiptToken } from './receiptStorage';
-import type { OrderReceipt } from './api';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'faq' | 'blog' | 'blog-post' | 'unsubscribe';
@@ -29,6 +29,13 @@ const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
 const newsletterOfferHomeSeenKey = 'midnight-cardworks.newsletterOfferHomeSeen';
 const newsletterSignupCompleteKey = 'midnight-cardworks.newsletterSignupComplete';
+// Product image viewer: bound the zoom so the controls cannot be driven into a state
+// the user has to fight their way out of, and round to whole percents for a stable label.
+const imageViewZoomMin = 1;
+const imageViewZoomMax = 4;
+const imageViewZoomStep = 1.35;
+const clampImageViewZoom = (value: number) =>
+  Math.min(imageViewZoomMax, Math.max(imageViewZoomMin, Math.round(value * 100) / 100));
 const readLocalFlag = (key: string) => {
   try { return typeof window !== 'undefined' && window.localStorage.getItem(key) === 'true'; } catch { return false; }
 };
@@ -50,6 +57,8 @@ export default function App() {
   const [cartNotice, setCartNotice] = useState('');
   const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
+  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Category', 'Search']);
+  const [shareNotice, setShareNotice] = useState('');
   const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('home');
   const [query, setQuery] = useState('');
@@ -70,7 +79,7 @@ export default function App() {
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [checkoutValidationMessage, setCheckoutValidationMessage] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [marketingSubscribers, setMarketingSubscribers] = useState<MarketingSubscriber[]>([]);
@@ -81,7 +90,7 @@ export default function App() {
   const [newFaqItem, setNewFaqItem] = useState<FaqItem>(blankFaqItem);
   const [newBlogPost, setNewBlogPost] = useState<BlogPost>(blankBlogPost);
   const [adminMessage, setAdminMessage] = useState('');
-  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing' | 'content'>('orders');
+  const [adminTab, setAdminTab] = useState<'orders' | 'listings' | 'sales' | 'marketing' | 'content' | 'health'>('orders');
   const [contentTab, setContentTab] = useState<'faq' | 'blog'>('faq');
   const [listingTab, setListingTab] = useState<'create' | 'current'>('current');
   const [saleSelection, setSaleSelection] = useState<string[]>([]);
@@ -89,8 +98,9 @@ export default function App() {
   const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
-  const [receiptOrder, setReceiptOrder] = useState<OrderReceipt | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<CustomerOrder | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
+  const [receiptAccess, setReceiptAccess] = useState<{ orderId: string; receiptToken?: string } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
   const [productMessage, setProductMessage] = useState('');
@@ -112,6 +122,9 @@ export default function App() {
   const [newsletterSignupComplete, setNewsletterSignupComplete] = useState(() => readLocalFlag(newsletterSignupCompleteKey));
   const [unsubscribeToken, setUnsubscribeToken] = useState('');
   const [unsubscribeMessage, setUnsubscribeMessage] = useState('');
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [imageViewZoom, setImageViewZoom] = useState(1);
+  const [imageViewOrigin, setImageViewOrigin] = useState({ x: 50, y: 50 });
   const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
   const [campaignMessage, setCampaignMessage] = useState('A new Midnight Cardworks update is ready. Add a short note about the deal, new product, or launch coupon here.');
   const { isAdmin, getAdminToken } = useAdminAccess();
@@ -143,9 +156,7 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
-    let receiptRequest = 0;
     function applyCurrentLocation() {
-      const requestId = ++receiptRequest;
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('order');
       const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
@@ -165,12 +176,7 @@ export default function App() {
         setView('receipt');
         setReceiptMessage('Checking payment status...');
         setReceiptOrder(null);
-        const receiptToken = readReceiptToken(orderId);
-        (receiptToken ? Promise.resolve(undefined) : getCustomerToken()).then((token) => fetchOrder(orderId, { receiptToken, customerToken: token ?? undefined })).then((order) => {
-          if (requestId !== receiptRequest) return;
-          setReceiptOrder(order);
-          setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
-        }).catch(() => { if (requestId === receiptRequest) setReceiptMessage('To view this receipt, return in the checkout tab or sign in with the order email. Contact support if you need help.'); });
+        setReceiptAccess({ orderId, receiptToken: receiptTokenFor(orderId) });
         return;
       }
       if (window.location.pathname === '/cart') {
@@ -244,8 +250,26 @@ export default function App() {
 
     applyCurrentLocation();
     window.addEventListener('popstate', applyCurrentLocation);
-    return () => { receiptRequest++; window.removeEventListener('popstate', applyCurrentLocation); };
-  }, [isAdmin, isSignedIn]);
+    return () => window.removeEventListener('popstate', applyCurrentLocation);
+  }, [isAdmin]);
+  useEffect(() => {
+    if (view !== 'receipt' || !receiptAccess) return;
+    let active = true;
+    setReceiptOrder(null);
+    setReceiptMessage('Checking payment status...');
+    const { orderId, receiptToken } = receiptAccess;
+    const receipt = receiptToken
+      ? fetchOrder(orderId, { receiptToken })
+      : getCustomerToken().then((token) => fetchOrder(orderId, { token: token ?? undefined }));
+    receipt.then((order) => {
+      if (!active) return;
+      setReceiptOrder(order);
+      setReceiptMessage(order.fulfillmentOnHold ? 'Payment received; stock review pending' : order.status === 'pending_payment' ? 'Payment is processing' : order.status === 'canceled' ? 'Order canceled' : 'Payment verified');
+    }).catch(() => {
+      if (active) setReceiptMessage('Open your private receipt link or sign in with the email used for this order.');
+    });
+    return () => { active = false; };
+  }, [view, receiptAccess, isSignedIn, sessionEmail]);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
@@ -287,14 +311,79 @@ export default function App() {
     }
     const homeOfferSeen = readLocalFlag(newsletterOfferHomeSeenKey);
     setNewsletterHomeOfferSeen(homeOfferSeen);
-    if (view === 'home' && !homeOfferSeen) {
+    if (view !== 'home' || homeOfferSeen) {
+      setNewsletterOfferOpen(false);
+      return;
+    }
+    // The offer used to open on the first paint, so it covered the storefront before a
+    // visitor had seen a single product. Wait for real engagement instead: a third of the
+    // way down the page, or a minute on the site, whichever comes first.
+    let opened = false;
+    let timer = 0;
+    function openOffer() {
+      if (opened) return;
+      opened = true;
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
       writeLocalFlag(newsletterOfferHomeSeenKey);
       setNewsletterHomeOfferSeen(true);
       setNewsletterOfferOpen(true);
-      return;
     }
-    setNewsletterOfferOpen(false);
+    function onScroll() {
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollable <= 0 || (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight >= 0.35) openOffer();
+    }
+    timer = window.setTimeout(openOffer, 60000);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+    };
   }, [view]);
+  useEffect(() => {
+    if (!newsletterOfferOpen) return;
+    // The dialog is aria-modal, so it has to behave like one: Escape closes it and focus
+    // moves into it (and back out again) rather than staying on the page behind it.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') closeNewsletterOffer();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    document.querySelector<HTMLInputElement>('.newsletter-popup input')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [newsletterOfferOpen]);
+  useEffect(() => {
+    if (!imageViewerOpen) return;
+    // Same contract as the coupon dialog: aria-modal means Escape closes it and focus
+    // goes in on open and back to the image on close.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') setImageViewerOpen(false);
+    }
+    // Wheel is bound natively rather than through React's onWheel because React attaches
+    // wheel listeners passively, where preventDefault() is ignored — the page would scroll
+    // behind the viewer instead of zooming. The functional updater avoids a stale closure.
+    function onWheel(event: globalThis.WheelEvent) {
+      event.preventDefault();
+      setImageViewZoom((current) => clampImageViewZoom(current * (event.deltaY < 0 ? 1.12 : 0.89)));
+    }
+    const stage = document.querySelector<HTMLElement>('.image-viewer-stage');
+    // aria-modal: the page behind must not scroll while the viewer owns the viewport.
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+    stage?.addEventListener('wheel', onWheel, { passive: false });
+    document.querySelector<HTMLButtonElement>('.image-viewer-close')?.focus();
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      stage?.removeEventListener('wheel', onWheel);
+      document.body.style.overflow = previousBodyOverflow;
+      previouslyFocused?.focus?.();
+    };
+  }, [imageViewerOpen]);
   useEffect(() => {
     if (view !== 'unsubscribe') return;
     if (!unsubscribeToken) {
@@ -367,6 +456,17 @@ export default function App() {
     trackAnalyticsEvent('View Listing', { slug: product.slug, category: product.category });
     window.history.pushState({}, '', `/products/${product.slug}`);
     setProductScrollSignal((signal) => signal + 1);
+  }
+
+  async function copyListingLink(slug: string) {
+    const url = `${window.location.origin}/products/${slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareNotice('Link copied');
+    } catch {
+      setShareNotice(url);
+    }
+    window.setTimeout(() => setShareNotice(''), 2200);
   }
 
   function rememberRecentlyViewed(product: Product) {
@@ -590,6 +690,7 @@ export default function App() {
   function removeFromCart(productId: string) {
     const removed = cart.find((line) => line.product.id === productId);
     setCart((lines) => lines.filter((line) => line.product.id !== productId));
+    setAddedProductIds((ids) => ids.filter((id) => id !== productId));
     setRemovedCartLine(removed ?? null);
     setCartNotice(removed ? `Removed ${removed.product.title} from your cart.` : 'Removed item from your cart.');
     setClearCartRequested(false);
@@ -611,6 +712,7 @@ export default function App() {
   function confirmClearCart() {
     const clearedCount = itemCount;
     setCart([]);
+    setAddedProductIds([]);
     setRemovedCartLine(null);
     setClearCartRequested(false);
     setCartNotice(`Cleared ${clearedCount} ${clearedCount === 1 ? 'item' : 'items'} from your cart.`);
@@ -662,16 +764,19 @@ export default function App() {
       return;
     }
     try {
-      checkReceiptStorage();
       const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
-      saveReceiptToken(checkout.orderId, checkout.receiptToken);
       trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
+      setCheckoutValidationMessage('');
       setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
-      setCart([]);
       setView('account');
+      // Hand off to Stripe first. The cart is only emptied once the redirect has been
+      // initiated, so an unreachable Stripe never strands the shopper with no cart and no message.
       redirectToCheckout(checkout.checkoutUrl);
+      setCart([]);
+      setAddedProductIds([]);
     } catch (error) {
-      setCheckoutValidationMessage(error instanceof Error ? error.message : 'Checkout failed. Please try again.');
+      const detail = error instanceof Error && error.message && error.message !== 'Checkout failed' ? ` ${error.message}.` : '';
+      setCheckoutValidationMessage(`Could not start secure checkout.${detail} Your cart is still saved — please try again.`);
     }
   }
 
@@ -783,7 +888,7 @@ export default function App() {
       const token = await getAdminToken();
       if (!token) throw new Error('Admin token required');
       const updated = await uploadProductImage(product.slug, file, token);
-      setProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
+      setProducts((items) => items.map((item) => item.slug === updated.slug ? { ...updated, inventory: Math.max(0, updated.inventory - (updated.reservedInventory ?? 0)) } : item));
       setAdminProducts((items) => items.map((item) => item.slug === updated.slug ? updated : item));
       setAdminMessage(`Updated image for ${updated.title}.`);
     } catch {
@@ -810,7 +915,7 @@ export default function App() {
     setAdminProducts((items) => items.some((item) => item.slug === saved.slug) ? items.map((item) => item.slug === saved.slug ? saved : item) : [...items, saved]);
     setProducts((items) => {
       const without = items.filter((item) => item.slug !== saved.slug);
-      return saved.active ? [...without, saved] : without;
+      return saved.active ? [...without, { ...saved, inventory: Math.max(0, saved.inventory - (saved.reservedInventory ?? 0)) }] : without;
     });
   }
 
@@ -941,7 +1046,7 @@ export default function App() {
       const token = await getAdminToken();
       if (!token) throw new Error('Admin token required');
       const amountValue = refundAmounts[order.id]?.trim();
-      const amount = fullRefund || !amountValue ? refundableAmount(order) : moneyToCents(amountValue);
+      const amount = fullRefund || !amountValue ? undefined : moneyToCents(amountValue);
       const updated = await refundAdminOrder(order.id, { amount, reason: refundReasons[order.id] ?? '' }, token);
       rememberUpdatedOrder(updated);
       setAdminMessage(`Refund updated for ${updated.id}.`);
@@ -952,16 +1057,17 @@ export default function App() {
 
   function renderOrderCard(order: Order) {
     const remainingRefund = refundableAmount(order);
-    const canFulfill = order.status === 'paid' || order.status === 'refund_failed';
+    const canFulfill = !order.inventoryIssue && (order.status === 'paid' || order.status === 'refund_failed');
     return <article className="order-card" key={order.id}>
       <div className="order-card-header"><strong>{order.id}: {order.email}</strong><span className="status-badge">{orderStatusLabel(order.status)}</span></div>
       <div className="order-detail-grid"><div><strong>Customer</strong><p>{order.customerName || order.email}</p></div><div><strong>Shipping</strong><p>{order.shippingAddress || 'Shipping address not provided yet.'}</p></div><div><strong>Total</strong><p>{formatMoney(order.total)}</p></div></div>
       <div><strong>Items</strong><ul>{orderItemSummary(order).map((item) => <li key={`${order.id}-${item}`}>{item}</li>)}</ul></div>
       {(order.refundedAmount ?? 0) > 0 && <p>Refunded: {formatMoney(order.refundedAmount)}{order.stripeRefundId ? ` (${order.stripeRefundId})` : ''}</p>}
+      {order.inventoryIssue && <p role="alert">{order.inventoryIssue}</p>}
       {order.refundReason && <p>Refund note: {order.refundReason}</p>}
       <div className="order-actions">
         {canFulfill && <button onClick={() => void handleOrderFulfilled(order)}>Mark {order.id} fulfilled</button>}
-        {order.status === 'pending_payment' && <button onClick={() => void handleOrderPaymentSynced(order)}>Sync Stripe payment</button>}
+        {(order.status === 'pending_payment' || order.inventoryIssue) && <button onClick={() => void handleOrderPaymentSynced(order)}>Sync Stripe payment</button>}
         {order.status === 'pending_payment' && <button className="ghost" onClick={() => void handleOrderCanceled(order)}>Cancel pending order</button>}
         {canRefundOrder(order) && <>
           <label>Refund amount for {order.id}<input aria-label={`Refund amount for ${order.id}`} type="number" step="0.01" min="0.01" max={(remainingRefund / 100).toFixed(2)} placeholder={(remainingRefund / 100).toFixed(2)} value={refundAmounts[order.id] ?? ''} onChange={(event) => setRefundAmounts((amounts) => ({ ...amounts, [order.id]: event.target.value }))} /></label>
@@ -978,29 +1084,70 @@ export default function App() {
     const setProduct = (patch: Partial<Product>) => isNew ? setNewProduct((item) => ({ ...item, ...patch })) : updateAdminProduct(product.slug, patch);
     const saveLabel = isNew ? 'Create product listing' : `Save ${originalTitle}`;
     const dropzoneClass = `image-dropzone${imageDragSlug === product.slug ? ' is-dragging' : ''}`;
+    const available = Math.max(0, product.inventory - (product.reservedInventory ?? 0));
+    // Grouped instead of one flat grid. The fields ran slug, title, description, price, category,
+    // tags, inventory, image, active in arbitrary order, which left a hole in every card and meant
+    // reading the inputs to work out which product you were editing. The card now leads with the
+    // product name and its state, and the fields sit under named groups in the order you think
+    // about them: what it is, what it costs, what it says, what it looks like.
     return <article className={`admin-listing product-editor${isNew ? ' new-product-editor' : ''}`} key={isNew ? 'new-product' : product.id}>
       {!isNew && <img src={product.image} alt="" />}
+      <header className="listing-head">
+        <h4>{isNew ? 'New listing' : product.title || product.slug}</h4>
+        <p className="listing-stock">
+          {isNew
+            ? 'Fill in the details below, then create the listing.'
+            : `Physical stock: ${product.inventory} · Held in checkout: ${product.reservedInventory ?? 0} · Available: ${available}`}
+        </p>
+        {!isNew && <div className="listing-flags">
+          <span className={`listing-flag${product.active ? ' is-live' : ' is-hidden'}`}>{product.active ? 'Live' : 'Hidden'}</span>
+          <span className="listing-flag">{formatMoney(effectiveProductPrice(product))}</span>
+          {isProductOnSale(product) && <span className="listing-flag is-sale">On sale</span>}
+        </div>}
+      </header>
       <div className="editor-grid">
-        <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
-        <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
-        <label>{isNew ? 'New product description' : `Description for ${originalTitle}`}<textarea aria-label={isNew ? 'New product description' : `Description for ${originalTitle}`} value={product.description} onChange={(e) => setProduct({ description: e.target.value })} /></label>
-        <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
-        <label>{isNew ? 'New product category' : `Category for ${originalTitle}`}<input aria-label={isNew ? 'New product category' : `Category for ${originalTitle}`} value={product.category} onChange={(e) => setProduct({ category: e.target.value })} /></label>
-        <label>{isNew ? 'New product tags' : `Tags for ${originalTitle}`}<input aria-label={isNew ? 'New product tags' : `Tags for ${originalTitle}`} value={product.tags.join(', ')} onChange={(e) => setProduct({ tags: e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} /></label>
-        <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
-        <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
-        <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
-        {!isNew && <label
-          className={dropzoneClass}
-          onDragEnter={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
-          onDragOver={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
-          onDragLeave={(event) => { event.preventDefault(); setImageDragSlug(null); }}
-          onDrop={(event) => handleImageDrop(product, event)}
-        >
-          <span>Upload image for {originalTitle}</span>
-          <input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} />
-          <small>Drop image here or choose a file</small>
-        </label>}
+        <div className="listing-group">
+          <span className="listing-group-label">Identity</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product title' : `Title for ${originalTitle}`}<input aria-label={isNew ? 'New product title' : `Title for ${originalTitle}`} value={product.title} onChange={(e) => setProduct({ title: e.target.value })} /></label>
+            <label>{isNew ? 'New product slug' : `Slug for ${originalTitle}`}<input aria-label={isNew ? 'New product slug' : `Slug for ${originalTitle}`} value={product.slug} disabled={!isNew} onChange={(e) => setProduct({ slug: e.target.value })} /></label>
+            <label>{isNew ? 'New product category' : `Category for ${originalTitle}`}<input aria-label={isNew ? 'New product category' : `Category for ${originalTitle}`} value={product.category} onChange={(e) => setProduct({ category: e.target.value })} /></label>
+            <label>{isNew ? 'New product tags' : `Tags for ${originalTitle}`}<input aria-label={isNew ? 'New product tags' : `Tags for ${originalTitle}`} value={product.tags.join(', ')} onChange={(e) => setProduct({ tags: e.target.value.split(',').map((tag) => tag.trim()).filter(Boolean) })} /></label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Pricing &amp; stock</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
+            <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
+            <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Description</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product description' : `Description for ${originalTitle}`}<textarea aria-label={isNew ? 'New product description' : `Description for ${originalTitle}`} value={product.description} onChange={(e) => setProduct({ description: e.target.value })} /></label>
+          </div>
+        </div>
+        <div className="listing-group">
+          <span className="listing-group-label">Media</span>
+          <div className="field-grid">
+            <label>{isNew ? 'New product image URL' : `Image URL for ${originalTitle}`}<input aria-label={isNew ? 'New product image URL' : `Image URL for ${originalTitle}`} value={product.image} onChange={(e) => setProduct({ image: e.target.value })} /></label>
+            {!isNew && <label
+              className={dropzoneClass}
+              onDragEnter={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+              onDragOver={(event) => { event.preventDefault(); setImageDragSlug(product.slug); }}
+              onDragLeave={(event) => { event.preventDefault(); setImageDragSlug(null); }}
+              onDrop={(event) => handleImageDrop(product, event)}
+            >
+              <span>Upload image for {originalTitle}</span>
+              <input aria-label={`Upload image for ${originalTitle}`} type="file" accept="image/*" onChange={(e) => void handleImageUpload(product, e.currentTarget.files?.[0])} />
+              <small>Drop image here or choose a file</small>
+            </label>}
+          </div>
+        </div>
+      </div>
+      <div className="listing-actions">
         <button onClick={() => void handleProductSave(product)}>{saveLabel}</button>
       </div>
     </article>;
@@ -1065,6 +1212,88 @@ export default function App() {
     </section>
   </div> : null;
 
+  const openImageViewer = () => {
+    setImageViewZoom(imageViewZoomMin);
+    setImageViewOrigin({ x: 50, y: 50 });
+    setImageViewerOpen(true);
+  };
+
+  // The product page shows the art in a 5:7 crop so the layout stays even with the grid;
+  // this viewer is where the whole image is actually visible. The scale is applied as a
+  // transform whose origin follows the pointer, so zooming in inspects the region you are
+  // pointing at instead of only the centre.
+  const productImageViewer = imageViewerOpen && selectedProduct ? <div
+    className="image-viewer-backdrop"
+    role="presentation"
+    onClick={() => setImageViewerOpen(false)}
+  >
+    <section
+      className={`image-viewer${imageViewZoom > 1 ? ' is-zoomed' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="image-viewer-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="image-viewer-bar">
+        <h2 id="image-viewer-title">{selectedProduct.title}</h2>
+        <div className="image-viewer-controls">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={imageViewZoom <= imageViewZoomMin}
+            onClick={() => setImageViewZoom((current) => clampImageViewZoom(current / imageViewZoomStep))}
+          >−</button>
+          <button
+            type="button"
+            className="image-viewer-level"
+            aria-label="Reset zoom to fit the whole image"
+            onClick={() => setImageViewZoom(imageViewZoomMin)}
+          >{Math.round(imageViewZoom * 100)}%</button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={imageViewZoom >= imageViewZoomMax}
+            onClick={() => setImageViewZoom((current) => clampImageViewZoom(current * imageViewZoomStep))}
+          >+</button>
+          <button
+            type="button"
+            className="image-viewer-close"
+            aria-label="Close full image view"
+            onClick={() => setImageViewerOpen(false)}
+          >Close</button>
+        </div>
+      </div>
+      <div
+        className="image-viewer-stage"
+        onMouseMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+          setImageViewOrigin({
+            x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+            y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100))
+          });
+        }}
+      >
+        <img
+          src={selectedProduct.image}
+          alt={`${selectedProduct.title} card art, full size`}
+          style={{
+            transform: `scale(${imageViewZoom})`,
+            transformOrigin: `${imageViewOrigin.x}% ${imageViewOrigin.y}%`
+          }}
+          onClick={() => setImageViewZoom((current) => (current > imageViewZoomMin ? imageViewZoomMin : 2))}
+        />
+      </div>
+      <p className="image-viewer-hint">
+        {imageViewZoom > 1
+          ? 'Move the pointer to explore the card, click the image to fit it again. Esc closes.'
+          : 'Click the image or scroll to zoom in. Esc closes.'}
+      </p>
+    </section>
+  </div> : null;
+
+  const heroFeature = useMemo(() => products.find((p) => p.featured) ?? products[0], [products]);
+
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
       <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>Midnight Cardworks</a>
@@ -1110,23 +1339,24 @@ export default function App() {
         <div className="hero-copy">
           <span className="eyebrow">Midnight Collector Studio</span>
           <h1>Cards made for the midnight table.</h1>
-          <p className="hero-sub">Premium custom proxies, token packs, and display cards with a dark collector finish — built for commander nights, gifts, and display binders.</p>
+          <p className="hero-sub">Custom proxies, token packs, and display cards — hand-finished for commander nights, gifts, and display binders.</p>
           <div className="cta-row">
             <button onClick={() => showShop({ category: 'All', query: '' })}>Shop the collection</button>
             <button className="ghost" onClick={startOrder}>Start a commission</button>
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="hero-card-glow" />
-          <div className="hero-card">
-            <div className="hero-card-inner">
-              <span className="hero-card-label">Featured</span>
-              <span className="hero-card-title">Golden Hour<br />Commander Proxy</span>
-              <span className="hero-card-price">From $12.99</span>
-            </div>
-          </div>
-          <p className="hero-art-caption">Made-to-order · Casual play · Dark collector finish</p>
+        <div className="hero-art">
+          {heroFeature ? <button type="button" className="hero-feature" onClick={() => showProduct(heroFeature)} aria-label={`View ${heroFeature.title}`}>
+            <span className="hero-feature-frame">
+              <img src={heroFeature.image} alt={`${heroFeature.title} card art`} />
+            </span>
+            <span className="hero-feature-meta">
+              <span className="hero-feature-label">Featured</span>
+              <span className="hero-feature-title">{heroFeature.title}</span>
+              <span className="hero-feature-price">From {formatMoney(effectiveProductPrice(heroFeature))}</span>
+            </span>
+          </button> : null}
         </div>
       </div>
     </header> : null}
@@ -1137,7 +1367,7 @@ export default function App() {
         <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>Commander proxies, token packs, and display cards — all with a dark collector finish.</p></div>
         <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => {
           const catClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : 'badge badge-display';
-          return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
+          return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
             <div className="card-img-frame"><img src={product.image} alt={`${product.title} card preview`} loading="lazy" /></div>
             <div className="card-info"><span className={catClass}>{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div>
           </article>;
@@ -1151,21 +1381,33 @@ export default function App() {
         <aside className="shop-sidebar" aria-label="Shop filters">
           <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => showShop({ category: 'All', query: '' })}>Clear</button>}</div>
           <div className="filter-section">
-            <button className="filter-section-toggle" type="button" aria-expanded="true">Category<span className="filter-chevron open">▾</span></button>
-            <div className="filter-options">
+            <button
+              className="filter-section-toggle"
+              type="button"
+              aria-expanded={openFilterSections.includes('Category')}
+              aria-controls="filter-category-options"
+              onClick={() => setOpenFilterSections((sections) => sections.includes('Category') ? sections.filter((s) => s !== 'Category') : [...sections, 'Category'])}
+            >Category<span className={`filter-chevron${openFilterSections.includes('Category') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Category') && <div className="filter-options" id="filter-category-options">
               {categories.map((c) => (
                 <label key={c} className="filter-option">
                   <input type="checkbox" checked={category === c} onChange={() => showShop({ category: c })} />
                   {c}
                 </label>
               ))}
-            </div>
+            </div>}
           </div>
           <div className="filter-section">
-            <button className="filter-section-toggle" type="button" aria-expanded="true">Search<span className="filter-chevron open">▾</span></button>
-            <div className="filter-options" style={{ paddingTop: '.35rem' }}>
+            <button
+              className="filter-section-toggle"
+              type="button"
+              aria-expanded={openFilterSections.includes('Search')}
+              aria-controls="filter-search-options"
+              onClick={() => setOpenFilterSections((sections) => sections.includes('Search') ? sections.filter((s) => s !== 'Search') : [...sections, 'Search'])}
+            >Search<span className={`filter-chevron${openFilterSections.includes('Search') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Search') && <div className="filter-options" id="filter-search-options" style={{ paddingTop: '.35rem' }}>
               <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => showShop({ query: e.target.value })} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
-            </div>
+            </div>}
           </div>
           <div className="sidebar-cta">
             <button type="button" onClick={startOrder}>Request custom card</button>
@@ -1174,10 +1416,7 @@ export default function App() {
         <div className="shop-results">
           <div className="results-bar">
             <span className="results-count">{visibleProducts.length} {visibleProducts.length === 1 ? 'item' : 'items'}</span>
-            <div className="results-controls">
-              <span style={{ fontSize: '.8rem', color: 'var(--text-3)', fontWeight: 600 }}>Sort</span>
-              <select aria-label="Filter category" value={category} onChange={(e) => setCategory(e.target.value)} style={{ display: 'none' }}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
-            </div>
+            {category !== 'All' && <button className="results-clear" type="button" onClick={() => showShop({ category: 'All' })}>Show all</button>}
           </div>
           {visibleProducts.length === 0
             ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => showShop({ category: 'All', query: '' })}>Clear filters</button></div>
@@ -1229,7 +1468,15 @@ export default function App() {
         <button className="ghost" onClick={() => showShop()}>← Back to shop</button>
         <div className="product-detail-grid">
           <div className="product-detail-img-col">
-            <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
+            <button
+              className="product-detail-img-trigger"
+              type="button"
+              onClick={openImageViewer}
+              aria-label={`View the full image of ${selectedProduct.title}`}
+            >
+              <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
+              <span className="product-detail-img-hint" aria-hidden="true">See full image</span>
+            </button>
             <table className="product-detail-meta-table">
               <tbody>
                 <tr><td>Category</td><td>{selectedProduct.category}</td></tr>
@@ -1260,14 +1507,13 @@ export default function App() {
                 : `Sold out: ${selectedProduct.title}`}
             </button>
             <div className="trust-strip">
-              <span>ðŸ”’ Secure Stripe checkout</span>
-              <span>✦ Made-to-order</span>
-              <span>⚠ Casual play only</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Secure Stripe checkout</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>Made to order</span>
+              <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>Casual play only</span>
             </div>
-            <div className="seo-share-box">
-              <strong>Shareable listing URL</strong>
-              <code>{`/products/${selectedProduct.slug}`}</code>
-              <p>Built for direct sharing and search indexing with product-specific title, description, Open Graph, and structured data.</p>
+            <div className="share-listing">
+              <button className="share-listing-btn ghost" type="button" onClick={() => void copyListingLink(selectedProduct.slug)}>Copy link to this card</button>
+              {shareNotice && <span className="share-notice" role="status">{shareNotice}</span>}
             </div>
           </div>
         </div>
@@ -1443,7 +1689,7 @@ export default function App() {
       </form>
     </section>}
 
-    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : 'Waiting for Stripe confirmation'}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p><h3>Total paid: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul><h3>What happens next</h3><p>We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : <p>Hang tight while Stripe confirms the order.</p>}</section>}
+    {view === 'receipt' && <section className="panel narrow receipt-panel"><p className="eyebrow">Checkout complete</p><h2>Order received</h2>{receiptMessage && <p className="status-message">{receiptMessage}</p>}{receiptOrder ? <div><p>Order number: {receiptOrder.id}</p><p>{receiptOrder.fulfillmentOnHold ? 'Paid; fulfillment on hold' : receiptOrder.status === 'fulfilled' ? 'Fulfilled' : receiptOrder.status === 'paid' ? 'Paid and confirmed' : receiptOrder.status === 'pending_payment' ? 'Waiting for Stripe confirmation' : receiptOrder.status.replaceAll('_', ' ')}</p>{receiptOrder.shippingAddress && <p>Ship to: {receiptOrder.shippingAddress}</p>}<p>Shipping: {receiptOrder.shippingCost === 0 ? 'Free' : formatMoney(receiptOrder.shippingCost ?? 0)}</p>{Boolean(receiptOrder.discountAmount) && <p>Discount: -{formatMoney(receiptOrder.discountAmount ?? 0)}</p>}<h3>{receiptOrder.paidAt || ['paid', 'fulfilled', 'partially_refunded', 'refunded', 'refund_pending', 'refund_failed'].includes(receiptOrder.status) ? 'Total paid' : 'Order total'}: {formatMoney(receiptOrder.total)}</h3><ul>{orderItemSummary(receiptOrder).map((item) => <li key={item}>{item}</li>)}</ul>{receiptOrder.refundedAmount > 0 && <p>Refunded: {formatMoney(receiptOrder.refundedAmount)}</p>}<h3>What happens next</h3><p>{receiptOrder.fulfillmentOnHold ? 'We received your payment and are reviewing stock availability. We’ll contact you before fulfillment.' : receiptOrder.status === 'paid' ? 'We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.' : receiptOrder.status === 'pending_payment' ? 'We’ll prepare your order once payment is confirmed.' : receiptOrder.status === 'canceled' ? 'This checkout was canceled. You can start a new order from the shop.' : 'Contact support if you have questions about fulfillment or refunds.'}</p><button onClick={() => contactSupportAboutOrder(receiptOrder.id)}>Contact support about {receiptOrder.id}</button><button className="ghost" onClick={() => showShop({ category: 'All', query: '' })}>Back to shop</button></div> : receiptMessage === 'Checking payment status...' ? <p>Loading your receipt.</p> : <button onClick={() => setView('account')}>Sign in to view your orders</button>}</section>}
 
     {view === 'admin' && isAdmin && <section className="panel admin-panel">
       <div className="admin-header">
@@ -1452,12 +1698,14 @@ export default function App() {
       </div>
       {adminMessage && <p className="status-message">{adminMessage}</p>}
       <div className="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button role="tab" aria-selected={adminTab === 'health'} className={adminTab === 'health' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('health')}>Health</button>
         <button role="tab" aria-selected={adminTab === 'orders'} className={adminTab === 'orders' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('orders')}>Orders ({orders.length})</button>
         <button role="tab" aria-selected={adminTab === 'listings'} className={adminTab === 'listings' ? 'active-tab' : 'ghost'} onClick={() => { setAdminTab('listings'); setListingTab('current'); }}>Listings ({adminProducts.length})</button>
         <button role="tab" aria-selected={adminTab === 'sales'} className={adminTab === 'sales' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('sales')}>Sales ({adminProducts.filter(isProductOnSale).length})</button>
         <button role="tab" aria-selected={adminTab === 'content'} className={adminTab === 'content' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('content')}>Content ({contentItemCount})</button>
         <button role="tab" aria-selected={adminTab === 'marketing'} className={adminTab === 'marketing' ? 'active-tab' : 'ghost'} onClick={() => setAdminTab('marketing')}>Marketing ({activeMarketingSubscribers.length})</button>
       </div>
+      {adminTab === 'health' && <OperationsHealthPanel getToken={getAdminToken} onReviewOrders={() => setAdminTab('orders')} />}
       {adminTab === 'orders' && <section className="admin-workspace order-workspace" role="tabpanel" aria-label="Orders">
         <div className="section-heading"><div><h3>Order navigation</h3><p>Review paid orders, shipping details, and fulfillment status.</p></div></div>
         {orders.length === 0 ? <p>No orders yet.</p> : <div className="order-list">{orders.map(renderOrderCard)}</div>}
@@ -1580,7 +1828,12 @@ export default function App() {
 
     {newsletterOfferDialog}
 
-    {analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
+    {productImageViewer}
+
+    {/* The consent notice belongs to shoppers. On /admin it sat over the order action
+        buttons — it was physically covering "Sync Stripe payment" and "Cancel pending
+        order" — and an internal seller console has nothing to consent to. */}
+    {view !== 'admin' && analyticsPreference === 'unknown' && <aside className="privacy-notice" role="region" aria-label="Privacy and cookie notice">
       <div>
         <strong>Privacy & cookie choices</strong>
         <p>Necessary storage keeps cart, checkout, sign-in, and security features working. Optional privacy-friendly analytics helps improve the shop after you allow it.</p>

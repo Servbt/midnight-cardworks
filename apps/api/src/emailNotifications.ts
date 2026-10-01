@@ -5,17 +5,17 @@ export type MarketingCampaign = { subject: string; message: string };
 
 export type EmailNotifier = {
   sendOrderPending(order: Order): Promise<void>;
-  sendOrderPaid(order: Order, idempotencyKey?: string): Promise<void>;
+  sendOrderPaid(order: Order): Promise<void>;
   sendOrderFulfilled(order: Order): Promise<void>;
   sendOrderCanceled(order: Order): Promise<void>;
-  sendOrderRefunded(order: Order, idempotencyKey?: string): Promise<void>;
-  sendOrderRefundFailed(order: Order, idempotencyKey?: string): Promise<void>;
+  sendOrderRefunded(order: Order): Promise<void>;
+  sendOrderRefundFailed(order: Order): Promise<void>;
   sendContactMessage(message: ContactMessage): Promise<void>;
   sendMarketingWelcome(subscriber: MarketingSubscriber): Promise<void>;
   sendMarketingCampaign(subscriber: MarketingSubscriber, campaign: MarketingCampaign): Promise<void>;
 };
 
-type ResendEmail = {
+export type ResendEmail = {
   from: string;
   to: string[];
   subject: string;
@@ -70,6 +70,7 @@ function buildPendingOrderAdminEmail(order: Order): ResendEmail | undefined {
       order.stripeSessionId ? 'Stripe Checkout Session: ' + order.stripeSessionId : undefined,
       'Status: ' + order.status,
       'Total: ' + money(order.total),
+    order.discountAmount ? 'Discount: ' + money(order.discountAmount) : undefined,
       '',
       orderLines(order),
       '',
@@ -86,15 +87,16 @@ function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEm
     '',
     'Order: ' + order.id,
     'Total: ' + money(order.total),
+    order.discountAmount ? 'Discount: ' + money(order.discountAmount) : undefined,
     order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined,
     '',
     orderLines(order),
     '',
-    'We will prepare it for fulfillment.'
+    order.inventoryIssue ? 'We received your payment and are reviewing stock availability. We will contact you before fulfillment.' : 'We will prepare it for fulfillment.'
   ].filter(Boolean).join(newline);
   const customer: ResendEmail = { from, to: [order.email], subject: 'Order ' + order.id + ' confirmed', text };
   const adminTo = ownerNotificationEmails();
-  const admin = adminTo.length > 0 ? { from, to: adminTo, subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
+  const admin = adminTo.length > 0 ? { from, to: adminTo, subject: 'New paid order ' + order.id, text: ['New paid order from ' + order.email, order.inventoryIssue ? 'ACTION REQUIRED: ' + order.inventoryIssue : undefined, order.customerName ? 'Name: ' + order.customerName : undefined, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, 'Total: ' + money(order.total), '', orderLines(order)].filter(Boolean).join(newline) } : undefined;
   return { customer, admin };
 }
 
@@ -220,13 +222,13 @@ function buildMarketingCampaignEmail(subscriber: MarketingSubscriber, campaign: 
   };
 }
 
-async function sendResend(email: ResendEmail, idempotencyKey?: string) {
+export async function sendResend(email: ResendEmail, idempotencyKey?: string) {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return;
+  if (!apiKey) { if (idempotencyKey) throw new Error('RESEND_API_KEY is missing'); return; }
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { authorization: 'Bearer ' + apiKey, 'content-type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify(email)
   });
   if (!response.ok) throw new Error('Email send failed with ' + response.status);
@@ -239,11 +241,11 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
       if (!email) return;
       await sendResend(email);
     },
-    async sendOrderPaid(order, idempotencyKey) {
+    async sendOrderPaid(order) {
       const emails = buildPaidEmail(order);
       if (!emails) return;
-      await sendResend(emails.customer, idempotencyKey ? idempotencyKey + '/customer' : undefined);
-      if (emails.admin) await sendResend(emails.admin, idempotencyKey ? idempotencyKey + '/owner' : undefined);
+      await sendResend(emails.customer);
+      if (emails.admin) await sendResend(emails.admin);
     },
     async sendOrderFulfilled(order) {
       const email = buildFulfilledEmail(order);
@@ -255,15 +257,15 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
       if (!email) return;
       await sendResend(email);
     },
-    async sendOrderRefunded(order, idempotencyKey) {
+    async sendOrderRefunded(order) {
       const email = buildRefundedEmail(order);
       if (!email) return;
-      await sendResend(email, idempotencyKey);
+      await sendResend(email);
     },
-    async sendOrderRefundFailed(order, idempotencyKey) {
+    async sendOrderRefundFailed(order) {
       const email = buildRefundFailedEmail(order);
       if (!email) return;
-      await sendResend(email, idempotencyKey);
+      await sendResend(email);
     },
     async sendContactMessage(message) {
       const email = buildContactEmail(message);
@@ -281,4 +283,19 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
       await sendResend(email);
     }
   };
+}
+
+/** Render once, then persist each recipient's exact payload before the first send. */
+export function buildOrderNotification(kind: import('./paymentState.js').NotificationKind, order: Order): ResendEmail[] {
+  if (!process.env.EMAIL_FROM) throw new Error('EMAIL_FROM is missing');
+  if (kind === 'Paid') {
+    const emails = buildPaidEmail(order)!;
+    return [emails.customer, ...(emails.admin ? [emails.admin] : [])];
+  }
+  const email = kind === 'Pending' ? buildPendingOrderAdminEmail(order)
+    : kind === 'Fulfilled' ? buildFulfilledEmail(order)
+    : kind === 'Canceled' ? buildCanceledEmail(order)
+    : kind === 'Refunded' ? buildRefundedEmail(order) : buildRefundFailedEmail(order);
+  if (!email) throw new Error('Notification recipient configuration is missing');
+  return [email];
 }

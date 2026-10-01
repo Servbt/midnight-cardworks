@@ -1,6 +1,6 @@
 # Midnight Cardworks Production Launch Roadmap
 
-Last updated: 2026-06-27
+Last updated: 2026-09-21
 
 This document is the source of truth for taking Midnight Cardworks from a working
 MVP to a public production shop. Work through one gate at a time. Do not mark a
@@ -19,7 +19,9 @@ gate complete until its evidence is recorded here.
 
 - Current service URL: `https://midnight-cardworks.onrender.com`
 - Hosting: Render web service and Render Postgres
-- Launch blocker: both resources are currently declared on Render Free tiers
+- Hosting verified 2026-09-21: Starter web service and Basic-256mb Postgres.
+- Monitoring: Render Health Check Path corrected to `/health` on 2026-09-21;
+  configuration redeploy verified live and public endpoint returned HTTP 200.
 - Payments: Stripe Checkout, webhook processing, cancellation, and refunds exist
 - Authentication: Clerk customer accounts and admin allowlist exist
 - Email: Resend transactional and marketing flows exist
@@ -28,6 +30,20 @@ gate complete until its evidence is recorded here.
   `llms.txt` exist
 - Admin tools: orders, fulfillment, listings, sales, marketing, FAQ, and blog
   management exist
+
+## Recent engineering phases
+
+These phases are separate from the launch gates below. Older unchecked items
+remain unverified unless this evidence explicitly resolves them.
+
+- Phase 2 production configuration: owner reported environment settings verified.
+- Phase 3 payment reliability: owner reported merged deployment operational.
+- Phase 4 stock reservations: owner reported operational; Render independently
+  showed merged commit `02713eb` live on 2026-09-21.
+- Phase 5 monitoring/recovery: admin Health dashboard implemented locally. See
+  [operational health and remaining gates](OPERATIONS_HEALTH.md). Render already
+  uses failure notifications via email, but actual delivery, staging and a restore
+  rehearsal remain unverified. The blank production Health Check Path was subsequently corrected to `/health`.
 
 ## Gate 1: Production Foundation
 
@@ -365,12 +381,12 @@ SHAs. Never record passwords, API keys, webhook secrets, or database URLs.
 
 ## Next Action
 
-Complete the remaining Gate 1 production checks:
+Complete phase five using [the operations runbook](OPERATIONS_HEALTH.md):
 
-1. Push and deploy the paid-tier Blueprint and pre-deploy migration change.
-2. Run `npm run check:production-env` in the Render Shell and resolve any
-   missing or invalid environment names without recording secret values.
-3. Confirm every Prisma migration is applied to the paid production database.
-4. Adopt the backup policy and document a restore rehearsal.
-5. Migrate Clerk, Stripe, Resend, and application URLs to
-   `https://servbotshop.com`.
+1. Review and deploy the admin Health dashboard PR.
+2. Keep Render Health Check Path at `/health`; the configuration redeploy and public endpoint passed verification.
+3. Verify delivery of existing failure email notifications using staging.
+4. Approve separate staging/recovery resources and rehearse a restore without
+   connecting application workers or changing production database connections.
+5. Run the documented staging purchase, expiration, fulfillment, refund and alert
+   checks. Record evidence before marking the remaining launch gates complete.

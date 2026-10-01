@@ -20,7 +20,7 @@ const required = [
   'MARKETING_POSTAL_ADDRESS'
 ];
 
-const optional = ['VITE_PLAUSIBLE_DOMAIN', 'VITE_PLAUSIBLE_SRC'];
+const optional = ['CLERK_AUTHORIZED_PARTIES', 'VITE_PLAUSIBLE_DOMAIN', 'VITE_PLAUSIBLE_SRC'];
 const placeholderPatterns = [
   /replace_me/i,
   /your-domain\.com/i,
@@ -37,17 +37,6 @@ const missing = required.filter((name) => !present(name));
 const invalid = required.filter((name) => present(name) && placeholderPatterns.some((pattern) => pattern.test(value(name))));
 const warnings = [];
 
-if (present('CLERK_ISSUER_URL')) {
-  try {
-    const issuer = new URL(value('CLERK_ISSUER_URL'));
-    if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash || issuer.pathname !== '/') {
-      invalid.push('CLERK_ISSUER_URL (must be an HTTPS origin without credentials, query, or fragment)');
-    }
-  } catch {
-    invalid.push('CLERK_ISSUER_URL (must be a valid HTTPS origin)');
-  }
-}
-
 if (present('NODE_ENV') && value('NODE_ENV') !== 'production') {
   invalid.push('NODE_ENV (must be production)');
 }
@@ -63,6 +52,20 @@ if (present('APP_BASE_URL')) {
     if (appUrl.hostname.endsWith('.onrender.com')) warnings.push('APP_BASE_URL still uses the temporary Render hostname');
   } catch {
     invalid.push('APP_BASE_URL (must be a valid URL)');
+  }
+}
+
+for (const name of ['CLERK_ISSUER_URL', 'CLERK_AUTHORIZED_PARTIES']) {
+  if (!present(name)) continue;
+  try {
+    for (const entry of value(name).split(',')) {
+      const url = new URL(entry.trim());
+      if (url.protocol !== 'https:' || url.pathname !== '/' || url.username || url.password || url.search || url.hash) {
+        throw new Error('Invalid origin');
+      }
+    }
+  } catch {
+    invalid.push(name + ' (must contain HTTPS origins without paths or credentials)');
   }
 }
 

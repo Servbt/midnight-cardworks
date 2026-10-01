@@ -1,30 +1,24 @@
+import { startInventoryWorker } from './inventoryWorker.js';
+import { startNotificationWorker } from './notificationWorker.js';
+import { assertProductionConfig } from './productionConfig.js';
 import { buildServer } from './server.js';
 import { createStoreFromEnv } from './storeFactory.js';
-import { releaseExpiredReservations } from './checkoutLifecycle.js';
-import { deliverOrderNotifications } from './orderNotifications.js';
-import { createEmailNotifierFromEnv } from './emailNotifications.js';
+
+assertProductionConfig();
 
 const port = Number(process.env.PORT ?? 4000);
 const serveStaticRoot = process.env.SERVE_STATIC_ROOT ?? (process.env.NODE_ENV === 'production' ? 'apps/web/dist' : undefined);
 const { store, disconnect } = await createStoreFromEnv();
-const emailNotifier = createEmailNotifierFromEnv();
-const app = buildServer(store, { serveStaticRoot, emailNotifier });
-let reservationCleanup: Promise<void> | undefined;
-const cleanReservations = () => {
-  if (reservationCleanup) return;
-  reservationCleanup = releaseExpiredReservations(store, (orderId, error) => console.error('Reservation reconciliation needs retry or review', orderId, error instanceof Error ? error.message : 'Unknown error'))
-    .then(() => deliverOrderNotifications(store, emailNotifier, undefined, (id, error) => console.error('Notification needs retry or review', id, error instanceof Error ? error.message : 'Unknown error')))
-    .catch((error) => console.error('Reservation cleanup failed', error instanceof Error ? error.message : 'Unknown error'))
-    .finally(() => { reservationCleanup = undefined; });
-};
-const cleanupTimer = setInterval(cleanReservations, 60_000);
-cleanupTimer.unref();
-cleanReservations();
+const app = await buildServer(store, { serveStaticRoot });
+
+const stopNotifications = startNotificationWorker(store, error => console.error('Notification worker failed', error instanceof Error ? error.message : 'Unknown error'));
+
+const stopInventory = startInventoryWorker(store, error => console.error('Inventory reconciliation failed', error instanceof Error ? error.name : 'Error'));
 
 const shutdown = async () => {
-  clearInterval(cleanupTimer);
   await app.close();
-  await reservationCleanup;
+  await stopInventory();
+  await stopNotifications();
   await disconnect?.();
   process.exit(0);
 };

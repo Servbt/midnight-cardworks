@@ -71,11 +71,6 @@ The checkout endpoint is production-ready at the service seam:
 - Production webhooks require `STRIPE_WEBHOOK_SECRET`; unsigned production webhook payloads are rejected.
 - The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`. If a paid checkout stays pending because a webhook was missed, admins can use `Sync Stripe payment` on the pending order to retrieve the Checkout Session, mark it paid, and send the confirmation email.
 - `/api/checkout` requires `customerName` and structured shipping fields; receipts and admin order review display the formatted shipping address.
-- Checkout combines duplicate product lines, rejects inactive/insufficient-stock listings, and reserves available inventory transactionally before contacting Stripe. New reservations last 35 minutes; payment consumes the reservation without deducting stock again.
-- Admin cancellation expires the Stripe Checkout Session before returning stock. Expiration and delayed-payment failure webhooks release stock after confirming Stripe's current state. A startup/minute cleanup pass retries expired reservations; processing payments and ambiguous Stripe failures keep stock held for safe reconciliation.
-- The exact Stripe session-create request and an order-specific idempotency key are retained for timeout recovery. Unrecorded sessions older than 23 hours require manual Stripe reconciliation before releasing stock, to avoid creating a new session after Stripe's idempotency retention window. See [Stripe idempotency guidance](https://docs.stripe.com/api/idempotent_requests).
-- New checkout responses include a random guest receipt credential. The browser stores it in session storage for the checkout tab and sends it in an `X-Receipt-Token` header; only its hash is stored on the server. Receipt responses contain fulfillment/totals/items, omit email/name/payment identifiers, and disable caching. Order IDs and URL query parameters do not grant receipt access.
-- Signed-in customers can access receipts belonging to their verified account email, and admins can access order receipts. Older guest receipt links and new guest links opened without their tab's credential require sign-in with the order email or support assistance.
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
 - Admins can cancel `pending_payment` orders before payment succeeds.
 - Admins can issue full or partial refunds for paid/fulfilled orders; refunds are created against the stored Stripe PaymentIntent.
@@ -142,13 +137,36 @@ Required production env vars:
 ```bash
 VITE_CLERK_PUBLISHABLE_KEY=pk_live_or_test_key
 CLERK_SECRET_KEY=sk_live_or_test_key
-CLERK_ISSUER_URL=https://your-instance.clerk.accounts.dev
 ```
 
 Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
-The API verifies customer sessions against the configured Clerk issuer and uses `CLERK_SECRET_KEY` to look up the authenticated user's email before returning account order history from `/api/orders`.
+The API uses `CLERK_SECRET_KEY` to verify customer sessions before returning account order history from `/api/orders`.
 
-Before deploying the authentication fix, set `CLERK_ISSUER_URL` on the API host to your Clerk instance's exact session-token issuer (its Frontend API URL, normally without a trailing slash). Use the production instance URL for production, not the development instance or the storefront URL. Obtain it from your trusted Clerk dashboard configuration, never from a caller-supplied token. Both customer and admin authentication reject requests when this setting is missing or invalid. Verification fetches keys only from this configured origin and requires matching issuer, RS256 signature, subject, issued-at, and expiration claims. See [Clerk's verification guide](https://clerk.com/docs/guides/sessions/manual-jwt-verification).
+## Order access and Clerk verification
+
+Customer and admin APIs share session verification against a fixed Clerk instance. Configure:
+
+```bash
+CLERK_ISSUER_URL=https://your-instance.clerk.accounts.dev
+CLERK_AUTHORIZED_PARTIES=https://your-shop.example
+```
+
+Use the exact Clerk Frontend API origin for `CLERK_ISSUER_URL` (your custom Clerk domain in production). It must match the session token issuer. `CLERK_AUTHORIZED_PARTIES` is a comma-separated list of storefront origins; when omitted, it defaults to `APP_BASE_URL`. Origins must use HTTPS in production and cannot include paths, credentials, queries, or fragments. Local development can use `http://localhost:5173` as an authorized party. The issuer always requires HTTPS. Missing or invalid configuration denies account/admin access.
+
+Verification requires a signed, unexpired Clerk session from that issuer and an allowed `azp` origin. Order ownership and the admin allowlist use the account's **verified primary email**. Customer order history matches checkout emails case-insensitively, including older mixed-case addresses.
+
+- `GET /api/orders` requires a customer bearer token and returns that account's orders.
+- `GET /api/orders/:orderId` requires either the matching customer's bearer token or the order's private `X-Receipt-Token` header. Knowing an order ID alone does not grant access.
+- New checkouts generate a random 256-bit receipt token and store only its SHA-256 hash. Stripe's success URL carries the token in a fragment, which is not sent to the web server. The storefront removes it from the address bar and retains it in session storage for reloads in the same tab, with an in-memory fallback when storage is unavailable.
+- Guest and customer responses omit email, customer name, payment-provider identifiers, access hashes, and internal refund notes. They include receipt items, amounts, status, dates, and the delivery address. Responses disable caching.
+- Treat private receipt links as credentials. Guest tokens grant access only to their own receipt. Existing orders have no guest token; their old order-ID-only links now require sign-in with the matching verified primary email. Support can use the protected admin dashboard for customers who cannot sign in.
+
+Deployment order for this change:
+
+1. Set `CLERK_ISSUER_URL` and the allowed storefront origins on the API host, matching the frontend Clerk instance.
+2. Run `npm run db:generate` and build the application.
+3. Apply migrations with `npm run db:migrate` before starting the new API. The new nullable `receiptTokenHash` column preserves existing orders; Render's existing pre-deploy migration command handles this.
+4. Smoke-test a real Clerk customer session, an allowlisted admin, and a new guest checkout return. Older Checkout Sessions do not gain a token retroactively.
 
 ## Admin Access
 
@@ -204,7 +222,7 @@ Production deploys should run migrations before the API starts. The included Ren
 npm run render:build
 ```
 
-Missing seed products are inserted on API startup when Prisma storage is enabled. Existing products are preserved, including edited prices, inventory, visibility, images, and renamed listings. Seeding does not repair product data overwritten by older deployments; restore that data from verified records or backups if needed.
+Seed products are inserted on API startup when Prisma storage is enabled. Existing product IDs or slugs are skipped, preserving edited titles, prices, images, inventory, visibility, and sale settings across restarts. Missing seed products are inserted; seed data never updates an existing listing.
 
 ## Product Image Uploads
 
@@ -236,7 +254,6 @@ Deployment flow:
    - `STRIPE_WEBHOOK_SECRET` after webhook creation
    - `VITE_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY`
-   - `CLERK_ISSUER_URL` (exact trusted Clerk session issuer; required for both customer and admin access)
    - `ADMIN_EMAILS`
    - `VITE_ADMIN_EMAILS`
    - `CLOUDINARY_URL`
@@ -281,3 +298,16 @@ Production behavior:
 8. Create the Stripe promotion code that matches `NEWSLETTER_COUPON_CODE`, then test the signup coupon in Stripe Checkout.
 9. Review the Privacy & Cookies page, analytics preference behavior, marketing email unsubscribe behavior, and any region-specific legal requirements before accepting live orders.
 10. Review real listings, prices, inventory, sale settings, refund policy, fulfillment copy, and legal notes before accepting live orders.
+
+## Phase two production safeguards
+
+Production startup now validates essential runtime settings before opening the database or listening:
+`DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`,
+`CLERK_SECRET_KEY`, `CLERK_ISSUER_URL`, and `ADMIN_EMAILS`.
+`CLERK_AUTHORIZED_PARTIES` remains optional and defaults to `APP_BASE_URL`; if supplied, all entries must be valid HTTPS origins. Invalid or missing values stop startup with the setting names, without logging secret values. Stripe/Clerk test keys are allowed for staging; use live keys when accepting real payments. Optional email, marketing, and image-upload settings do not block startup. The broader `check:production-env` script remains a launch checklist, not the runtime validator.
+
+Production cannot fall back to in-memory storage, demo checkout, or simulated refunds. Development/test mode retains those local workflows. Checkout/refund helpers also reject missing or placeholder Stripe keys when invoked directly in production.
+
+The API now waits for raw-body registration before defining routes and verifies Stripe signatures with the real SDK. Stripe must deliver events to `/api/stripe/webhook`, and `STRIPE_WEBHOOK_SECRET` must be the signing secret for that endpoint and environment (a Stripe CLI secret is for CLI-forwarded requests). Invalid, missing, stale, or tampered signatures are rejected before changing orders or sending email.
+
+Deploy this phase with the existing Render build, pre-deploy migration, and start commands; it adds no new database migration. Confirm the required settings before merging into Render's deployed branch. After deployment, check `/health`, verify edited listings survived the restart, and use Stripe test mode in a staging environment to verify webhook delivery. This phase fixes signature delivery and startup safety; payment-state transitions, event deduplication, discount reconciliation, and inventory reservations are subsequent phases.

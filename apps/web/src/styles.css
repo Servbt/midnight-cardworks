@@ -4,42 +4,55 @@
   --font-display: 'Cinzel', 'Palatino Linotype', Georgia, serif;
   --font-ui:      'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  /* Backgrounds — layered darkness */
-  --bg-void:      #070710;
-  --bg-dark:      #0d0d1a;
-  --bg-surface:   #131320;
-  --bg-surface-2: #1a1a2c;
-  --bg-surface-3: #222236;
+  /* Backgrounds — three steps, not five. Sleek reads as flat: depth comes from type,
+     hairlines and space, not from layered near-identical greys and glow. */
+  --bg-void:      #08080d;
+  --bg-surface:   #101018;
+  --bg-raised:    #16161f;
+  /* Legacy aliases so existing rules keep resolving onto the three-step scale. */
+  --bg-dark:      var(--bg-void);
+  --bg-surface-2: var(--bg-raised);
+  --bg-surface-3: var(--bg-raised);
 
-  /* Accent — warm amber gold */
-  --accent:       #d4a853;
-  --accent-hover: #c49040;
-  --accent-dim:   rgba(212,168,83,.12);
-  --accent-glow:  rgba(212,168,83,.22);
-  --accent-border: rgba(212,168,83,.3);
+  /* Accent — warm amber. Used for text, hairlines and the primary CTA. Never as a glow. */
+  --accent:        #d4a853;
+  --accent-hover:  #c49040;
+  --accent-dim:    rgba(212,168,83,.10);
+  --accent-border: rgba(212,168,83,.34);
+  --accent-glow:   transparent;
 
   /* Text */
   --text:   #f5f4f0;
-  --text-2: rgba(245,244,240,.68);
-  --text-3: rgba(245,244,240,.40);
+  --text-2: rgba(245,244,240,.66);
+  --text-3: rgba(245,244,240,.42);
 
-  /* Borders */
-  --border:       rgba(255,255,255,.07);
-  --border-2:     rgba(255,255,255,.12);
+  /* Borders — hairlines now do the work shadows used to. */
+  --border:   rgba(255,255,255,.08);
+  --border-2: rgba(255,255,255,.14);
 
   /* Semantic */
   --success:      #6ee7b7;
   --danger:       #f87171;
-  --foil-grad:    linear-gradient(135deg, #7b2ff7, #9c44e8);
   --rare-gold:    #c3a438;
   --mythic:       #e05e1c;
   --uncommon:     #6b9db5;
 
-  /* Shadows */
-  --shadow-card:  0 4px 24px rgba(0,0,0,.55), 0 1px 4px rgba(0,0,0,.4);
-  --shadow-hover: 0 20px 60px rgba(212,168,83,.18), 0 6px 20px rgba(0,0,0,.7);
-  --shadow-hero:  0 40px 100px rgba(212,168,83,.28), 0 10px 40px rgba(0,0,0,.85);
-  --shadow-nav:   0 1px 0 rgba(255,255,255,.05);
+  /* Elevation — flat everywhere. One shadow, reserved for overlays. */
+  --shadow-card:  none;
+  --shadow-hover: none;
+  --shadow-hero:  none;
+  --shadow-nav:   none;
+  --shadow-overlay: 0 24px 70px rgba(0,0,0,.62);
+
+  /* Radii — two values only. Mixed radii read as assembled; consistent edges read as designed. */
+  --radius-plate:   0px;
+  --radius-control: 4px;
+  --radius-pill:    999px;
+
+  /* Chrome heights. Sticky offsets referenced the literals 58px/40px directly, so
+     changing the nav height silently broke three of them. Single source now. */
+  --nav-primary-h:   64px;
+  --nav-secondary-h: 40px;
 
   /* Layout */
   --app-w:        1400px;
@@ -97,7 +110,7 @@ button {
   min-height: 44px;
   padding: .65rem 1.35rem;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: #0d0d1a;
   font-family: var(--font-ui);
@@ -160,7 +173,7 @@ input, select, textarea {
   padding: .75rem 1rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-2);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text);
   font-family: var(--font-ui);
   transition: border-color .18s ease, box-shadow .18s ease;
@@ -201,7 +214,9 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   text-transform: uppercase;
   white-space: nowrap;
 }
-.badge-foil    { background: var(--foil-grad); color: #fff; }
+/* Hairline outline rather than a fill: the amber gradient with white text it used to
+   carry was the poorest-contrast badge in the set. */
+.badge-foil    { background: transparent; color: var(--accent); border: 1px solid var(--accent-border); }
 .badge-new     { background: var(--accent); color: #0d0d1a; }
 .badge-sold    { background: rgba(255,255,255,.1); color: var(--text-3); border: 1px solid var(--border); }
 .badge-rare    { background: rgba(195,164,56,.15); color: var(--rare-gold); border: 1px solid rgba(195,164,56,.3); }
@@ -217,35 +232,41 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   z-index: 100;
 }
 
+/* Three-column grid so the wordmark can sit dead centre, the way B&O and The Row do it.
+   Background is opaque: the previous translucent + 22px blur let product titles scroll
+   visibly *through* the bar. */
 .nav-primary {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 1rem;
   padding: 0 var(--gutter);
-  height: 58px;
-  background: rgba(7,7,16,.88);
-  backdrop-filter: saturate(180%) blur(22px);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  height: var(--nav-primary-h);
+  background: var(--bg-void);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-nav);
+  box-shadow: none;
 }
 
 .brand {
+  order: 2;
+  justify-self: center;
   font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-size: .92rem;
   font-weight: 600;
-  letter-spacing: .04em;
+  letter-spacing: .24em;
+  text-transform: uppercase;
   color: var(--text);
   text-decoration: none;
-  margin-right: auto;
+  margin: 0;
   white-space: nowrap;
-  flex-shrink: 0;
 }
-.brand:hover { color: var(--accent); }
+.brand:hover { color: var(--text-2); }
 
 .nav-search {
-  flex: 1;
-  max-width: 420px;
+  order: 1;
+  justify-self: start;
+  width: 100%;
+  max-width: 300px;
   position: relative;
 }
 .nav-search input {
@@ -253,13 +274,15 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   min-width: 0;
   height: 36px;
   padding: .4rem .9rem .4rem 2.4rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   font-size: .85rem;
   color: var(--text);
 }
-.nav-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.nav-search input::placeholder { color: var(--text-3); }
+/* The global :focus-visible ring covers keyboard focus, so no glow ring here. */
+.nav-search input:focus { border-color: var(--border-2); box-shadow: none; }
 .nav-search-icon {
   position: absolute;
   left: .75rem;
@@ -271,6 +294,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 .nav-actions {
+  order: 3;
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: .35rem;
@@ -284,7 +309,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   height: 40px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-2);
   font-size: 1.1rem;
   min-height: unset;
@@ -334,53 +359,53 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   align-items: center;
   gap: 0;
   padding: 0 var(--gutter);
-  height: 40px;
-  background: rgba(13,13,26,.95);
+  height: var(--nav-secondary-h);
+  background: var(--bg-void);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: none;
 }
 .nav-secondary::-webkit-scrollbar { display: none; }
 
+/* Letter-spaced uppercase micro-labels, the way the reference sites label their nav.
+   Active state is a hairline underline plus a lift to full-strength text — not a
+   coloured pill, so the row reads as one quiet line. */
 .nav-tab {
   display: flex;
   align-items: center;
-  padding: 0 1rem;
+  padding: 0 1.05rem;
   height: 100%;
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
   color: var(--text-3);
-  font-size: .8rem;
+  font-size: .7rem;
   font-weight: 600;
-  letter-spacing: .01em;
+  letter-spacing: .13em;
+  text-transform: uppercase;
   white-space: nowrap;
   min-height: unset;
   transition: color .15s ease, border-color .15s ease;
 }
 .nav-tab:hover:not(:disabled) {
-  color: var(--text);
+  color: var(--text-2);
   background: transparent;
   transform: none;
 }
 .nav-tab.active {
-  color: var(--accent);
+  color: var(--text);
   border-bottom-color: var(--accent);
 }
 
 /* ─── HERO ───────────────────────────────────────────────────────────────── */
 .hero {
   position: relative;
-  min-height: clamp(640px, 72svh, 780px);
+  min-height: clamp(520px, 62svh, 660px);
   display: flex;
   align-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse at 15% 55%, rgba(212,168,83,.14) 0%, transparent 42%),
-    radial-gradient(ellipse at 85% 20%, rgba(139,92,246,.1) 0%, transparent 36%),
-    radial-gradient(ellipse at 50% 100%, rgba(7,7,16,0) 0%, rgba(7,7,16,1) 40%),
-    var(--bg-void);
+  background: var(--bg-void);
 }
 
 .hero-grid {
@@ -428,14 +453,27 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   margin-top: 1.6rem;
 }
 .mini-stats span {
-  border: 1px solid var(--border-2);
-  border-radius: 999px;
+  border: 0;
+  border-radius: 0;
   color: var(--text-3);
-  padding: .35rem .75rem;
-  background: rgba(255,255,255,.04);
-  font-size: .78rem;
+  padding: 0;
+  background: none;
+  font-size: .68rem;
   font-weight: 600;
-  letter-spacing: .03em;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+/* Hairline separators instead of pill outlines — keeps the trust line as one quiet
+   row of labels rather than three competing chrome chips. */
+.mini-stats span + span::before {
+  content: '';
+  width: 1px;
+  height: 10px;
+  margin: 0 .85rem;
+  background: var(--border-2);
 }
 
 /* Hero card art stage */
@@ -446,82 +484,81 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   align-items: center;
   gap: .85rem;
 }
-.hero-card {
-  width: 100%;
-  max-width: 340px;
-  aspect-ratio: 5/7;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at 40% 30%, rgba(212,168,83,.35), transparent 55%),
-    radial-gradient(circle at 70% 75%, rgba(139,92,246,.25), transparent 45%),
-    linear-gradient(160deg, #1a1428 0%, #0d0d1a 40%, #070710 100%);
-  border: 1px solid rgba(212,168,83,.25);
-  box-shadow: var(--shadow-hero);
+/* Removed: .hero-card, .hero-card::before, .hero-card-inner, .hero-card-label,
+   .hero-card-title, .hero-card-price, .hero-card-glow and .hero-art-caption.
+   Nothing in the JSX has referenced them since the markup moved to .hero-feature,
+   so they were shipping six gradients and a 100px amber glow for no rendered output.
+   .hero-art stays — the hero still uses that wrapper. */
+
+/* ─── HERO FEATURED CARD ─────────────────────────────────────────────────────
+   The featured-product button had no styles of its own. The JSX renamed the
+   element to .hero-feature but the CSS below was still written against
+   .hero-card, so the button fell through to the generic `button` rule
+   (inline-flex, min-height 44px, gap .45rem) and every child collapsed:
+   the frame measured 0x0 so the artwork never showed, and the label, title
+   and price sat on one line with no separation. This restores the intended
+   portrait card using the same 5:7 ratio as .hero-card. */
+.hero-feature {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  max-width: 340px;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+  box-shadow: none;
   overflow: hidden;
-  position: relative;
+  cursor: pointer;
+  text-align: left;
+  transition: transform .18s ease, border-color .18s ease;
 }
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(255,255,255,.12) 0%, transparent 55%),
-    linear-gradient(180deg, transparent 55%, rgba(0,0,0,.65));
+.hero-feature:hover { transform: translateY(-3px); border-color: rgba(212,168,83,.5); }
+.hero-feature:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hero-feature-frame {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5/7;
+  overflow: hidden;
+  background: #0d0d1a;
 }
-.hero-card-inner {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  padding: 1.5rem;
+.hero-feature-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
-.hero-card-label {
+.hero-feature-meta {
+  display: flex;
+  flex-direction: column;
+  gap: .28rem;
+  padding: .9rem 1.1rem 1.05rem;
+  border-top: 1px solid rgba(212,168,83,.18);
+  background: rgba(7,7,16,.55);
+  /* The base `button` rule sets white-space:nowrap and this element is inside a
+     button, so the product title inherited it, overflowed the plate and was clipped
+     at narrow widths ("GOLDEN HOUR COMMANDE"). Reset it for the meta block. */
+  white-space: normal;
+}
+.hero-feature-label {
   font-family: var(--font-display);
-  font-size: clamp(.7rem, 2vw, .9rem);
+  font-size: .68rem;
   font-weight: 600;
   letter-spacing: .18em;
   text-transform: uppercase;
   color: var(--accent);
-  display: block;
-  margin-bottom: .65rem;
 }
-.hero-card-title {
+.hero-feature-title {
   font-family: var(--font-display);
-  font-size: clamp(1.1rem, 3vw, 1.65rem);
+  font-size: 1.06rem;
   font-weight: 700;
+  line-height: 1.2;
   color: var(--text);
-  line-height: 1.1;
-  letter-spacing: .01em;
 }
-.hero-card-price {
-  margin-top: .5rem;
-  font-size: .9rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-/* Decorative orb behind card */
-.hero-card-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 110%;
-  height: 110%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(212,168,83,.18) 0%, transparent 65%);
-  filter: blur(30px);
-  pointer-events: none;
-  z-index: 0;
-}
-.hero-art-caption {
-  font-size: .78rem;
-  color: var(--text-3);
-  letter-spacing: .04em;
-  text-align: center;
-}
+.hero-feature-price { font-size: .88rem; font-weight: 700; color: var(--accent); }
 
 /* ─── STOREFRONT PANEL WRAPPER ──────────────────────────────────────────── */
 .storefront-panel {
@@ -586,19 +623,19 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 .gallery-preview-grid article {
-  border-radius: 16px;
+  border-radius: var(--radius-plate);
   overflow: hidden;
-  background: var(--bg-surface);
+  background: var(--bg-raised);
   border: 1px solid var(--border);
   display: grid;
   grid-template-rows: auto 1fr;
-  transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease;
+  transition: border-color .22s ease;
   cursor: pointer;
 }
+/* No lift and no glow — the artwork moves, the card stays put. */
 .gallery-preview-grid article:hover {
-  border-color: var(--accent-border);
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-3px);
+  border-color: var(--border-2);
+  box-shadow: none;
 }
 
 .gallery-preview-grid .card-img-frame {
@@ -683,8 +720,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
 .shop-sidebar {
   position: sticky;
-  top: calc(58px + 40px + 1.25rem);
-  max-height: calc(100vh - 58px - 40px - 2.5rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.25rem);
+  max-height: calc(100vh - var(--nav-primary-h) - var(--nav-secondary-h) - 2.5rem);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;
@@ -817,8 +854,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* ─── PRODUCT GRID & CARDS ──────────────────────────────────────────────── */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2.5rem 2rem;
 }
 
 /* The card — Etsy-clean: no border around the outer wrapper */
@@ -832,27 +869,28 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   border-radius: 0;
   box-shadow: none;
   text-align: left;
-  transition: transform .25s ease;
 }
+/* Feedback comes from the hairline brightening and the art easing in — no lift, no glow. */
 .product-card:hover, .product-card:focus-visible {
-  transform: translateY(-4px);
   outline: none;
 }
-.product-card.sold-out { opacity: .65; }
+.product-card.sold-out { opacity: .6; }
 
-/* Image container — the card shape */
+/* Image container — a flat plate. Hard edges, hairline border, no elevation. */
 .product-card__img-wrap {
   position: relative;
   aspect-ratio: 5/7;
-  border-radius: 14px;
+  border-radius: var(--radius-plate);
   overflow: hidden;
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-card);
-  transition: box-shadow .25s ease;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  transition: border-color .2s ease;
 }
 .product-card:hover .product-card__img-wrap,
 .product-card:focus-visible .product-card__img-wrap {
-  box-shadow: var(--shadow-hover);
+  border-color: var(--border-2);
+  box-shadow: none;
 }
 
 .product-card__img-wrap img {
@@ -888,7 +926,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   font-weight: 800;
   letter-spacing: .04em;
   text-align: center;
-  border-radius: 0 0 14px 14px;
+  border-radius: 0;
   border: 0;
   min-height: unset;
   transform: translateY(100%);
@@ -914,11 +952,11 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   }
 }
 
-/* Info below the image */
+/* Info below the image — plain text, left aligned. The plate above is the whole card. */
 .product-card__info {
-  padding: .75rem 2px 0;
+  padding: .85rem 0 0;
   display: grid;
-  gap: .22rem;
+  gap: .3rem;
 }
 .product-card__name {
   font-size: .88rem;
@@ -994,18 +1032,145 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 
 .product-detail-img-col {
   position: sticky;
-  top: calc(58px + 40px + 1.5rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.5rem);
   display: grid;
   gap: .85rem;
 }
 .product-detail-img-col img {
   width: 100%;
   aspect-ratio: 5/7;
-  object-fit: cover;
-  border-radius: 18px;
+  object-fit: cover;   /* cropped here on purpose — the viewer is where the whole art shows */
+  border-radius: var(--radius-plate);
   border: 1px solid var(--border-2);
-  box-shadow: var(--shadow-hero);
+  box-shadow: none;
   background: var(--bg-surface);
+}
+
+/* ─── PRODUCT IMAGE VIEWER ───────────────────────────────────────────────────
+   The detail page crops the art to 5:7 so it sits evenly against the grid. This is
+   the one place the whole image is visible: the stage letterboxes it with
+   object-fit: contain, and zoom is a transform whose origin follows the pointer, so
+   zooming inspects the region under the cursor rather than only the centre. */
+
+.product-detail-img-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: unset;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.product-detail-img-trigger img { display: block; }
+.product-detail-img-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: .42rem .6rem;
+  background: rgba(8,8,13,.85);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: .64rem;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.product-detail-img-trigger:hover .product-detail-img-hint,
+.product-detail-img-trigger:focus-visible .product-detail-img-hint { color: var(--text); }
+
+.image-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: clamp(.75rem, 3vw, 2rem);
+  background: rgba(4,4,8,.92);
+}
+.image-viewer {
+  display: grid;
+  /* Rows hug the content rather than pinning a fixed-height stage. A fixed stage forced a
+     tall letterbox around a landscape card, which on a phone was mostly empty panel with a
+     strip of artwork in the middle. The image now sets the height and the panel follows. */
+  grid-template-rows: auto auto auto;
+  gap: .85rem;
+  width: min(1200px, 100%);
+  max-height: min(94vh, 100%);
+  padding: .9rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-plate);
+  background: var(--bg-void);
+  box-shadow: var(--shadow-overlay);
+}
+.image-viewer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+}
+.image-viewer-bar h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(.95rem, 2.2vw, 1.3rem);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.image-viewer-controls { display: flex; align-items: center; gap: .35rem; }
+.image-viewer-controls button {
+  min-height: 34px;
+  padding: 0 .65rem;
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.image-viewer-controls button:hover:not(:disabled) { color: var(--text); border-color: var(--text-3); }
+.image-viewer-controls button:disabled { opacity: .35; cursor: default; }
+.image-viewer-level { min-width: 64px; color: var(--accent); border-color: var(--accent-border); }
+
+/* The stage clips, so a zoomed image shows the pointed-at region instead of reflowing. */
+.image-viewer-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+.image-viewer.is-zoomed .image-viewer-stage { cursor: crosshair; }
+.image-viewer-stage img {
+  max-width: 100%;
+  max-height: 72vh;   /* the artwork sizes the panel; contain guarantees no crop */
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  transition: transform .12s ease-out;
+}
+.image-viewer.is-zoomed .image-viewer-stage img { transition: none; }
+.image-viewer-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .image-viewer { max-height: 94vh; padding: .7rem; }
+  .image-viewer-bar h2 { font-size: .92rem; }
+  .image-viewer-stage img { max-height: 58vh; }
+  .image-viewer-hint { display: none; }
 }
 .product-detail-meta-table {
   border: 1px solid var(--border);
@@ -1139,87 +1304,6 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   text-underline-offset: .18rem;
 }
 .detail-link:hover { color: var(--accent-hover); }
-
-/* ─── LANDING SECTIONS ──────────────────────────────────────────────────── */
-.landing-sections {
-  width: min(var(--max-w), calc(100% - 2 * var(--gutter)));
-  margin: 0 auto;
-  display: grid;
-  gap: clamp(3rem, 7vw, 5rem);
-  padding-bottom: clamp(3rem, 7vw, 5rem);
-}
-
-.landing-section { display: grid; gap: 1.5rem; }
-
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 1.5rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-.section-heading h2 {
-  font-family: var(--font-display);
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 600;
-  letter-spacing: -.02em;
-  color: var(--text);
-  margin-top: .3rem;
-}
-.section-heading p {
-  max-width: 380px;
-  font-size: .9rem;
-  color: var(--text-2);
-  line-height: 1.55;
-  margin: 0;
-}
-
-/* Gallery grid */
-.gallery-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-.gallery-preview-grid article {
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  display: grid;
-  grid-template-rows: 220px 1fr;
-  transition: border-color .2s ease, box-shadow .2s ease;
-}
-.gallery-preview-grid article:hover {
-  border-color: var(--accent-border);
-  box-shadow: 0 8px 32px var(--accent-glow);
-}
-.gallery-preview-grid img { width: 100%; height: 100%; object-fit: cover; }
-.gallery-preview-grid div { padding: 1rem; }
-.gallery-preview-grid h3 {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin: .5rem 0 .35rem;
-  letter-spacing: .01em;
-}
-.gallery-preview-grid p { font-size: .82rem; color: var(--text-2); margin: 0; }
-
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--bg-surface);
-}
-.empty-state h3 {
-  font-family: var(--font-display);
-  font-size: clamp(1.4rem, 4vw, 2.2rem);
-  color: var(--text);
-  margin-bottom: .6rem;
-  letter-spacing: -.01em;
-}
-.empty-state p { color: var(--text-2); font-size: .9rem; margin-bottom: 1rem; }
 
 /* ─── CART ───────────────────────────────────────────────────────────────── */
 .cart-panel { display: grid; gap: 1.25rem; }
@@ -1402,7 +1486,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .cart-items { background: transparent; }
 .cart-summary-card {
   position: sticky;
-  top: calc(58px + 40px + 1.25rem);
+  top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.25rem);
   display: grid;
   gap: .85rem;
   padding: 1rem;
@@ -1438,7 +1522,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 .free-shipping-bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+  background: var(--accent);
   transition: width .4s ease;
 }
 
@@ -1527,8 +1611,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   overflow-y: auto;
   padding: clamp(1rem, 3vw, 1.45rem);
   border: 1px solid rgba(212,168,83,.38);
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(212,168,83,.13), rgba(110,231,183,.07)), var(--bg-surface);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
   box-shadow: 0 28px 90px rgba(0,0,0,.62);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1591,7 +1675,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   justify-items: center;
   text-align: center;
   border-color: rgba(212,168,83,.35);
-  background: linear-gradient(135deg, rgba(212,168,83,.12), rgba(74,144,226,.09)), var(--bg-surface);
+  background: var(--bg-raised);
 }
 .account-newsletter-offer .newsletter-copy,
 .account-newsletter-offer .newsletter-form {
@@ -1748,7 +1832,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   display: grid;
   gap: .45rem;
   border-color: rgba(110,231,183,.28);
-  background: linear-gradient(135deg, rgba(110,231,183,.08), rgba(212,168,83,.06));
+  background: var(--bg-raised);
 }
 .contact-success-card h3 {
   font-family: var(--font-display);
@@ -2403,3 +2487,473 @@ footer {
   .privacy-notice { left: .65rem; right: .65rem; bottom: .65rem; width: auto; transform: none; }
   .privacy-notice-actions button { flex: 1 1 auto; }
 }
+
+.health-summary { display: flex; flex-wrap: wrap; gap: 1rem; margin-block: 1rem; }
+.health-items { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.health-items li { border: 1px solid #555; border-radius: 12px; padding: 1rem; overflow-wrap: anywhere; }
+.health-items li.health-attention { border-left: 4px solid #e9b86e; }
+.health-items li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.health-items h4 { margin: 0; }
+.operations-health select { max-width: 100%; margin-left: .5rem; }
+
+/* ─── SLEEK PASS: SURFACE & RADIUS NORMALISATION ──────────────────────────────
+   The stylesheet had grown twelve distinct border-radius values (5/6/7/8/10/12/14/
+   16/18/20/999px) across the same kinds of surfaces. That inconsistency is what
+   reads as "assembled" rather than "designed", and it is invisible until you count
+   it. These groups collapse everything onto a two-value scale: content surfaces get
+   hard edges, controls get 4px, and only things that are functionally pills keep
+   the full round.
+
+   :is() takes the specificity of its most specific argument (0,1,0 for a single
+   class), so these win against an equal-specificity component rule purely on source
+   order — which is what makes the normalisation actually apply. The first attempt
+   used :where() for safety, but :where() is specificity 0 and therefore *lost* to
+   every `.component { border-radius: … }` it was meant to replace, so only elements
+   with no rule of their own were affected. Admin-only surfaces (admin-tabs, sale-row,
+   image-dropzone, subscriber-list, marketing-card, content-editor-card, health-items)
+   are deliberately left alone — they are internal tooling, not storefront design. */
+
+/* Content surfaces — hard edges. On a dark flat page a rounded panel is the single
+   largest source of visual noise; the image plate itself should be the shape. */
+:is(
+  .panel, .narrow,
+  .shop-sidebar,
+  .listing-layout > div,
+  .product-detail-img-col img,
+  .product-detail-meta-table,
+  .trust-strip,
+  .seo-share-box,
+  .empty-state,
+  .empty-cart-state,
+  .cart-items-card,
+  .cart-summary-card,
+  .recently-viewed,
+  .recently-viewed-list article,
+  .recently-viewed-list img,
+  .sticky-checkout-bar,
+  .contact-form-card,
+  .contact-success-card,
+  .policy-card,
+  .privacy-notice,
+  .gallery-preview-grid article
+) { border-radius: var(--radius-plate); }
+
+/* Controls and small chips — 4px. */
+:is(
+  .tag-row span,
+  .seo-share-box code,
+  .quantity-stepper,
+  .results-controls select,
+  .cart-status,
+  .detail-confirmation,
+  .success,
+  .status-message,
+  .cart-message,
+  .cart-item-link img,
+  .empty-cart-cues span
+) { border-radius: var(--radius-control); }
+
+/* Genuine pills: a progress track, a count bubble and a status dot are round by
+   function, so they keep the full round and are not part of the inconsistency. */
+:is(.free-shipping-bar, .free-shipping-bar-fill, .nav-cart-count, .status-badge) {
+  border-radius: var(--radius-pill);
+}
+
+/* ============================================================================
+   ADMIN SLEEK PASS
+   The storefront was flattened onto one radius language, one type scale and no
+   effects. The seller console is the other half of the product and still carried
+   the old drift: six radius values, ten near-duplicate font sizes, and a mint
+   green used as a second accent that fought the amber brand colour.
+   ============================================================================ */
+
+/* 1. LAYOUT BUG: the listing editor was rendering inside the 110px thumbnail column.
+   `.product-editor` is a 110px/1fr grid; the thumbnail and the stock line fill row
+   one, so the editor grid auto-placed into row two *column one* — a 110px cell. Its
+   own repeat(auto-fit, minmax(180px,1fr)) then could not fit even one column, and
+   every field stacked vertically. Measured: editor grid at x=159 width=110px, tracks
+   "180px 0px", each listing 1063px tall, the page 6574px. Spanning both columns hands
+   the fields the real 1283px and the form collapses to a few rows. */
+.admin-panel :is(.product-editor .editor-grid) { grid-column: 1 / -1; }
+
+
+/* 2. One radius language. Plates square, controls 4px, and status badges keep the
+   pill because the storefront already treats a status indicator as genuinely round. */
+.admin-panel :is(
+  .order-card,
+  .admin-workspace,
+  .admin-grid > div,
+  .admin-tabs,
+  .marketing-card,
+  .subscriber-list article,
+  .sale-toolbar,
+  .sale-row,
+  .content-card,
+  .content-editor-card,
+  .image-dropzone,
+  .listing-tab-panel,
+  .admin-listing img
+) { border-radius: var(--radius-plate); }
+
+.admin-panel :is(
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select
+) { border-radius: var(--radius-control); }
+
+
+/* 3. Tabs: hairline underline, matching the storefront nav, and a 44px hit target.
+   They measured 38px, under the comfortable minimum for a pointer. */
+.admin-panel :is(.admin-tabs) {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: .15rem;
+}
+
+.admin-panel :is(.admin-tabs button) {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 0 .85rem;
+}
+
+.admin-panel :is(.admin-tabs .active-tab) {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+.admin-panel :is(.admin-tabs button:hover:not(:disabled):not(.active-tab)) {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.admin-panel :is(.listing-subtabs, .content-subtabs) { background: transparent; }
+
+
+/* 4. Summary chips were pills inside a pill. The storefront settled on tracked
+   micro-labels divided by hairlines, so the console reads as instrumentation. */
+.admin-panel :is(.admin-summary) { gap: 0; align-items: center; }
+
+.admin-panel :is(.admin-summary span) {
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  padding: 0 .8rem;
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.admin-panel :is(.admin-summary span:first-child) { border-left: 0; padding-left: 0; }
+
+
+/* 5. Status colour. The mint green (#6ee7b7) was the only non-amber accent in the
+   system and it read as a different product. Attention states take the brand amber;
+   neutral states stay neutral; genuine failures keep the red token. */
+.admin-panel :is(.status-badge) {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .28rem .55rem;
+}
+
+.admin-panel :is(.sale-status-active, .badge-sale) {
+  background: transparent;
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.admin-panel :is(.sale-status-inactive) {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-3);
+}
+
+
+/* 6. Type scale. Ten sizes (.76 .78 .8 .82 .85 .88 .94 .95 1.06 1.097rem) collapse
+   onto three: micro, body, and card heading. */
+.admin-panel { font-size: .94rem; }
+
+.admin-panel :is(
+  label,
+  p,
+  small,
+  .subscriber-list strong,
+  .subscriber-list small,
+  .subscriber-list span:not(.status-badge),
+  .sale-listing-summary span,
+  .sale-listing-summary strong,
+  .order-card p,
+  .order-card ul,
+  .order-card strong,
+  .marketing-card p,
+  .content-editor-card p,
+  .content-card p,
+  .admin-listing p,
+  .section-heading > p,
+  .sale-toolbar label,
+  .sale-row label,
+  .editor-grid label,
+  .image-dropzone small
+) { font-size: .82rem; }
+
+.admin-panel :is(
+  .marketing-card h4,
+  .content-card h3,
+  .content-editor-card h4,
+  .marketing-card-header span
+) {
+  font-family: var(--font-ui);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+
+/* 7. Section headings: Cinzel, same as the storefront, with a hairline rule so the
+   eye has one line to scan per workspace instead of a plain bold sentence. */
+.admin-panel :is(.listing-tab-panel h3, .section-heading h3, .marketing-card > h4 + *, .admin-workspace > h3) {
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  letter-spacing: .01em;
+  color: var(--text);
+}
+
+.admin-panel :is(.section-heading) {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: .85rem;
+}
+
+
+/* 8. Controls: one height, one radius, an amber focus edge instead of a glow. */
+.admin-panel :is(
+  input:not([type='checkbox']):not([type='radio']),
+  select
+) { min-height: 44px; }
+
+.admin-panel :is(input:not([type='checkbox']):not([type='radio']):focus-visible,
+    textarea:focus-visible,
+    select:focus-visible) {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.admin-panel :is(textarea) { min-height: 96px; }
+
+.admin-panel :is(.marketing-compose textarea) { min-height: 140px; }
+
+.admin-panel :is(.blog-editor-card textarea[aria-label^="Blog body"]) { min-height: 160px; }
+
+.admin-panel :is(.editor-grid) { gap: .7rem 1rem; align-items: start; }
+
+.admin-panel :is(.image-dropzone:hover, .image-dropzone.is-dragging) { box-shadow: none; }
+
+
+/* 9. Listing rows: a 5:7 card thumbnail to match the storefront grid, and the stock
+   line reads as data rather than a sentence. */
+.admin-panel :is(.product-editor) { grid-template-columns: 100px minmax(0, 1fr); }
+
+.admin-panel :is(.product-editor.new-product-editor) { grid-template-columns: minmax(0, 1fr); }
+
+/* Cards sit one step up from the panel so five of them read as five things rather
+   than one long column of fields. */
+.admin-panel :is(.admin-listing) { padding: 1.1rem 1.2rem; border: 1px solid var(--border-2); background: var(--bg-raised); margin-bottom: .75rem; }
+
+.admin-panel :is(.admin-listing img) { width: 92px; height: 129px; }
+
+/* 14. Listing cards, reorganised. Each card now leads with the product name and its
+   state so you can identify it without reading the inputs, and the fields sit under
+   four named groups instead of one arbitrary run that left a hole in every card. */
+.admin-panel :is(.listing-head) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .3rem 1rem;
+  align-items: baseline;
+  align-content: start;
+}
+.admin-panel :is(.listing-head h4) {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: .94rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.admin-panel :is(.listing-stock) {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-3);
+  font-size: .82rem;
+  letter-spacing: .02em;
+}
+.admin-panel :is(.listing-flags) { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+.admin-panel :is(.listing-flag) {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-pill);
+  padding: .22rem .55rem;
+  color: var(--text-2);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.admin-panel :is(.listing-flag.is-live, .listing-flag.is-sale) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+.admin-panel :is(.listing-flag.is-hidden) { color: var(--text-3); border-color: var(--border); }
+/* The groups sit two-up, and each label carries a hairline so the form reads as
+   sections rather than a field soup. */
+.admin-panel :is(.editor-grid) {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 1.25rem;
+  align-items: start;
+}
+.admin-panel :is(.listing-group) { display: grid; gap: .55rem; align-content: start; min-width: 0; }
+.admin-panel :is(.listing-group-label) {
+  display: block;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.admin-panel :is(.field-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: .55rem 1rem;
+  align-items: start;
+}
+/* Spans chosen so no group ends on a short row of empty cells, which is what the first
+   pass produced: Identity and Pricing both trailed off with two blank cells. Two columns
+   also lets the long labels ("Title for Golden Hour Commander Proxy") sit on one line
+   instead of wrapping at 193px. The textarea and the active toggle take the full width;
+   the image URL sits beside the uploader. */
+.admin-panel :is(.field-grid > label:has(textarea)) { grid-column: 1 / -1; }
+.admin-panel :is(.field-grid > .checkbox-row) { grid-column: 1 / -1; }
+.admin-panel :is(.field-grid > .image-dropzone) { grid-column: auto; }
+.admin-panel :is(.listing-actions) {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: .9rem;
+  border-top: 1px solid var(--border);
+}
+.admin-panel :is(.listing-actions button) { min-width: min(260px, 100%); white-space: normal; }
+
+
+/* 10. Order cards: the primary action leads, the destructive one stops shouting as
+   loud as it, and the order id becomes a scannable anchor line. */
+.admin-panel :is(.order-card-header strong) {
+  font-family: var(--font-ui);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text);
+}
+
+.admin-panel :is(.order-actions) {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: .5rem;
+  padding-top: .85rem;
+}
+
+.admin-panel :is(.order-actions button.ghost) {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--text-2);
+}
+
+.admin-panel :is(.order-actions button.ghost:hover:not(:disabled)) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+
+/* 11. Buttons inherited the storefront's .88rem; on the console every button sat a
+   size off the body text it belongs to. */
+.admin-panel :is(button) { font-size: .82rem; }
+
+
+/* 12. Health queue: the last two hardcoded colours in the console were here — a #555
+   border that is in no token and a #e9b86e attention stripe that is a different amber
+   from --accent. Both now resolve through the palette. */
+.admin-panel :is(.health-items li) {
+  border: 1px solid var(--border-2);
+  border-left: 1px solid var(--border-2);
+  border-radius: var(--radius-plate);
+  background: var(--bg-raised);
+  padding: .9rem 1rem;
+}
+
+.admin-panel :is(.health-items li.health-attention) { border-left: 3px solid var(--accent); }
+
+.admin-panel :is(.health-items h4) {
+  font-family: var(--font-ui);
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text);
+}
+
+.admin-panel :is(.health-summary) { gap: 0; align-items: center; }
+
+.admin-panel :is(.health-summary span) {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  border-left: 1px solid var(--border);
+  padding: 0 .8rem;
+}
+
+.admin-panel :is(.health-summary span:first-child) { border-left: 0; padding-left: 0; }
+
+.admin-panel :is(.sale-toolbar > span) {
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+
+/* 13. Admin buttons wrap rather than truncate. `Save Golden Hour Commander Proxy`
+   inherited the base button rule's white-space: nowrap, so the label could not wrap
+   and overflowed its cell — it rendered as "e Golden Hour Commander Pr", cut off at
+   both ends. The listing field geometry this section used to carry now lives in 14,
+   which matches the grouped card; leaving it here would have overridden that grid. */
+.admin-panel :is(button) { white-space: normal; }
+
+.admin-panel :is(.field-grid textarea) { min-height: 120px; }
