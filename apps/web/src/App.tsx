@@ -3,6 +3,8 @@ import { cancelAdminOrder, createCheckout, fetchAdminContent, fetchAdminMarketin
 import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analytics';
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { redirectToCheckout } from './checkoutRedirect';
+import { checkReceiptStorage, readReceiptToken, saveReceiptToken } from './receiptStorage';
+import type { OrderReceipt } from './api';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'faq' | 'blog' | 'blog-post' | 'unsubscribe';
@@ -87,7 +89,7 @@ export default function App() {
   const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [imageDragSlug, setImageDragSlug] = useState<string | null>(null);
-  const [receiptOrder, setReceiptOrder] = useState<Order | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<OrderReceipt | null>(null);
   const [receiptMessage, setReceiptMessage] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [recentlyViewed, setRecentlyViewed] = useState<Product[]>([]);
@@ -141,7 +143,9 @@ export default function App() {
     }
   }, []);
   useEffect(() => {
+    let receiptRequest = 0;
     function applyCurrentLocation() {
+      const requestId = ++receiptRequest;
       const params = new URLSearchParams(window.location.search);
       const orderId = params.get('order');
       const productMatch = window.location.pathname.match(/^\/products\/([a-z0-9-]+)$/);
@@ -160,10 +164,13 @@ export default function App() {
       if (window.location.pathname === '/checkout/success' && orderId) {
         setView('receipt');
         setReceiptMessage('Checking payment status...');
-        fetchOrder(orderId).then((order) => {
+        setReceiptOrder(null);
+        const receiptToken = readReceiptToken(orderId);
+        (receiptToken ? Promise.resolve(undefined) : getCustomerToken()).then((token) => fetchOrder(orderId, { receiptToken, customerToken: token ?? undefined })).then((order) => {
+          if (requestId !== receiptRequest) return;
           setReceiptOrder(order);
           setReceiptMessage(order.status === 'paid' ? 'Payment verified' : 'Payment is processing');
-        }).catch(() => setReceiptMessage('Could not verify this order yet'));
+        }).catch(() => { if (requestId === receiptRequest) setReceiptMessage('To view this receipt, return in the checkout tab or sign in with the order email. Contact support if you need help.'); });
         return;
       }
       if (window.location.pathname === '/cart') {
@@ -237,8 +244,8 @@ export default function App() {
 
     applyCurrentLocation();
     window.addEventListener('popstate', applyCurrentLocation);
-    return () => window.removeEventListener('popstate', applyCurrentLocation);
-  }, [isAdmin]);
+    return () => { receiptRequest++; window.removeEventListener('popstate', applyCurrentLocation); };
+  }, [isAdmin, isSignedIn]);
   useEffect(() => {
     if (view !== 'admin' || !isAdmin) return;
     getAdminToken().then(async (token) => {
@@ -541,7 +548,7 @@ export default function App() {
     return ['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status) && refundableAmount(order) > 0;
   }
 
-  function orderItemSummary(order: Order) {
+  function orderItemSummary(order: Pick<Order, 'items'>) {
     return order.items.map((item) => `${item.quantity} × ${item.title} — ${formatMoney(item.price * item.quantity)}`);
   }
 
@@ -654,12 +661,18 @@ export default function App() {
       setCheckoutValidationMessage(`Shipping ${missingShipping.join(', ')} required before payment.`);
       return;
     }
-    const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
-    trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
-    setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
-    setCart([]);
-    setView('account');
-    redirectToCheckout(checkout.checkoutUrl);
+    try {
+      checkReceiptStorage();
+      const checkout = await createCheckout(checkoutEmail, checkoutCustomerName, checkoutShippingAddressFields, cart.map((line) => ({ productId: line.product.id, quantity: line.quantity })));
+      saveReceiptToken(checkout.orderId, checkout.receiptToken);
+      trackAnalyticsEvent('Begin Stripe Checkout', { item_count: itemCount, total_cents: checkout.total });
+      setCheckoutMessage(`Order ${checkout.orderId} reserved — sending you to Stripe Checkout for ${formatMoney(checkout.total)}.`);
+      setCart([]);
+      setView('account');
+      redirectToCheckout(checkout.checkoutUrl);
+    } catch (error) {
+      setCheckoutValidationMessage(error instanceof Error ? error.message : 'Checkout failed. Please try again.');
+    }
   }
 
   async function handleContactSubmit(event: FormEvent<HTMLFormElement>) {

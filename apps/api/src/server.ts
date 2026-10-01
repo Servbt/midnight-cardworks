@@ -6,18 +6,22 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import rawBody from 'fastify-raw-body';
 import { z } from 'zod';
-import { createCheckoutResponse } from './checkout.js';
+import { createCheckoutResponse, stripeConfigured } from './checkout.js';
 import { retrieveCheckoutPaymentStatus } from './stripeCheckoutStatus.js';
+import { deliverOrderNotifications } from './orderNotifications.js';
+import { retrieveHistoricalRefunds, retrieveCurrentRefund } from './refundReconciliation.js';
 import { createOrderRefund } from './stripeRefunds.js';
 import { createAdminAuthFromEnv, type AdminAuth } from './adminAuth.js';
 import { createCustomerAuthFromEnv, type CustomerAuth } from './customerAuth.js';
 import { createInMemoryStore } from './store.js';
-import { getCompletedCheckout, getRefundUpdate, parseStripeWebhookEvent } from './stripeWebhook.js';
+import { getCompletedCheckout, getReleasedCheckout, getRefundUpdate, parseStripeWebhookEvent } from './stripeWebhook.js';
 import type { UploadImage } from './imageUpload.js';
 import { uploadProductImage } from './imageUpload.js';
 import type { MarketingSubscriber, Store, Product } from './types.js';
 import { createEmailNotifierFromEnv, type EmailNotifier } from './emailNotifications.js';
 import { effectiveProductPrice } from './pricing.js';
+import { cancelCheckout, rejectedCheckoutRequest } from './checkoutLifecycle.js';
+import { newReceiptToken, hashReceiptToken, receiptTokenMatches, publicOrder, orderReceipt } from './receiptAccess.js';
 
 const shippingAddressFieldsSchema = z.object({
   streetAddress: z.string().trim().min(1).max(200),
@@ -29,7 +33,7 @@ const checkoutSchema = z.object({
   email: z.string().trim().email(),
   customerName: z.string().trim().min(1).max(120),
   shippingAddressFields: shippingAddressFieldsSchema,
-  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1)
+  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(99) })).min(1).max(100)
 }).transform(({ shippingAddressFields, ...checkout }) => ({
   ...checkout,
   shippingAddress: [
@@ -135,7 +139,7 @@ async function productSeoHtml(staticRoot: string, product: Product) {
   return withoutTitle.includes('</head>') ? withoutTitle.replace('</head>', `${head}</head>`) : `${head}${withoutTitle}`;
 }
 
-type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier };
+type ServerOptions = { uploadImage?: UploadImage; serveStaticRoot?: string; adminAuth?: AdminAuth; customerAuth?: CustomerAuth; emailNotifier?: EmailNotifier; retrieveRefund?: typeof retrieveCurrentRefund };
 
 export function buildServer(store: Store = createInMemoryStore(), options: ServerOptions = {}) {
   const uploadImage = options.uploadImage ?? uploadProductImage;
@@ -167,7 +171,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   app.get('/api/products/:slug', async (request, reply) => {
     const { slug } = request.params as { slug: string };
     const product = await store.getProduct(slug);
-    if (!product) return reply.code(404).send({ error: 'Product not found' });
+    if (!product?.active) return reply.code(404).send({ error: 'Product not found' });
     return { product };
   });
   app.get('/api/content/faqs', async () => ({ faqItems: await store.listFaqItems() }));
@@ -203,11 +207,19 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const parsed = checkoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid checkout payload' });
     try {
-      const order = await store.createOrder(parsed.data);
-      const checkout = await createCheckoutResponse(order);
+      const receiptToken = newReceiptToken();
+      const order = await store.createOrder({ ...parsed.data, receiptTokenHash: hashReceiptToken(receiptToken), useStripe: stripeConfigured(), checkoutBaseUrl: process.env.APP_BASE_URL });
+      let checkout;
+      try {
+        checkout = await createCheckoutResponse(order);
+      } catch (error) {
+        // Network/server errors are ambiguous: keep the reservation for recovery.
+        if (rejectedCheckoutRequest(error)) await store.cancelOrder(order.id, 'Checkout request rejected');
+        throw error;
+      }
       const notificationOrder = checkout.stripeSessionId ? await store.recordCheckoutSession(order.id, checkout.stripeSessionId) : order;
       await emailNotifier.sendOrderPending(notificationOrder ?? order).catch(() => undefined);
-      return reply.code(201).send(checkout);
+      return reply.header('Cache-Control', 'no-store').code(201).send({ ...checkout, receiptToken });
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Checkout failed' });
     }
@@ -215,49 +227,75 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
   app.get('/api/orders', async (request, reply) => {
     const result = await customerAuth.authorize(request.headers.authorization);
     if (result.ok === false) return reply.code(result.status).send({ error: result.error });
-    return { orders: await store.listOrdersByEmail(result.email) };
+    return reply.header('Cache-Control', 'no-store').send({ orders: (await store.listOrdersByEmail(result.email)).map(publicOrder) });
   });
   app.get('/api/orders/:orderId', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const { orderId } = request.params as { orderId: string };
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
-    return { order };
-  });
-  app.post('/api/stripe/webhook', async (request, reply) => {
-    try {
-      const event = await parseStripeWebhookEvent(request);
-      const checkout = getCompletedCheckout(event);
-      if (checkout) {
-        const order = await store.markOrderPaid(checkout.orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
-        if (!order) return reply.code(404).send({ error: 'Order not found' });
-        await emailNotifier.sendOrderPaid(order);
-      }
-      const refund = getRefundUpdate(event);
-      if (refund) {
-        if (refund.status === 'failed') {
-          const previousOrder = await store.getOrder(refund.orderId);
-          const previousStatus = previousOrder?.status;
-          const previousRefundId = previousOrder?.stripeRefundId;
-          const order = await store.markOrderRefundFailed(refund.orderId, { refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-          if (previousStatus !== 'refund_failed' || previousRefundId !== refund.refundId) await emailNotifier.sendOrderRefundFailed(order);
-        } else if (refund.status === 'succeeded') {
-          const previousOrder = await store.getOrder(refund.orderId);
-          const previousStatus = previousOrder?.status;
-          const previousRefundId = previousOrder?.stripeRefundId;
-          const order = await store.markOrderRefunded(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-          const alreadyNotified = previousRefundId === refund.refundId && previousStatus !== undefined && ['refunded', 'partially_refunded'].includes(previousStatus);
-          if (!alreadyNotified) await emailNotifier.sendOrderRefunded(order);
-        } else {
-          const order = await store.markOrderRefundPending(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
-          if (!order) return reply.code(404).send({ error: 'Order not found' });
-        }
-      }
-      return { received: true };
-    } catch (error) {
-      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
+    let authorized = receiptTokenMatches(request.headers['x-receipt-token'], order.receiptTokenHash);
+    if (!authorized && request.headers.authorization) {
+      const customer = await customerAuth.authorize(request.headers.authorization);
+      authorized = customer.ok && customer.email.toLowerCase() === order.email.trim().toLowerCase();
+      if (!authorized) authorized = (await adminAuth.authorize(request.headers.authorization)).ok;
     }
+    if (!authorized) return reply.code(404).send({ error: 'Order not found' });
+    return { order: orderReceipt(order) };
+  });
+  // Register after the raw-body plugin has installed its onRoute hook.
+  app.register(async (webhookApp) => {
+    webhookApp.post('/api/stripe/webhook', async (request, reply) => {
+      try {
+        const event = await parseStripeWebhookEvent(request);
+        const release = getReleasedCheckout(event);
+        if (release) {
+          let pending = await store.getOrder(release.orderId);
+          if (!pending) return reply.code(404).send({ error: 'Order not found' });
+          if (pending.stripeSessionId && pending.stripeSessionId !== release.sessionId) throw new Error('Stripe session does not match this order');
+          if (pending.status === 'pending_payment') {
+            if (!pending.stripeSessionId) {
+              if (!pending.checkoutRequestJson) throw new Error('Order has no Stripe checkout request');
+              pending = await store.recordCheckoutSession(pending.id, release.sessionId) ?? pending;
+            }
+            await cancelCheckout(store, pending, release.failedPayment ? 'Payment failed' : 'Checkout expired', release.failedPayment);
+          }
+        }
+        const checkout = getCompletedCheckout(event);
+        if (checkout) {
+          const order = await store.markOrderPaid(checkout.orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
+          if (!order) return reply.code(404).send({ error: 'Order not found' });
+          await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'paid');
+        }
+        const refund = getRefundUpdate(event);
+        if (refund) {
+          if (stripeConfigured()) {
+            let kind: 'refunded' | 'refund_failed' | undefined;
+            const order = await store.syncRefund(refund.orderId, async (currentOrder) => {
+              const current = await (options.retrieveRefund ?? retrieveCurrentRefund)(currentOrder, refund.refundId!);
+              kind = current.status === 'succeeded' ? 'refunded' : current.status === 'failed' ? 'refund_failed' : undefined;
+              return current;
+            });
+            if (!order) return reply.code(404).send({ error: 'Order not found' });
+            if (kind) await deliverOrderNotifications(store, emailNotifier, order.id, undefined, kind);
+          } else if (refund.status === 'failed') {
+            const order = await store.markOrderRefundFailed(refund.orderId, { refundId: refund.refundId, amount: refund.amount, reason: refund.reason });
+            if (!order) return reply.code(404).send({ error: 'Order not found' });
+            await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'refund_failed');
+          } else if (refund.status === 'succeeded') {
+            const order = await store.markOrderRefunded(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
+            if (!order) return reply.code(404).send({ error: 'Order not found' });
+            await deliverOrderNotifications(store, emailNotifier, order.id, undefined, 'refunded');
+          } else {
+            const order = await store.markOrderRefundPending(refund.orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
+            if (!order) return reply.code(404).send({ error: 'Order not found' });
+          }
+        }
+        return { received: true };
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : 'Invalid Stripe webhook' });
+      }
+    });
   });
   app.post('/api/admin/products/:slug/image', { bodyLimit: imageUploadBodyLimit, preHandler: requireAdmin }, async (request, reply) => {
     const { slug } = request.params as { slug: string };
@@ -272,7 +310,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Image upload failed' });
     }
   });
-  app.get('/api/admin/orders', { preHandler: requireAdmin }, async () => ({ orders: await store.listOrders() }));
+  app.get('/api/admin/orders', { preHandler: requireAdmin }, async (_request, reply) => reply.header('Cache-Control', 'no-store').send({ orders: (await store.listOrders()).map(publicOrder) }));
   app.get('/api/admin/products', { preHandler: requireAdmin }, async () => ({ products: await store.listAdminProducts() }));
   app.get('/api/admin/content', { preHandler: requireAdmin }, async () => ({ faqItems: await store.listFaqItems({ includeInactive: true }), blogPosts: await store.listBlogPosts({ includeDrafts: true }) }));
   app.post('/api/admin/content/faqs', { preHandler: requireAdmin }, async (request, reply) => {
@@ -305,8 +343,8 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
       }
       const updated = await store.markOrderPaid(orderId, { stripeSessionId: checkout.stripeSessionId, stripePaymentIntentId: checkout.stripePaymentIntentId });
       if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      await emailNotifier.sendOrderPaid(updated);
-      return { order: updated, checkout };
+      await deliverOrderNotifications(store, emailNotifier, updated.id);
+      return { order: publicOrder(updated), checkout };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Payment sync failed' });
     }
@@ -317,7 +355,7 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const order = await store.markOrderFulfilled(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
     await emailNotifier.sendOrderFulfilled(order);
-    return { order };
+    return { order: publicOrder(order) };
   });
   app.post('/api/admin/orders/:orderId/cancel', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
@@ -326,10 +364,15 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
     if (order.status !== 'pending_payment') return reply.code(400).send({ error: 'Only pending payment orders can be canceled without a refund' });
-    const canceled = await store.cancelOrder(orderId, parsed.data.reason);
+    let canceled;
+    try {
+      canceled = await cancelCheckout(store, order, parsed.data.reason ?? 'Canceled by administrator');
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : 'Could not safely cancel checkout' });
+    }
     if (!canceled) return reply.code(404).send({ error: 'Order not found' });
     await emailNotifier.sendOrderCanceled(canceled);
-    return { order: canceled };
+    return { order: publicOrder(canceled) };
   });
   app.post('/api/admin/orders/:orderId/refund', { preHandler: requireAdmin }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
@@ -338,16 +381,38 @@ export function buildServer(store: Store = createInMemoryStore(), options: Serve
     const order = await store.getOrder(orderId);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
     if (!['paid', 'fulfilled', 'partially_refunded', 'refund_failed'].includes(order.status)) return reply.code(400).send({ error: 'Only paid or fulfilled orders can be refunded' });
+    if (order.refundReconciliationRequired) return reply.code(400).send({ error: 'Historical refunds require reconciliation before creating another refund' });
     try {
       const refund = await createOrderRefund(order, parsed.data);
-      const updated = refund.status === 'succeeded'
+      let notificationKind: 'refunded' | 'refund_failed' | undefined = refund.status === 'succeeded' ? 'refunded' : ['failed', 'canceled'].includes(refund.status) ? 'refund_failed' : undefined;
+      const updated = stripeConfigured()
+        ? await store.syncRefund(orderId, async (currentOrder) => {
+          const current = await (options.retrieveRefund ?? retrieveCurrentRefund)(currentOrder, refund.refundId);
+          notificationKind = current.status === 'succeeded' ? 'refunded' : current.status === 'failed' ? 'refund_failed' : undefined;
+          return current;
+        })
+        : refund.status === 'succeeded'
         ? await store.markOrderRefunded(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
+        : ['failed', 'canceled'].includes(refund.status)
+        ? await store.markOrderRefundFailed(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason })
         : await store.markOrderRefundPending(orderId, { amount: refund.amount, refundId: refund.refundId, reason: refund.reason });
       if (!updated) return reply.code(404).send({ error: 'Order not found' });
-      if (refund.status === 'succeeded') await emailNotifier.sendOrderRefunded(updated);
-      return { order: updated, refund };
+      if (notificationKind) await deliverOrderNotifications(store, emailNotifier, updated.id, undefined, notificationKind);
+      return { order: publicOrder(updated), refund };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund failed' });
+    }
+  });
+  app.post('/api/admin/orders/:orderId/reconcile-refunds', { preHandler: requireAdmin }, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string };
+    const order = await store.getOrder(orderId);
+    if (!order) return reply.code(404).send({ error: 'Order not found' });
+    if (!order.refundReconciliationRequired) return reply.code(400).send({ error: 'Order does not require historical reconciliation' });
+    try {
+      const updated = await store.reconcileHistoricalRefunds(orderId, await retrieveHistoricalRefunds(order));
+      return { order: updated ? publicOrder(updated) : undefined };
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : 'Refund reconciliation failed' });
     }
   });
   app.post('/api/admin/products', { preHandler: requireAdmin }, async (request, reply) => {

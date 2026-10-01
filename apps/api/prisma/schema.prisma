@@ -59,10 +59,44 @@ model Order {
   refundReason          String?
   canceledAt            DateTime?
   refundedAt            DateTime?
+  inventoryReserved     Boolean     @default(false)
+  reservationExpiresAt  DateTime?
+  checkoutRequestJson   String?
+  receiptTokenHash      String?
+  refundReconciliationRequired Boolean @default(false)
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
 
   items OrderItem[]
+  notifications OrderNotification[]
+  refunds OrderRefund[]
+
+  @@index([status, reservationExpiresAt])
+}
+
+model OrderRefund {
+  id        String @id
+  orderId   String
+  amount    Int
+  status    String
+  reason    String?
+  updatedAt DateTime @updatedAt
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([orderId])
+}
+
+model OrderNotification {
+  id             String   @id
+  orderId        String
+  payloadJson    String
+  createdAt      DateTime @default(now())
+  firstAttemptAt DateTime?
+  leaseUntil     DateTime?
+  leaseToken     String?
+  sentAt         DateTime?
+  lastError      String?
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([sentAt, leaseUntil])
 }
 
 model OrderItem {

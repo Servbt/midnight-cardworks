@@ -27,10 +27,10 @@ export async function parseStripeWebhookEvent(request: FastifyRequest): Promise<
     if (!signature || !('rawBody' in request) || !request.rawBody) {
       throw new Error('Stripe webhook signature required');
     }
-    const stripeModule = await import('stripe');
-    const StripeClient = stripeModule as unknown as { new (key: string): { webhooks: { constructEvent(rawBody: string | Buffer, signature: string | string[], secret: string): StripeWebhookEvent } } };
+    const { default: StripeClient } = await import('stripe');
     const stripe = new StripeClient(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder');
-    return stripe.webhooks.constructEvent(request.rawBody as string | Buffer, signature, webhookSecret);
+    const event = stripe.webhooks.constructEvent(request.rawBody as string | Buffer, signature, webhookSecret);
+    return { type: event.type, data: { object: { ...event.data.object } } };
   }
 
   if (isProduction) {
@@ -41,8 +41,11 @@ export async function parseStripeWebhookEvent(request: FastifyRequest): Promise<
 }
 
 export function getCompletedCheckout(event: StripeWebhookEvent): { orderId: string; stripeSessionId?: string; stripePaymentIntentId?: string } | undefined {
-  if (event.type !== 'checkout.session.completed') return undefined;
+  if (!['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(event.type ?? '')) return undefined;
   const object = event.data?.object ?? undefined;
+  if (object?.payment_status !== 'paid' && object?.payment_status !== 'no_payment_required') return undefined;
+  if (object.payment_status === 'no_payment_required' && object.amount_total !== 0) return undefined;
+  if (object.status !== undefined && object.status !== 'complete') return undefined;
   const orderId = metadataValue(object, 'orderId');
   if (!orderId) return undefined;
   return {
@@ -52,18 +55,26 @@ export function getCompletedCheckout(event: StripeWebhookEvent): { orderId: stri
   };
 }
 
-export function getRefundUpdate(event: StripeWebhookEvent): { orderId: string; refundId?: string; amount: number; status?: string; reason?: string } | undefined {
-  if (!['refund.created', 'refund.updated', 'refund.failed', 'charge.refunded'].includes(event.type ?? '')) return undefined;
+export function getReleasedCheckout(event: StripeWebhookEvent) {
+  if (!['checkout.session.expired', 'checkout.session.async_payment_failed'].includes(event.type ?? '')) return undefined;
   const object = event.data?.object ?? undefined;
   const orderId = metadataValue(object, 'orderId');
-  const amount = typeof object?.amount === 'number' ? object.amount : typeof object?.amount_refunded === 'number' ? object.amount_refunded : 0;
-  if (!orderId || amount <= 0) return undefined;
+  const sessionId = stringValue(object?.id);
+  return orderId && sessionId ? { orderId, sessionId, failedPayment: event.type === 'checkout.session.async_payment_failed' } : undefined;
+}
+
+export function getRefundUpdate(event: StripeWebhookEvent): { orderId: string; refundId?: string; amount: number; status?: string; reason?: string } | undefined {
+  if (!['refund.created', 'refund.updated', 'refund.failed'].includes(event.type ?? '')) return undefined;
+  const object = event.data?.object ?? undefined;
+  const orderId = metadataValue(object, 'orderId');
+  const amount = typeof object?.amount === 'number' ? object.amount : 0;
+  if (!orderId || !Number.isSafeInteger(amount) || amount <= 0 || !stringValue(object?.id)) return undefined;
   const reason = metadataValue(object, 'reason') ?? (typeof object?.failure_reason === 'string' ? object.failure_reason : undefined);
   return {
     orderId,
     refundId: stringValue(object?.id),
     amount,
-    status: typeof object?.status === 'string' ? object.status : event.type === 'refund.failed' ? 'failed' : undefined,
+    status: object?.status === 'canceled' ? 'failed' : typeof object?.status === 'string' ? object.status : event.type === 'refund.failed' ? 'failed' : undefined,
     reason
   };
 }

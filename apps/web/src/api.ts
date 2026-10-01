@@ -8,6 +8,7 @@ export type MarketingCampaignPayload = { subject:string; message:string };
 export type FaqItem = { id:string; question:string; answer:string; sortOrder:number; active:boolean; createdAt:string; updatedAt:string };
 export type BlogPost = { id:string; slug:string; title:string; excerpt:string; body:string; published:boolean; publishedAt?:string; createdAt:string; updatedAt:string };
 export type AdminContent = { faqItems:FaqItem[]; blogPosts:BlogPost[] };
+export type OrderReceipt = Pick<Order, 'id' | 'status' | 'shippingAddress' | 'subtotal' | 'shippingCost' | 'total' | 'refundedAmount' | 'items'>;
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
 async function errorMessage(response: Response, fallback: string) {
@@ -33,8 +34,15 @@ export async function fetchProduct(slug: string): Promise<Product> { const r = a
 export async function fetchFaqItems(): Promise<FaqItem[]> { const r = await fetch(API + '/api/content/faqs'); if(!r.ok) throw new Error('FAQ not found'); return (await r.json()).faqItems; }
 export async function fetchBlogPosts(): Promise<BlogPost[]> { const r = await fetch(API + '/api/content/blog-posts'); if(!r.ok) throw new Error('Blog not found'); return (await r.json()).blogPosts; }
 export async function fetchBlogPost(slug: string): Promise<BlogPost> { const r = await fetch(API + '/api/content/blog-posts/' + slug); if(!r.ok) throw new Error('Blog post not found'); return (await r.json()).post; }
-export async function createCheckout(email:string, customerName:string, shippingAddressFields:ShippingAddressFields, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;subtotal:number;shippingCost:number;total:number}> { const r = await fetch(API + '/api/checkout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddressFields, items}) }); if(!r.ok) throw new Error('Checkout failed'); return r.json(); }
-export async function fetchOrder(orderId: string): Promise<Order> { const r = await fetch(API + '/api/orders/' + orderId); if(!r.ok) throw new Error('Order not found'); return (await r.json()).order; }
+export async function createCheckout(email:string, customerName:string, shippingAddressFields:ShippingAddressFields, items:Array<{productId:string;quantity:number}>): Promise<{orderId:string;checkoutUrl:string;receiptToken:string;subtotal:number;shippingCost:number;total:number}> { const r = await fetch(API + '/api/checkout', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, customerName, shippingAddressFields, items}) }); if(!r.ok) throw new Error(await errorMessage(r, 'Checkout failed')); return r.json(); }
+export async function fetchOrder(orderId: string, access: { receiptToken?: string; customerToken?: string } = {}): Promise<OrderReceipt> {
+  const r = await fetch(API + '/api/orders/' + encodeURIComponent(orderId), { headers: {
+    ...(access.receiptToken ? { 'x-receipt-token': access.receiptToken } : {}),
+    ...(access.customerToken ? { authorization: `Bearer ${access.customerToken}` } : {})
+  }, cache: 'no-store' });
+  if(!r.ok) throw new Error('Receipt access required. Sign in with the order email or contact support.');
+  return (await r.json()).order;
+}
 export async function fetchCustomerOrders(token?: string): Promise<Order[]> { const r = await fetch(API + '/api/orders', { headers: token ? { authorization: 'Bearer ' + token } : undefined }); if(!r.ok) throw new Error('Orders not found'); return (await r.json()).orders; }
 export async function sendContactMessage(payload: ContactPayload): Promise<void> { const r = await fetch(API + '/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error('Message send failed'); }
 export async function subscribeNewsletter(payload: NewsletterSignupPayload): Promise<{ subscriber: MarketingSubscriber; created: boolean }> { const r = await fetch(API + '/api/newsletter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); if(!r.ok) throw new Error(await errorMessage(r, 'Newsletter signup failed')); return r.json(); }

@@ -19,6 +19,11 @@ export type Order = {
   canceledAt?: string;
   refundedAt?: string;
   createdAt: string;
+  inventoryReserved?: boolean;
+  reservationExpiresAt?: string;
+  checkoutRequestJson?: string;
+  receiptTokenHash?: string;
+  refundReconciliationRequired?: boolean;
 };
 export type MarketingSubscriberStatus = 'subscribed' | 'unsubscribed';
 export type MarketingSubscriber = {
@@ -54,11 +59,17 @@ export type BlogPost = {
   createdAt: string;
   updatedAt: string;
 };
-export type CheckoutInput = { email: string; customerName: string; shippingAddress: string; items: CartItemInput[] };
+export type CheckoutInput = { email: string; customerName: string; shippingAddress: string; items: CartItemInput[]; useStripe?: boolean; checkoutBaseUrl?: string; receiptTokenHash?: string };
 export type MarketingSubscribeInput = { email: string; name?: string; source: string; couponCode: string };
 export type FaqItemInput = { id?: string; question: string; answer: string; sortOrder: number; active: boolean };
 export type BlogPostInput = { id?: string; slug: string; title: string; excerpt: string; body: string; published: boolean; publishedAt?: string | null };
 export type Store = {
+  syncRefund(orderId: string, retrieve: (order: Order) => Promise<import('./refundLedger.js').RefundEntry>): Promise<Order | undefined>;
+  reconcileHistoricalRefunds(orderId: string, entries: import('./refundLedger.js').RefundEntry[]): Promise<Order | undefined>;
+  pendingNotifications(orderId?: string): Promise<Array<{ id: string }>>;
+  claimNotification(id: string, leaseToken: string): Promise<{ payloadJson: string } | undefined>;
+  completeNotification(id: string, leaseToken: string): Promise<void>;
+  releaseNotification(id: string, leaseToken: string, error: string): Promise<void>;
   healthCheck(): Promise<void>;
   listProducts(): Promise<Product[]>;
   listAdminProducts(): Promise<Product[]>;
@@ -75,7 +86,7 @@ export type Store = {
   cancelOrder(orderId: string, reason?: string): Promise<Order | undefined>;
   markOrderRefundPending(orderId: string, refund: { amount: number; refundId?: string; reason?: string }): Promise<Order | undefined>;
   markOrderRefunded(orderId: string, refund: { amount: number; refundId?: string; reason?: string }): Promise<Order | undefined>;
-  markOrderRefundFailed(orderId: string, refund: { refundId?: string; reason?: string }): Promise<Order | undefined>;
+  markOrderRefundFailed(orderId: string, refund: { refundId?: string; amount?: number; reason?: string }): Promise<Order | undefined>;
   subscribeMarketing(input: MarketingSubscribeInput): Promise<{ subscriber: MarketingSubscriber; created: boolean }>;
   listMarketingSubscribers(): Promise<MarketingSubscriber[]>;
   unsubscribeMarketing(token: string): Promise<MarketingSubscriber | undefined>;

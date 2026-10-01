@@ -9,6 +9,7 @@ const required = [
   'STRIPE_WEBHOOK_SECRET',
   'VITE_CLERK_PUBLISHABLE_KEY',
   'CLERK_SECRET_KEY',
+  'CLERK_ISSUER_URL',
   'ADMIN_EMAILS',
   'VITE_ADMIN_EMAILS',
   'CLOUDINARY_URL',
@@ -35,6 +36,17 @@ const emailList = (name) => value(name).split(',').map((email) => email.trim().t
 const missing = required.filter((name) => !present(name));
 const invalid = required.filter((name) => present(name) && placeholderPatterns.some((pattern) => pattern.test(value(name))));
 const warnings = [];
+
+if (present('CLERK_ISSUER_URL')) {
+  try {
+    const issuer = new URL(value('CLERK_ISSUER_URL'));
+    if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash || issuer.pathname !== '/') {
+      invalid.push('CLERK_ISSUER_URL (must be an HTTPS origin without credentials, query, or fragment)');
+    }
+  } catch {
+    invalid.push('CLERK_ISSUER_URL (must be a valid HTTPS origin)');
+  }
+}
 
 if (present('NODE_ENV') && value('NODE_ENV') !== 'production') {
   invalid.push('NODE_ENV (must be production)');

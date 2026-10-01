@@ -71,6 +71,11 @@ The checkout endpoint is production-ready at the service seam:
 - Production webhooks require `STRIPE_WEBHOOK_SECRET`; unsigned production webhook payloads are rejected.
 - The webhook marks orders `paid` when it receives `checkout.session.completed` with `metadata.orderId`. If a paid checkout stays pending because a webhook was missed, admins can use `Sync Stripe payment` on the pending order to retrieve the Checkout Session, mark it paid, and send the confirmation email.
 - `/api/checkout` requires `customerName` and structured shipping fields; receipts and admin order review display the formatted shipping address.
+- Checkout combines duplicate product lines, rejects inactive/insufficient-stock listings, and reserves available inventory transactionally before contacting Stripe. New reservations last 35 minutes; payment consumes the reservation without deducting stock again.
+- Admin cancellation expires the Stripe Checkout Session before returning stock. Expiration and delayed-payment failure webhooks release stock after confirming Stripe's current state. A startup/minute cleanup pass retries expired reservations; processing payments and ambiguous Stripe failures keep stock held for safe reconciliation.
+- The exact Stripe session-create request and an order-specific idempotency key are retained for timeout recovery. Unrecorded sessions older than 23 hours require manual Stripe reconciliation before releasing stock, to avoid creating a new session after Stripe's idempotency retention window. See [Stripe idempotency guidance](https://docs.stripe.com/api/idempotent_requests).
+- New checkout responses include a random guest receipt credential. The browser stores it in session storage for the checkout tab and sends it in an `X-Receipt-Token` header; only its hash is stored on the server. Receipt responses contain fulfillment/totals/items, omit email/name/payment identifiers, and disable caching. Order IDs and URL query parameters do not grant receipt access.
+- Signed-in customers can access receipts belonging to their verified account email, and admins can access order receipts. Older guest receipt links and new guest links opened without their tab's credential require sign-in with the order email or support assistance.
 - Admins can mark paid orders `fulfilled` after shipping/hand-off.
 - Admins can cancel `pending_payment` orders before payment succeeds.
 - Admins can issue full or partial refunds for paid/fulfilled orders; refunds are created against the stored Stripe PaymentIntent.
@@ -137,10 +142,13 @@ Required production env vars:
 ```bash
 VITE_CLERK_PUBLISHABLE_KEY=pk_live_or_test_key
 CLERK_SECRET_KEY=sk_live_or_test_key
+CLERK_ISSUER_URL=https://your-instance.clerk.accounts.dev
 ```
 
 Create the key in Clerk, add your production domain in Clerk's dashboard, and set the env var before deployment.
-The API uses `CLERK_SECRET_KEY` to verify customer sessions before returning account order history from `/api/orders`.
+The API verifies customer sessions against the configured Clerk issuer and uses `CLERK_SECRET_KEY` to look up the authenticated user's email before returning account order history from `/api/orders`.
+
+Before deploying the authentication fix, set `CLERK_ISSUER_URL` on the API host to your Clerk instance's exact session-token issuer (its Frontend API URL, normally without a trailing slash). Use the production instance URL for production, not the development instance or the storefront URL. Obtain it from your trusted Clerk dashboard configuration, never from a caller-supplied token. Both customer and admin authentication reject requests when this setting is missing or invalid. Verification fetches keys only from this configured origin and requires matching issuer, RS256 signature, subject, issued-at, and expiration claims. See [Clerk's verification guide](https://clerk.com/docs/guides/sessions/manual-jwt-verification).
 
 ## Admin Access
 
@@ -196,7 +204,7 @@ Production deploys should run migrations before the API starts. The included Ren
 npm run render:build
 ```
 
-Seed products are upserted on API startup when Prisma storage is enabled, so the initial catalog is present after deployment.
+Missing seed products are inserted on API startup when Prisma storage is enabled. Existing products are preserved, including edited prices, inventory, visibility, images, and renamed listings. Seeding does not repair product data overwritten by older deployments; restore that data from verified records or backups if needed.
 
 ## Product Image Uploads
 
@@ -228,6 +236,7 @@ Deployment flow:
    - `STRIPE_WEBHOOK_SECRET` after webhook creation
    - `VITE_CLERK_PUBLISHABLE_KEY`
    - `CLERK_SECRET_KEY`
+   - `CLERK_ISSUER_URL` (exact trusted Clerk session issuer; required for both customer and admin access)
    - `ADMIN_EMAILS`
    - `VITE_ADMIN_EMAILS`
    - `CLOUDINARY_URL`

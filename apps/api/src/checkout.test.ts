@@ -42,6 +42,6 @@ describe('createCheckoutResponse', () => {
     expect(response.orderId).toBe('ord_test');
     expect(response.stripeSessionId).toBe('cs_test_123');
     expect(response.stripePaymentIntentId).toBe('pi_test_123');
-    expect(stripeCreate).toHaveBeenCalledWith(expect.objectContaining({ allow_promotion_codes: true }));
+    expect(stripeCreate).toHaveBeenCalledWith(expect.objectContaining({ allow_promotion_codes: true }), { idempotencyKey: 'checkout:ord_test' });
   });
 });

@@ -5,11 +5,11 @@ export type MarketingCampaign = { subject: string; message: string };
 
 export type EmailNotifier = {
   sendOrderPending(order: Order): Promise<void>;
-  sendOrderPaid(order: Order): Promise<void>;
+  sendOrderPaid(order: Order, idempotencyKey?: string): Promise<void>;
   sendOrderFulfilled(order: Order): Promise<void>;
   sendOrderCanceled(order: Order): Promise<void>;
-  sendOrderRefunded(order: Order): Promise<void>;
-  sendOrderRefundFailed(order: Order): Promise<void>;
+  sendOrderRefunded(order: Order, idempotencyKey?: string): Promise<void>;
+  sendOrderRefundFailed(order: Order, idempotencyKey?: string): Promise<void>;
   sendContactMessage(message: ContactMessage): Promise<void>;
   sendMarketingWelcome(subscriber: MarketingSubscriber): Promise<void>;
   sendMarketingCampaign(subscriber: MarketingSubscriber, campaign: MarketingCampaign): Promise<void>;
@@ -220,12 +220,13 @@ function buildMarketingCampaignEmail(subscriber: MarketingSubscriber, campaign: 
   };
 }
 
-async function sendResend(email: ResendEmail) {
+async function sendResend(email: ResendEmail, idempotencyKey?: string) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { authorization: 'Bearer ' + apiKey, 'content-type': 'application/json' },
+    headers: { authorization: 'Bearer ' + apiKey, 'content-type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) },
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify(email)
   });
   if (!response.ok) throw new Error('Email send failed with ' + response.status);
@@ -238,11 +239,11 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
       if (!email) return;
       await sendResend(email);
     },
-    async sendOrderPaid(order) {
+    async sendOrderPaid(order, idempotencyKey) {
       const emails = buildPaidEmail(order);
       if (!emails) return;
-      await sendResend(emails.customer);
-      if (emails.admin) await sendResend(emails.admin);
+      await sendResend(emails.customer, idempotencyKey ? idempotencyKey + '/customer' : undefined);
+      if (emails.admin) await sendResend(emails.admin, idempotencyKey ? idempotencyKey + '/owner' : undefined);
     },
     async sendOrderFulfilled(order) {
       const email = buildFulfilledEmail(order);
@@ -254,15 +255,15 @@ export function createEmailNotifierFromEnv(): EmailNotifier {
       if (!email) return;
       await sendResend(email);
     },
-    async sendOrderRefunded(order) {
+    async sendOrderRefunded(order, idempotencyKey) {
       const email = buildRefundedEmail(order);
       if (!email) return;
-      await sendResend(email);
+      await sendResend(email, idempotencyKey);
     },
-    async sendOrderRefundFailed(order) {
+    async sendOrderRefundFailed(order, idempotencyKey) {
       const email = buildRefundFailedEmail(order);
       if (!email) return;
-      await sendResend(email);
+      await sendResend(email, idempotencyKey);
     },
     async sendContactMessage(message) {
       const email = buildContactEmail(message);

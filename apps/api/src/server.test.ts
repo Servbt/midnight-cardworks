@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildServer } from './server.js';
 import { createInMemoryStore } from './store.js';
 
-const stripeMock = vi.hoisted(() => ({ paymentStatus: 'paid', sessionStatus: 'complete', paymentIntentId: 'pi_synced' }));
+const stripeMock = vi.hoisted(() => ({ paymentStatus: 'paid', sessionStatus: 'complete', paymentIntentId: 'pi_synced', orderId: '' }));
 
 vi.mock('stripe', () => ({
   default: class MockStripe {
@@ -15,7 +15,8 @@ vi.mock('stripe', () => ({
           id,
           payment_status: stripeMock.paymentStatus,
           status: stripeMock.sessionStatus,
-          payment_intent: stripeMock.paymentIntentId
+          payment_intent: stripeMock.paymentIntentId,
+          metadata: { orderId: stripeMock.orderId }
         }))
       }
     };
@@ -232,7 +233,7 @@ describe('storefront API', () => {
     const webhook = await app.inject({
       method: 'POST',
       url: '/api/stripe/webhook',
-      payload: { type: 'checkout.session.completed', data: { object: { metadata: { orderId } } } }
+      payload: { type: 'checkout.session.completed', data: { object: { payment_status: 'paid', metadata: { orderId } } } }
     });
 
     expect(webhook.statusCode).toBe(200);
@@ -246,7 +247,7 @@ describe('storefront API', () => {
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 2 }]) });
     const orderId = checkout.json().orderId;
 
-    const webhookPayload = { type: 'checkout.session.completed', data: { object: { metadata: { orderId } } } };
+    const webhookPayload = { type: 'checkout.session.completed', data: { object: { payment_status: 'paid', metadata: { orderId } } } };
     const firstWebhook = await app.inject({ method: 'POST', url: '/api/stripe/webhook', payload: webhookPayload });
     const secondWebhook = await app.inject({ method: 'POST', url: '/api/stripe/webhook', payload: webhookPayload });
 
@@ -263,7 +264,7 @@ describe('storefront API', () => {
     const webhook = await app.inject({
       method: 'POST',
       url: '/api/stripe/webhook',
-      payload: { type: 'checkout.session.completed', data: { object: { metadata: { orderId: 'ord_test' } } } }
+      payload: { type: 'checkout.session.completed', data: { object: { payment_status: 'paid', metadata: { orderId: 'ord_test' } } } }
     });
 
     expect(webhook.statusCode).toBe(400);
@@ -277,10 +278,10 @@ describe('storefront API', () => {
     const orderId = checkout.json().orderId;
     await store.markOrderPaid(orderId);
 
-    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: { 'x-receipt-token': checkout.json().receiptToken } });
 
     expect(receipt.statusCode).toBe(200);
-    expect(receipt.json().order).toMatchObject({ id: orderId, email: 'buyer@example.com', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
+    expect(receipt.json().order).toMatchObject({ id: orderId, subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid' });
   });
 
   it('lists customer order history for the signed-in account only', async () => {
@@ -313,7 +314,7 @@ describe('storefront API', () => {
     await store.markOrderPaid(orderId);
 
     const fulfill = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/fulfill`, headers: adminHeaders });
-    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}` });
+    const receipt = await app.inject({ method: 'GET', url: `/api/orders/${orderId}`, headers: { 'x-receipt-token': checkout.json().receiptToken } });
 
     expect(fulfill.statusCode).toBe(200);
     expect(fulfill.json().order).toMatchObject({ id: orderId, status: 'fulfilled' });
@@ -328,6 +329,7 @@ describe('storefront API', () => {
     const orderId = checkout.json().orderId;
     emailSpy.sent.length = 0;
     await store.recordCheckoutSession(orderId, 'cs_test_sync');
+    stripeMock.orderId = orderId;
     vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_sync');
 
     const sync = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/sync-payment`, headers: adminHeaders });
@@ -347,6 +349,7 @@ describe('storefront API', () => {
     const checkout = await app.inject({ method: 'POST', url: '/api/checkout', payload: checkoutPayload([{ productId: 'p1', quantity: 1 }]) });
     const orderId = checkout.json().orderId;
     await store.recordCheckoutSession(orderId, 'cs_test_sync');
+    stripeMock.orderId = orderId;
     vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_sync');
 
     const sync = await app.inject({ method: 'POST', url: `/api/admin/orders/${orderId}/sync-payment`, headers: adminHeaders });
@@ -425,7 +428,7 @@ describe('storefront API', () => {
     const webhook = await app.inject({
       method: 'POST',
       url: '/api/stripe/webhook',
-      payload: { type: 'checkout.session.completed', data: { object: { metadata: { orderId } } } }
+      payload: { type: 'checkout.session.completed', data: { object: { payment_status: 'paid', metadata: { orderId } } } }
     });
 
     expect(webhook.statusCode).toBe(200);

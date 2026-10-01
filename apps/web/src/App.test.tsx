@@ -11,7 +11,7 @@ vi.mock('./checkoutRedirect', () => ({ redirectToCheckout: vi.fn() }));
 vi.mock('./auth', () => ({
   AccountPanel: ({ checkoutMessage }: { checkoutMessage: string }) => <section className="panel narrow"><h2>Customer account</h2><button>Sign in with Clerk</button>{checkoutMessage && <p>{checkoutMessage}</p>}</section>,
   useAdminAccess: () => ({ isAdmin: mockAuth.isAdmin, getAdminToken: async () => mockAuth.token }),
-  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email, getCustomerToken: async () => mockAuth.token })
+  useCustomerSession: () => ({ isSignedIn: mockAuth.isSignedIn, email: mockAuth.email, getCustomerToken: async () => mockAuth.isSignedIn ? mockAuth.token : undefined })
 }));
 
 const products = [
@@ -32,6 +32,7 @@ const blogPosts = [
 ];
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   mockAuth.isAdmin = false;
   mockAuth.isSignedIn = false;
   mockAuth.token = 'admin-token';
@@ -64,13 +65,17 @@ beforeEach(() => {
     }
     if (String(url).includes('/api/products/golden')) return new Response(JSON.stringify({ product: products[0] }), { status: 200 });
     if (String(url).includes('/api/products')) return new Response(JSON.stringify({ products }), { status: 200 });
-    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
+    if (String(url).includes('/api/checkout')) return new Response(JSON.stringify({ orderId: 'ord_test', receiptToken: 'receipt-test-token', checkoutUrl: 'https://checkout.stripe.test/session', subtotal: 1299, shippingCost: 499, total: 1798 }), { status: 201 });
     if (String(url).includes('/api/admin/orders/ord_test/sync-payment')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', stripeSessionId: 'cs_test_sync', stripePaymentIntentId: 'pi_synced', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/fulfill')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'fulfilled', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/cancel')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'canceled', refundedAmount: 0, refundReason: 'Customer changed their mind', canceledAt: '2026-06-20T00:00:00.000Z', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/orders/ord_test/refund')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'refunded', refundedAmount: 1798, stripeRefundId: 're_demo_ord_test', refundReason: 'Customer requested cancellation', items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
     if (String(url).includes('/api/admin/products/golden/image')) return new Response(JSON.stringify({ product: { ...products[0], image: 'https://images.example.com/golden.jpg' } }), { status: 200 });
-    if (String(url).includes('/api/orders/ord_test')) return new Response(JSON.stringify({ order: { id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    if (String(url).includes('/api/orders/ord_test')) {
+      const headers = new Headers(init?.headers);
+      if (headers.get('x-receipt-token') !== 'receipt-test-token' && !headers.get('authorization')) return new Response(JSON.stringify({ error: 'Order not found' }), { status: 404 });
+      return new Response(JSON.stringify({ order: { id: 'ord_test', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] } }), { status: 200 });
+    }
     if (String(url).endsWith('/api/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: 'paid', refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
     if (String(url).includes('/api/contact')) return new Response(JSON.stringify({ ok: true }), { status: 200 });
     if (String(url).includes('/api/admin/orders')) return new Response(JSON.stringify({ orders: [{ id: 'ord_test', email: 'buyer@example.com', customerName: 'Ari Buyer', shippingAddress: '123 Midnight Lane', subtotal: 1299, shippingCost: 499, total: 1798, status: adminOrderStatus, refundedAmount: 0, items: [{ title: 'Golden Hour Commander Proxy', quantity: 1, price: 1299 }] }] }), { status: 200 });
@@ -1098,6 +1103,7 @@ describe('Midnight Cardworks storefront', () => {
   });
 
   it('shows a verified receipt when returning from Stripe Checkout', async () => {
+    window.sessionStorage.setItem('midnight-cardworks.receipt.ord_test', 'receipt-test-token');
     window.history.pushState({}, '', '/checkout/success?order=ord_test');
 
     render(<App />);
@@ -1112,6 +1118,31 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getByText('We’ll review, pack, and mark your made-to-order cards fulfilled from the shop dashboard.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Contact support about ord_test' })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { 'x-receipt-token': 'receipt-test-token' }, cache: 'no-store' }));
+  });
+
+  it('does not expose a receipt when the browser has only an order ID', async () => {
+    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+    render(<App />);
+    expect(await screen.findByText(/To view this receipt, return in the checkout tab/)).toBeInTheDocument();
+    expect(screen.queryByText('Ship to: 123 Midnight Lane')).not.toBeInTheDocument();
+  });
+
+  it('uses the signed-in account for receipt access without a guest credential', async () => {
+    mockAuth.isSignedIn = true;
+    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+    render(<App />);
+    expect(await screen.findByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/orders/ord_test'), expect.objectContaining({ headers: { authorization: 'Bearer admin-token' } }));
+  });
+
+  it('reloads a protected receipt when account sign-in finishes', async () => {
+    window.history.pushState({}, '', '/checkout/success?order=ord_test');
+    const view = render(<App />);
+    expect(await screen.findByText(/To view this receipt, return in the checkout tab/)).toBeInTheDocument();
+    mockAuth.isSignedIn = true;
+    view.rerender(<App />);
+    expect(await screen.findByText('Ship to: 123 Midnight Lane')).toBeInTheDocument();
   });
 
   it('shows signed-in customers their order history in account', async () => {
