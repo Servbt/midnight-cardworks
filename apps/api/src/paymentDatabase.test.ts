@@ -4,6 +4,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPrismaStore, seedPrismaProducts } from './prismaStore.js';
 import { processPaymentEvent, startCheckout } from './paymentService.js';
 
+const stripeMocks = vi.hoisted(() => ({ retrieve: vi.fn(), list: vi.fn() }));
+vi.mock('stripe', () => ({ default: class { checkout = { sessions: { retrieve: stripeMocks.retrieve } }; refunds = { list: stripeMocks.list }; } }));
+
 const url = process.env.TEST_DATABASE_URL;
 if (url) {
   const target = new URL(url);
@@ -17,10 +20,31 @@ const paidEvent = (id: string, orderId: string) => ({ id, type: 'checkout.sessio
 
 describe.skipIf(!url)('payment transactions on PostgreSQL', () => {
   beforeEach(async () => {
+    vi.clearAllMocks();
     vi.stubEnv('NODE_ENV', 'test'); vi.stubEnv('STRIPE_SECRET_KEY', '');
     const prisma = connect();
     await prisma.paymentJournal.deleteMany(); await prisma.orderItem.deleteMany(); await prisma.order.deleteMany(); await prisma.product.deleteMany();
     await seedPrismaProducts(prisma);
+  });
+  it('corrects an empty historical refund history and clears stale refund fields durably', async () => {
+    const store = createPrismaStore(connect()); const order = await store.createOrder(input);
+    const event = paidEvent('evt_paid', order.id);
+    await processPaymentEvent(store, event);
+    await store.markOrderFulfilled(order.id);
+    await store.atomic(async tx => {
+      const current = (await tx.getOrder(order.id))!;
+      current.refundedAmount = 500; current.status = 'partially_refunded'; current.stripeRefundId = 're_old'; current.refundReason = 'Old reason'; current.refundedAt = new Date().toISOString();
+      await tx.saveOrder(current);
+      await tx.putRecord({ id: `refund-baseline:${order.id}`, kind: 'refund-baseline', orderId: order.id, data: { amount: 500, lastRefundId: 're_old', migratedAt: 100000 } });
+    });
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_fake');
+    stripeMocks.retrieve.mockResolvedValue(event.data.object);
+    stripeMocks.list.mockImplementation(async function* () {});
+    await processPaymentEvent(store, { id: 'evt_empty_history', type: 'charge.refunded', data: { object: { payment_intent: 'pi_test' } } });
+    const saved = (await createPrismaStore(connect()).getOrder(order.id))!;
+    expect(saved).toMatchObject({ refundedAmount: 0, status: 'fulfilled' });
+    expect(saved.stripeRefundId).toBeUndefined(); expect(saved.refundReason).toBeUndefined(); expect(saved.refundedAt).toBeUndefined();
+    expect((await store.listRecords('notification')).filter(r => r.id.includes(':Refunded:'))).toEqual([]);
   });
   it('serializes two independent clients and persists deduplication across reconnects', async () => {
     const a = createPrismaStore(connect()); const b = createPrismaStore(connect());

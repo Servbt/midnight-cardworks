@@ -59,6 +59,10 @@ prevention remain phase 4; inventory is still decremented when payment is confir
   amounts. Current Stripe refund state is retrieved before applying old events;
   pending events cannot undo success, and failure can remove a previously successful
   refund from the total. Full refunds use the server's current captured balance.
+  During legacy aggregate reconciliation, an empty Stripe refund history clears an
+  incorrect aggregate and restores paid/fulfilled status without historical refund
+  notifications. Each listed refund's payment intent and order metadata must agree
+  with the target order when supplied; conflicting ownership rolls back processing.
 - New refund requests reconcile Stripe's current refund list first. An unresolved
   request blocks another request for that order; retry uses the same frozen amount,
   reason and Stripe idempotency key. Pending refunds also block another request.

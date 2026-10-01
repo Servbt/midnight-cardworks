@@ -17,6 +17,38 @@ beforeEach(() => { vi.stubEnv('STRIPE_SECRET_KEY', ''); vi.stubEnv('NODE_ENV', '
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.clearAllMocks(); vi.useRealTimers(); });
 
 describe('durable payment processing', () => {
+  it.each([false, true])('clears an incorrect historical refund aggregate while preserving fulfillment=%s', async (fulfilled) => {
+    const store = createInMemoryStore(); const order = await paid(store);
+    if (fulfilled) await store.markOrderFulfilled(order.id);
+    await store.atomic(async tx => {
+      const current = (await tx.getOrder(order.id))!;
+      current.status = 'partially_refunded'; current.refundedAmount = 500; current.stripeRefundId = 're_old';
+      await tx.saveOrder(current);
+      await tx.putRecord({ id: `refund-baseline:${order.id}`, kind: 'refund-baseline', orderId: order.id, data: { amount: 500, lastRefundId: 're_old', migratedAt: 100000 } });
+    });
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_fake');
+    mocks.retrieve.mockResolvedValue(session(order));
+    mocks.listRefunds.mockImplementation(async function* () {});
+    await processPaymentEvent(store, event('reconcile_empty', 'charge.refunded', { payment_intent: 'pi_test' }));
+    expect(await store.getOrder(order.id)).toMatchObject({ refundedAmount: 0, status: fulfilled ? 'fulfilled' : 'paid' });
+    expect((await store.getOrder(order.id))!.stripeRefundId).toBeUndefined();
+    expect((await store.getRecord(`refund-baseline:${order.id}`))!.data).toMatchObject({ amount: 0, reconciled: true });
+    expect((await store.listRecords('notification')).filter(r => r.id.includes(':Refunded:'))).toEqual([]);
+  });
+
+  it.each([
+    { payment_intent: 'pi_other', metadata: { orderId: 'other' } },
+    { payment_intent: 'pi_test', metadata: { orderId: 'other' } },
+    { payment_intent: 'pi_other', metadata: { orderId: '' } }
+  ])('rejects conflicting listed refund ownership %j', async (ownership) => {
+    const store = createInMemoryStore(); const order = await paid(store);
+    vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_fake');
+    mocks.retrieve.mockResolvedValue(session(order));
+    mocks.listRefunds.mockImplementation(async function* () { yield { id: 're_foreign', amount: 100, status: 'succeeded', ...ownership }; });
+    await expect(processPaymentEvent(store, event('wrong_refund', 'charge.refunded', { payment_intent: 'pi_test' }))).rejects.toThrow('Refund payment mismatch');
+    expect(await store.getRecord('event:wrong_refund')).toBeUndefined();
+    expect(await store.listRecords('refund')).toEqual([]);
+  });
   it('applies a discount and inventories exactly once across concurrent distinct/repeated events, preserving fulfillment', async () => {
     const store = createInMemoryStore(); const order = await store.createOrder(input);
     await Promise.all(Array.from({ length: 8 }, (_, i) => processPaymentEvent(store, event(`evt_${i % 4}`, 'checkout.session.completed', session(order)))));

@@ -182,7 +182,18 @@ export function createPrismaStore(prisma: PrismaClient | Prisma.TransactionClien
     async listRecords(kind, orderId) { return (await prisma.paymentJournal.findMany({ where: { kind, orderId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(r => ({ ...r, orderId: r.orderId ?? undefined })); },
     async saveOrder(order) {
       const { items: _items, createdAt: _createdAt, ...data } = order;
-      const saved = await prisma.order.update({ where: { id: order.id }, data: { ...data, inventoryIssue: order.inventoryIssue ?? null, canceledAt: order.canceledAt ? new Date(order.canceledAt) : null }, include: { items: true } });
+      const saved = await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          ...data,
+          stripeRefundId: order.stripeRefundId ?? null,
+          refundReason: order.refundReason ?? null,
+          refundedAt: order.refundedAt ? new Date(order.refundedAt) : null,
+          inventoryIssue: order.inventoryIssue ?? null,
+          canceledAt: order.canceledAt ? new Date(order.canceledAt) : null
+        },
+        include: { items: true }
+      });
       return toOrder(saved);
     },
     async adjustInventory(productId, quantity, action) {

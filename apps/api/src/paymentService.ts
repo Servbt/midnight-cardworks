@@ -245,9 +245,20 @@ export async function processPaymentEvent(store: Store, event: StripeWebhookEven
     if (migrateBaseline) {
       // Replace the legacy aggregate with Stripe's complete individual history.
       await tx.putRecord({ id: baseline!.id, kind: 'refund-baseline', orderId: current.id, data: { amount: 0, reconciled: true } });
+      if (!refunds.length && !(await tx.listRecords('refund', current.id)).length) {
+        current.refundedAmount = 0;
+        current.status = current.fulfilledAt ? 'fulfilled' : 'paid';
+        current.stripeRefundId = undefined;
+        current.refundReason = undefined;
+        current.refundedAt = undefined;
+        await tx.saveOrder(current);
+      }
     }
     const changed: RefundEntry[] = [];
     for (const r of refunds) {
+      const refundIntent = idOf(r.payment_intent);
+      const refundOrderId = (r.metadata as Record<string, string> | undefined)?.orderId;
+      if ((refundIntent && current.stripePaymentIntentId && refundIntent !== current.stripePaymentIntentId) || (refundOrderId && refundOrderId !== current.id)) throw new PermanentPaymentError('Refund payment mismatch');
       if (r.currency && r.currency !== 'usd') throw new PermanentPaymentError('Refund currency mismatch');
       const entry: RefundEntry = { refundId: String(r.id), amount: Number(r.amount), status: String(r.status), reason: (r.metadata as Record<string, string> | undefined)?.reason ?? (typeof r.failure_reason === 'string' ? r.failure_reason : undefined) };
       const before = (await tx.getRecord(`refund:${entry.refundId}`))?.data as RefundEntry | undefined;
