@@ -8,6 +8,16 @@ import { redirectToCheckout } from './checkoutRedirect';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'faq' | 'blog' | 'blog-post' | 'unsubscribe';
+
+// The account page is a set of sections the shopper opens one at a time, rather than one
+// long stack of panels.
+type AccountSectionId = 'orders' | 'checkout' | 'profile' | 'preferences';
+const ACCOUNT_SECTIONS: Array<{ id: AccountSectionId; label: string }> = [
+  { id: 'orders', label: 'Order history' },
+  { id: 'checkout', label: 'Checkout details' },
+  { id: 'profile', label: 'Profile & sign-in' },
+  { id: 'preferences', label: 'Preferences & offers' },
+];
 type AnalyticsPreference = 'unknown' | 'accepted' | 'necessary';
 
 const formatMoney = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -81,6 +91,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
   const [customerOrdersMessage, setCustomerOrdersMessage] = useState('');
+  const [accountSection, setAccountSection] = useState<AccountSectionId | null>(null);
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [marketingSubscribers, setMarketingSubscribers] = useState<MarketingSubscriber[]>([]);
   const [faqItems, setFaqItems] = useState<FaqItem[]>([]);
@@ -1185,6 +1196,10 @@ export default function App() {
   const publicBlogPosts = blogPosts.filter((post) => post.published).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
   const contentItemCount = faqItems.length + blogPosts.length;
   const showAccountNewsletterOffer = view === 'account' && isSignedIn && newsletterHomeOfferSeen && (!newsletterSignupComplete || Boolean(newsletterMessage));
+  // The shopper's pick, falling back to the section they most likely came for: order history
+  // when signed in, the sign-in panel when not. Holding null rather than a default keeps the
+  // fallback following the sign-in state until they choose for themselves.
+  const activeAccountSection: AccountSectionId = accountSection ?? (isSignedIn ? 'orders' : 'profile');
 
   const newsletterSignupForm = (showDismissAction = false) => <form className="newsletter-form" onSubmit={(event) => void handleNewsletterSubmit(event)}>
     <div className="newsletter-fields">
@@ -1600,8 +1615,33 @@ export default function App() {
       {recentlyViewedSection}</>}</section>}
 
     {view === 'account' && <>
-      <AccountPanel checkoutMessage={checkoutMessage} />
-      <section className="panel narrow saved-checkout-info account-saved-checkout-info" role="region" aria-label="Saved checkout info">
+      <section className="panel narrow account-hub" aria-label="Account overview">
+        <p className="eyebrow">Your account</p>
+        <h2>Account</h2>
+        <p>Order history, checkout details, and preferences. Pick a section to open it.</p>
+        <nav className="account-nav" aria-label="Account sections">
+          {ACCOUNT_SECTIONS.map((section) => <button
+            key={section.id}
+            type="button"
+            aria-current={activeAccountSection === section.id ? 'page' : undefined}
+            onClick={() => setAccountSection(section.id)}
+          >{section.label}</button>)}
+        </nav>
+      </section>
+
+      {activeAccountSection === 'orders' && <section className="panel narrow account-order-history" role="region" aria-label="Order history">
+        <div className="account-section-header"><div><h2>Order history</h2><p>Review recent orders and jump back into the shop when you’re ready.</p></div>{isSignedIn && <button type="button" onClick={continueShopping}>Continue shopping</button>}</div>
+        {!isSignedIn && <p>Sign in from Profile &amp; sign-in to see the orders saved to your account.</p>}
+        {isSignedIn && customerOrdersMessage && <p>{customerOrdersMessage}</p>}
+        {isSignedIn && customerOrders.length > 0 && <div className="order-list">{customerOrders.map((order) => <article className="order-card" key={`customer-${order.id}`}>
+          <div className="order-card-header"><strong>{order.id}</strong><span className="status-badge">{order.status}</span></div>
+          <ul>{order.items.map((item) => <li key={`${order.id}-${item.title}`}>{item.quantity} × {item.title}</li>)}</ul>
+          <p>{formatMoney(order.total)}</p>
+          <button className="ghost" type="button" onClick={() => contactSupportAboutOrder(order.id)}>Contact support about {order.id}</button>
+        </article>)}</div>}
+      </section>}
+
+      {activeAccountSection === 'checkout' && <section className="panel narrow saved-checkout-info account-saved-checkout-info" role="region" aria-label="Saved checkout info">
         <h2>Saved checkout info</h2>
         {savedCheckoutInfoExists ? <>
           <p>Checkout info saved on this device only — not synced to your account.</p>
@@ -1615,24 +1655,25 @@ export default function App() {
           <p>Checkout details can be saved from the cart for faster checkout in this browser only.</p>
           {savedCheckoutInfoMessage && <p className="status-message" role="status">{savedCheckoutInfoMessage}</p>}
         </>}
-      </section>
-      {showAccountNewsletterOffer && <section className="panel narrow account-newsletter-offer" role="region" aria-label="Account launch coupon">
-        <div className="newsletter-copy">
-          <p className="eyebrow">Account offer</p>
-          <h2>Get a coupon for the first drop.</h2>
-          <p>The launch coupon is still waiting here in your account area. Join for coupon codes, product notes, and sale alerts.</p>
-        </div>
-        {newsletterSignupForm(false)}
       </section>}
-      {isSignedIn && <section className="panel narrow account-order-history" role="region" aria-label="Order history">
-        <div className="account-section-header"><div><h2>Order history</h2><p>Review recent orders and jump back into the shop when you’re ready.</p></div><button type="button" onClick={continueShopping}>Continue shopping</button></div>
-        {customerOrdersMessage && <p>{customerOrdersMessage}</p>}
-        {customerOrders.length > 0 && <div className="order-list">{customerOrders.map((order) => <article className="order-card" key={`customer-${order.id}`}>
-          <div className="order-card-header"><strong>{order.id}</strong><span className="status-badge">{order.status}</span></div>
-          <ul>{order.items.map((item) => <li key={`${order.id}-${item.title}`}>{item.quantity} × {item.title}</li>)}</ul>
-          <p>{formatMoney(order.total)}</p>
-          <button className="ghost" type="button" onClick={() => contactSupportAboutOrder(order.id)}>Contact support about {order.id}</button>
-        </article>)}</div>}
+
+      {activeAccountSection === 'profile' && <div className="account-profile" role="region" aria-label="Profile & sign-in">
+        <AccountPanel checkoutMessage={checkoutMessage} />
+      </div>}
+
+      {activeAccountSection === 'preferences' && <section className="panel narrow account-preferences" role="region" aria-label="Account preferences">
+        <div className="account-section-header"><div><h2>Preferences &amp; offers</h2><p>Coupon offers, newsletter settings, and privacy controls in one place.</p></div></div>
+        {showAccountNewsletterOffer ? <div className="account-newsletter-offer" role="region" aria-label="Account launch coupon">
+          <div className="newsletter-copy">
+            <p className="eyebrow">Account offer</p>
+            <h2>Get a coupon for the first drop.</h2>
+            <p>The launch coupon is still waiting here in your account area. Join for coupon codes, product notes, and sale alerts.</p>
+          </div>
+          {newsletterSignupForm(false)}
+        </div> : <p>No offers are waiting right now. Coupon drops and sale alerts appear here when they go live.</p>}
+        <h3>Privacy &amp; data</h3>
+        <p>Your checkout details stay in this browser and can be cleared from the Checkout details section. For anything else, reach the shop or read the privacy policy.</p>
+        <div className="policy-actions"><button type="button" onClick={() => showPrivacy({ scrollToTop: true })}>Read the privacy policy</button><button className="ghost" type="button" onClick={() => showContact({ scrollToTop: true })}>Contact the shop</button></div>
       </section>}
     </>}
 

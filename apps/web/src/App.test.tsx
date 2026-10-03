@@ -382,7 +382,11 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
   });
 
-  it('shows the launch coupon as an inline account offer above order history after the home offer was seen', async () => {
+  // Retargeted: the coupon used to be stacked above order history on one long page. It now
+  // has its own section, so the assertion states the section contract instead of a document
+  // order that no longer exists: the offer is reachable, and it replaces order history
+  // rather than piling on top of it.
+  it('keeps the launch coupon in its own account section, separate from order history', async () => {
     window.localStorage.setItem('midnight-cardworks.newsletterOfferHomeSeen', 'true');
     mockAuth.isSignedIn = true;
     render(<App />);
@@ -392,12 +396,16 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
 
+    // A signed-in shopper lands on order history, and the coupon is not there.
+    expect(await screen.findByRole('region', { name: 'Order history' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Account launch coupon' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Preferences & offers' }));
+
     const accountOffer = await screen.findByRole('region', { name: 'Account launch coupon' });
     expect(within(accountOffer).getByText('Account offer')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Get a coupon for the first drop.' })).not.toBeInTheDocument();
-
-    const history = await screen.findByRole('region', { name: 'Order history' });
-    expect(accountOffer.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Order history' })).not.toBeInTheDocument();
   });
 
   it('shows the dark Apple-inspired collector studio direction', async () => {
@@ -1287,6 +1295,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Checkout details' }));
 
     const savedInfo = screen.getByRole('region', { name: 'Saved checkout info' });
     expect(within(savedInfo).getByText('Checkout info saved on this device only — not synced to your account.')).toBeInTheDocument();
@@ -1319,6 +1328,53 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(await screen.findByRole('heading', { name: 'Shop the current lineup' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/shop');
+  });
+
+  it('opens one account section at a time and marks the active one', async () => {
+    mockAuth.isSignedIn = true;
+    render(<App />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+
+    const nav = screen.getByRole('navigation', { name: 'Account sections' });
+    expect(within(nav).getAllByRole('button')).toHaveLength(4);
+
+    // Signed in, so the shopper opens on order history.
+    expect(await screen.findByRole('region', { name: 'Order history' })).toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: 'Order history' })).toHaveAttribute('aria-current', 'page');
+
+    await userEvent.click(within(nav).getByRole('button', { name: 'Checkout details' }));
+    expect(screen.getByRole('region', { name: 'Saved checkout info' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Order history' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(nav).getByRole('button', { name: 'Profile & sign-in' }));
+    expect(screen.getByRole('heading', { name: 'Customer account' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Saved checkout info' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(nav).getByRole('button', { name: 'Preferences & offers' }));
+    expect(screen.getByRole('region', { name: 'Account preferences' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Customer account' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: 'Preferences & offers' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('opens the sign-in section first for a visitor who is not signed in', async () => {
+    render(<App />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+
+    const nav = screen.getByRole('navigation', { name: 'Account sections' });
+    expect(within(nav).getByRole('button', { name: 'Profile & sign-in' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Sign in with Clerk' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Order history' })).not.toBeInTheDocument();
+  });
+
+  it('asks a signed-out visitor to sign in when they open order history', async () => {
+    mockAuth.isSignedIn = false;
+    render(<App />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Order history' }));
+
+    const history = screen.getByRole('region', { name: 'Order history' });
+    expect(within(history).getByText(/Sign in from Profile/)).toBeInTheDocument();
+    expect(within(history).getByRole('heading', { name: 'Order history' })).toBeInTheDocument();
   });
 
   it('uses Clerk-ready account actions instead of a manual demo email form', async () => {
