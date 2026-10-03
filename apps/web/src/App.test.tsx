@@ -88,6 +88,35 @@ afterEach(() => {
 });
 
 describe('Midnight Cardworks storefront', () => {
+  it('filters listings from the compact category control and keeps footer categories in sync', async () => {
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Shop category' }), 'Tokens');
+    expect(screen.getByRole('link', { name: 'Open listing for Midnight Token Pack' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' })).not.toBeInTheDocument();
+    const footer = screen.getByRole('navigation', { name: 'Footer navigation' });
+    await userEvent.click(within(footer).getByRole('button', { name: 'Display' }));
+    expect(screen.getByRole('link', { name: 'Open listing for Archive Showcase Proxy' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open listing for Midnight Token Pack' })).not.toBeInTheDocument();
+  });
+
+  it('loads catalog batches without hiding products from search', async () => {
+    const catalogue = Array.from({ length: 25 }, (_, index) => ({ ...products[0], id: `batch-${index}`, slug: `batch-${index}`, title: `Batch card ${index}` }));
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => String(url).endsWith('/api/products')
+      ? new Response(JSON.stringify({ products: catalogue }), { status: 200 })
+      : originalFetch(url, init)));
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Batch card 0' });
+    expect(screen.getAllByRole('link', { name: /^Open listing for/ })).toHaveLength(12);
+    await userEvent.click(screen.getByRole('button', { name: 'Load more cards' }));
+    expect(screen.getAllByRole('link', { name: /^Open listing for/ })).toHaveLength(24);
+    await userEvent.type(screen.getAllByRole('textbox', { name: 'Search products' })[0], 'Batch card 24');
+    expect(screen.getByRole('link', { name: 'Open listing for Batch card 24' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^Open listing for/ })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Load more cards' })).not.toBeInTheDocument();
+  });
+
   it('opens a shareable product detail page and sets SEO metadata', async () => {
     window.history.pushState({}, '', '/products/golden');
 
@@ -241,7 +270,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: 'Midnight Cardworks home' }));
 
-    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
   it('scrolls to the top of the selected section when shop category nav buttons are clicked', async () => {
@@ -254,7 +283,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(within(categoryNav).getByRole('button', { name: 'Contact' }));
 
     expect(await screen.findByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
-    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'auto' });
 
     scrollTo.mockClear();
     await userEvent.click(within(categoryNav).getByRole('button', { name: 'Commander' }));
@@ -263,7 +292,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/shop');
     expect(window.location.search).toBe('?category=Commander');
-    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
 
   it('opens public FAQ and blog pages from the shop navigation', async () => {
@@ -786,7 +815,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getByRole('button', { name: /cart, 1/i }));
 
     expect(screen.getByRole('heading', { name: 'Checkout details' })).toBeInTheDocument();
-    expect(screen.getByText('Review items and enter your delivery details before secure Stripe payment.')).toBeInTheDocument();
+    expect(screen.getByText('Enter your delivery details. After payment, you’ll return here for confirmation and fulfillment tracking.')).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Contact information' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Delivery information' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Order summary' })).toBeInTheDocument();
@@ -899,9 +928,8 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(progress).getByText('2. Checkout details')).toBeInTheDocument();
     expect(within(progress).getByText('3. Secure payment')).toBeInTheDocument();
     expect(within(progress).getByText('4. Confirmation')).toBeInTheDocument();
-    expect(screen.getByText('Step 2 of 4: Checkout details')).toBeInTheDocument();
-    expect(screen.getByText('Payment is processed securely by Stripe.')).toBeInTheDocument();
-    expect(screen.getByText('After payment, you’ll return here for confirmation and fulfillment tracking.')).toBeInTheDocument();
+    expect(screen.getByText('Enter your delivery details. After payment, you’ll return here for confirmation and fulfillment tracking.')).toBeInTheDocument();
+    expect(screen.getByText('You’ll review and pay securely on Stripe next.')).toBeInTheDocument();
   });
 
   it('keeps checkout totals and the submit action visible in a sticky cart bar', async () => {

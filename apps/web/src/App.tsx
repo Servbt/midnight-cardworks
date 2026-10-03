@@ -5,6 +5,7 @@ import { analyticsConfigured, loadAnalytics, trackAnalyticsEvent } from './analy
 import { AccountPanel, useAdminAccess, useCustomerSession } from './auth';
 import { receiptTokenFor } from './receiptAccess';
 import { redirectToCheckout } from './checkoutRedirect';
+import { displayProductTitle, productPreviewCopy } from './productPresentation';
 
 type CartLine = { product: Product; quantity: number };
 type View = 'home' | 'shop' | 'cart' | 'account' | 'admin' | 'receipt' | 'product' | 'contact' | 'privacy' | 'faq' | 'blog' | 'blog-post' | 'unsubscribe';
@@ -73,6 +74,7 @@ export default function App() {
   const [view, setView] = useState<View>('home');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
+  const [productLimit, setProductLimit] = useState(12);
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [shippingAddressFields, setShippingAddressFields] = useState<ShippingAddressFields>(blankShippingAddressFields);
@@ -422,6 +424,7 @@ export default function App() {
     const matchesQuery = [p.title, p.description, p.category, ...p.tags].join(' ').toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (category === 'All' || p.category === category);
   }), [products, query, category]);
+  useEffect(() => { setProductLimit(12); }, [query, category]);
   const subtotal = cart.reduce((sum, line) => sum + effectiveProductPrice(line.product) * line.quantity, 0);
   const shippingCost = subtotal >= freeShippingThresholdCents ? 0 : flatShippingCents;
   const orderTotal = subtotal + shippingCost;
@@ -504,7 +507,7 @@ export default function App() {
   }
 
   function scrollToPageTop(options: { behavior?: ScrollBehavior } = {}) {
-    window.scrollTo({ top: 0, left: 0, behavior: options.behavior ?? 'smooth' });
+    window.scrollTo({ top: 0, left: 0, behavior: options.behavior ?? 'auto' });
   }
 
   function shopPath(nextCategory = category, nextQuery = query) {
@@ -608,7 +611,7 @@ export default function App() {
     <div><p className="eyebrow">Keep browsing</p><h3>Recently viewed</h3><p>Continue browsing where you left off.</p></div>
     <div className="recently-viewed-list">{recentlyViewed.map((product) => <article key={product.id}>
       <img src={product.image} alt="" />
-      <div><strong>{product.title}</strong><span>{formatMoney(effectiveProductPrice(product))} · {product.category}</span></div>
+      <div><strong>{displayProductTitle(product.title)}</strong><span>{formatMoney(effectiveProductPrice(product))} · {product.category}</span></div>
       <button className="ghost" type="button" onClick={() => showProduct(product)} aria-label={`Continue browsing ${product.title}`}>View again</button>
     </article>)}</div>
   </section> : null;
@@ -1316,7 +1319,7 @@ export default function App() {
         <span className="nav-search-icon" aria-hidden="true">⌕</span>
         <input
           aria-label="Search products"
-          placeholder="Search cards, tokens, commander..."
+          placeholder="Search cards, themes, tokens…"
           value={query}
           onChange={(e) => { setQuery(e.target.value); if (view !== 'shop') showShop({ query: e.target.value }); }}
         />
@@ -1336,9 +1339,12 @@ export default function App() {
       </div>
     </div>
     <nav className="nav-secondary" aria-label="Shop categories">
-      <button className={`nav-tab${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => showShop({ category: 'All', scrollToTop: true })}>All</button>
+      <select className="mobile-category-select" aria-label="Shop category" value={category} onChange={(event) => showShop({ category: event.target.value, scrollToTop: true })}>
+        {categories.map((c) => <option key={c} value={c}>{c === 'All' ? 'All products' : c}</option>)}
+      </select>
+      <button className={`nav-tab desktop-category${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => showShop({ category: 'All', scrollToTop: true })}>All</button>
       {categories.filter((c) => c !== 'All').map((c) => (
-        <button key={c} className={`nav-tab${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => showShop({ category: c, scrollToTop: true })}>{c}</button>
+        <button key={c} className={`nav-tab desktop-category${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => showShop({ category: c, scrollToTop: true })}>{c}</button>
       ))}
       <button className={`nav-tab${view === 'contact' ? ' active' : ''}`} onClick={() => showContact({ scrollToTop: true })}>Contact</button>
       <button className={`nav-tab${view === 'faq' ? ' active' : ''}`} onClick={() => showFaq({ scrollToTop: true })}>FAQ</button>
@@ -1356,7 +1362,7 @@ export default function App() {
           <h1>Cards made for the midnight table.</h1>
           <p className="hero-sub">Custom proxies, token packs, and display cards — hand-finished for commander nights, gifts, and display binders.</p>
           <div className="cta-row">
-            <button onClick={() => showShop({ category: 'All', query: '' })}>Shop the collection</button>
+            <button onClick={() => showShop({ category: 'All', query: '', scrollToTop: true })}>Shop the collection</button>
             <button className="ghost" onClick={startOrder}>Start a commission</button>
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
@@ -1368,7 +1374,7 @@ export default function App() {
             </span>
             <span className="hero-feature-meta">
               <span className="hero-feature-label">Featured</span>
-              <span className="hero-feature-title">{heroFeature.title}</span>
+              <span className="hero-feature-title">{displayProductTitle(heroFeature.title)}</span>
               <span className="hero-feature-price">From {formatMoney(effectiveProductPrice(heroFeature))}</span>
             </span>
           </button> : null}
@@ -1379,14 +1385,15 @@ export default function App() {
 
     {view === 'home' && <section className="panel storefront-panel">
       <section className="landing-section gallery-preview" aria-label="Gallery preview">
-        <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>Commander proxies, token packs, and display cards — all with a dark collector finish.</p></div>
+        <div className="section-heading"><div><span className="eyebrow">Gallery preview</span><h2>Examples from the collection.</h2></div><p>A closer look at the art. Made for casual tables and collectors.</p></div>
         <div className="gallery-preview-grid">{products.slice(0, 3).map((product) => {
           const catClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : 'badge badge-display';
           return <article key={`preview-${product.id}`} onClick={() => showProduct(product)} onKeyDown={(event) => handleProductCardKeyDown(product, event)} role="link" tabIndex={0} aria-label={`Preview ${product.title}`}>
             <div className="card-img-frame"><img src={product.image} alt={`${product.title} card preview`} loading="lazy" /></div>
-            <div className="card-info"><span className={catClass}>{product.category}</span><h3>{product.title}</h3><p>{product.description}</p></div>
+            <div className="card-info"><span className={catClass}>{product.category}</span><h3>{displayProductTitle(product.title)}</h3><p>{productPreviewCopy(product)}</p></div>
           </article>;
         })}</div>
+        <p className="gallery-swipe-hint">Swipe to explore the gallery →</p>
       </section>
     </section>}
 
@@ -1435,7 +1442,7 @@ export default function App() {
           </div>
           {visibleProducts.length === 0
             ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => showShop({ category: 'All', query: '' })}>Clear filters</button></div>
-            : <div className="product-grid">{visibleProducts.map((product) => {
+            : <div className="product-grid">{visibleProducts.slice(0, productLimit).map((product) => {
                 const categoryBadgeClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : product.category === 'Display' ? 'badge badge-display' : 'badge';
                 return <article
                   aria-label={`Open listing for ${product.title}`}
@@ -1462,8 +1469,8 @@ export default function App() {
                     }
                   </div>
                   <div className="product-card__info">
-                    <span className="product-card__name">{product.title}</span>
-                    <span className="product-card__meta">{product.category}{product.tags.length > 0 ? ` · #${product.tags[0]}` : ''}</span>
+                    <span className="product-card__name" title={product.title}>{displayProductTitle(product.title)}</span>
+                    <span className="product-card__meta">{product.category}</span>
                     <div className={`price-stack${isProductOnSale(product) ? ' is-sale' : ''}`}>
                       <span className="product-card__price-label">From</span>
                       {isProductOnSale(product) && <span className="product-card__original-price">{formatMoney(product.price)}</span>}
@@ -1474,6 +1481,10 @@ export default function App() {
                 </article>;
               })}</div>
           }
+          {visibleProducts.length > productLimit && <div className="catalogue-more">
+            <p>Showing {Math.min(productLimit, visibleProducts.length)} of {visibleProducts.length} items</p>
+            <button type="button" className="ghost" onClick={() => setProductLimit((limit) => limit + 12)}>Load more cards</button>
+          </div>}
         </div>
       </div>
     </section>}
@@ -1492,26 +1503,18 @@ export default function App() {
               <img src={selectedProduct.image} alt={`${selectedProduct.title} card art`} />
               <span className="product-detail-img-hint" aria-hidden="true">See full image</span>
             </button>
-            <table className="product-detail-meta-table">
-              <tbody>
-                <tr><td>Category</td><td>{selectedProduct.category}</td></tr>
-                <tr><td>Stock</td><td>{selectedProduct.inventory > 0 ? `${selectedProduct.inventory} available` : 'Sold out'}</td></tr>
-                {selectedProduct.tags.length > 0 && <tr><td>Tags</td><td>{selectedProduct.tags.map((t) => `#${t}`).join(' ')}</td></tr>}
-              </tbody>
-            </table>
           </div>
           <div className="product-detail-info">
             <span className="eyebrow">{selectedProduct.category}</span>
-            <h2>{selectedProduct.title}</h2>
+            <h2>{displayProductTitle(selectedProduct.title)}</h2>
             <div className={`product-detail-price-block${isProductOnSale(selectedProduct) ? ' is-sale' : ''}`}>
               <span className="product-detail-price-label">From</span>
               {isProductOnSale(selectedProduct) && <span className="product-detail-original-price">{formatMoney(selectedProduct.price)}</span>}
               <span className="product-detail-price">{formatMoney(effectiveProductPrice(selectedProduct))}</span>
             </div>
-            <p className="product-detail-desc">{selectedProduct.description}</p>
-            <div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div>
+            <p className="product-stock">{selectedProduct.inventory > 0 ? `${selectedProduct.inventory} available · Made to order` : 'Sold out'}</p>
             {selectedProduct.inventory > 0 && (
-              <label className="detail-quantity-field">Quantity for {selectedProduct.title}
+              <label className="detail-quantity-field">Quantity
                 <input aria-label={`Quantity for ${selectedProduct.title}`} type="number" min="1" max={selectedProduct.inventory} value={detailQuantity} onChange={(e) => updateDetailQuantity(selectedProduct, e.target.value)} />
               </label>
             )}
@@ -1530,6 +1533,8 @@ export default function App() {
               <button className="share-listing-btn ghost" type="button" onClick={() => void copyListingLink(selectedProduct.slug)}>Copy link to this card</button>
               {shareNotice && <span className="share-notice" role="status">{shareNotice}</span>}
             </div>
+            <div className="product-description"><h3>About this card</h3><p className="product-detail-desc">{selectedProduct.description}</p></div>
+            <details className="product-tags"><summary>Explore tags</summary><div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div></details>
           </div>
         </div>
       </> : <p>{productMessage || 'Loading listing...'}</p>}
@@ -1544,7 +1549,7 @@ export default function App() {
           <section className="cart-items-card" role="region" aria-label="Items in your cart">
             <div className="cart-section-header"><div><h3>Items in your cart</h3><p>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</p></div><div className="cart-column-labels" aria-hidden="true"><span>Item</span><span>Quantity</span><span>Price</span></div></div>
             <div className="cart-items" aria-label="Cart items">
-              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{line.product.title}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(effectiveProductPrice(line.product) * line.quantity)}</strong></div>)}
+              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{displayProductTitle(line.product.title)}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(effectiveProductPrice(line.product) * line.quantity)}</strong></div>)}
             </div>
           </section>
           <div className="checkout-intro">
@@ -1556,10 +1561,7 @@ export default function App() {
               <li>4. Confirmation</li>
             </ol>
             <h2>Checkout details</h2>
-            <p><strong>Step 2 of 4: Checkout details</strong></p>
-            <p>Review items and enter your delivery details before secure Stripe payment.</p>
-            <p className="next-step">Payment is processed securely by Stripe.</p>
-            <p>After payment, you’ll return here for confirmation and fulfillment tracking.</p>
+            <p>Enter your delivery details. After payment, you’ll return here for confirmation and fulfillment tracking.</p>
           </div>
           <fieldset>
             <legend>Contact information</legend>
@@ -1587,25 +1589,20 @@ export default function App() {
           </div>
           <aside className="cart-summary-card" role="region" aria-label="Cart summary">
             <h3>Cart Summary</h3>
-          <fieldset className="order-summary-box">
-            <legend>Order summary</legend>
-            <div className="summary-row"><span>Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
-            <div className="summary-row"><span>Shipping</span><strong>Shipping: {shippingCost === 0 ? 'Free' : formatMoney(shippingCost)}</strong></div>
-            <div className="summary-row"><span>Total before Stripe</span><strong>Total: {formatMoney(orderTotal)}</strong></div>
-            <div className="summary-row"><span>Secure checkout</span><span>Stripe</span></div>
-          </fieldset>
-          <p className="cart-summary-note">Checkout securely with Stripe</p>
           <section className="checkout-review-box" role="region" aria-label="Review before payment">
-            <h2>Review before payment</h2>
-            <ul>{cart.map((line) => <li key={`review-${line.product.id}`}>{line.quantity} × {line.product.title}</li>)}</ul>
+            <h4>Review before payment</h4>
+            <ul>{cart.map((line) => <li key={`review-${line.product.id}`}>{line.quantity} × {displayProductTitle(line.product.title)}</li>)}</ul>
             <p>Contact: {email || 'Add an email address'}</p>
             <p>Ship to: {shippingAddress || 'Add a shipping address'}</p>
-            <p><strong>Subtotal: {formatMoney(subtotal)}</strong></p>
-            <p><strong>Shipping: {shippingCost === 0 ? 'Free' : formatMoney(shippingCost)}</strong></p>
+            <div role="group" aria-label="Order summary">
+            <div className="summary-row"><span>Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})</span><strong>Subtotal: {formatMoney(subtotal)}</strong></div>
+            <div className="summary-row"><span>Shipping</span><strong>Shipping: {shippingCost === 0 ? 'Free' : formatMoney(shippingCost)}</strong></div>
             <p>{shippingCost === 0 ? 'Free shipping unlocked.' : `Free shipping at ${formatMoney(freeShippingThresholdCents)} — add ${formatMoney(freeShippingRemaining)} more to qualify.`}</p>
-            <p><strong>Total: {formatMoney(orderTotal)}</strong></p>
+            <div className="summary-row"><span>Total before Stripe</span><strong>Total: {formatMoney(orderTotal)}</strong></div>
+            </div>
             <p>You’ll review and pay securely on Stripe next.</p>
           </section>
+          <p className="cart-summary-note">Checkout securely with Stripe</p>
           <div className="sticky-checkout-bar" role="region" aria-label="Sticky checkout summary">
             <div><span>Total</span><strong>{formatMoney(orderTotal)}</strong></div>
             <button type="submit">Continue to secure checkout</button>
@@ -1896,9 +1893,7 @@ export default function App() {
           <div>
             <h4>Shop</h4>
             <button className="text-btn" onClick={() => showShop({ category: 'All', query: '' })}>All products</button>
-            <button className="text-btn" onClick={() => showShop({ category: 'Commander', query: '' })}>Commander proxies</button>
-            <button className="text-btn" onClick={() => showShop({ category: 'Tokens', query: '' })}>Token packs</button>
-            <button className="text-btn" onClick={() => showShop({ category: 'Display', query: '' })}>Display cards</button>
+            {categories.filter((c) => c !== 'All').map((c) => <button key={c} className="text-btn" onClick={() => showShop({ category: c, query: '', scrollToTop: true })}>{c}</button>)}
           </div>
           <div>
             <h4>Studio</h4>
