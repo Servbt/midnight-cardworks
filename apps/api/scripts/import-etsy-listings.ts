@@ -5,6 +5,7 @@
  *   npx tsx scripts/import-etsy-listings.ts --csv "..." --apply [--retire-placeholders]
  *
  * Add --dump <file.csv> to write every mapped product out for review without writing to the DB.
+ * Add --emit <file.ts> to regenerate the committed catalogue module that the server seeds from.
  *
  * Dry run by default: every row is mapped and validated and the result is printed,
  * but nothing is written. Pass --apply to upsert for real.
@@ -240,6 +241,36 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
     writeFileSync(out, lines.join('\n'));
     console.log(`wrote ${products.length} mapped products to ${out}`);
+  }
+
+  // Regenerate the module the server seeds from, so the committed catalogue always has a
+  // documented provenance instead of being copied by hand.
+  const emitIdx = argv.indexOf('--emit');
+  if (emitIdx !== -1 && argv[emitIdx + 1] && !argv[emitIdx + 1].startsWith('--')) {
+    const out = argv[emitIdx + 1];
+    const q = (v: string) => `'${v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
+    const body = products.map((p) => `{${[
+      `id:${q(p.id)}`, `slug:${q(p.slug)}`, `title:${q(p.title)}`, `description:${q(p.description)}`,
+      `price:${p.price}`, `saleActive:false`, `salePrice:null`, `category:${q(p.category)}`,
+      `tags:[${p.tags.map(q).join(',')}]`, `image:${q(p.image)}`, `inventory:${p.inventory}`,
+      `active:true`, `featured:false`,
+    ].join(',')}}`).join(',\n');
+    writeFileSync(out, [
+      '// GENERATED FILE — do not edit by hand.',
+      '//',
+      '// Regenerate from the shop\'s Etsy export with:',
+      '//   npx tsx scripts/import-etsy-listings.ts --csv <EtsyListingsDownload.csv> --emit src/etsyCatalogue.ts',
+      '//',
+      '// One Etsy listing per product. The Product model holds a single image and has no variant',
+      '// support, so each listing\'s first photo is used and the Foil/Regular option is dropped.',
+      '// Descriptions are generated per product rather than copied: the export ships one shared',
+      '// blurb on 114 of 116 listings, which would make 100+ near-duplicate storefront pages.',
+      "import type { Product } from './types.js';",
+      '',
+      `export const etsyListings: Product[] = [\n${body}\n];`,
+      '',
+    ].join('\n'));
+    console.log(`emitted ${products.length} listings to ${out}`);
   }
 
   if (!apply) {
