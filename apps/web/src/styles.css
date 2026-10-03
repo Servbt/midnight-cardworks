@@ -2340,76 +2340,14 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 /* ─── FOOTER ─────────────────────────────────────────────────────────────── */
+/* The footer is the disclaimer line alone: no wordmark, no link columns. It used to
+   carry a brand block and three columns of links, which made it the tallest block on
+   the page and duplicated the header's category control. */
 footer {
   background: var(--bg-dark);
   border-top: 1px solid var(--border);
-  padding: clamp(2.5rem, 5vw, 4rem) var(--gutter) clamp(1.5rem, 3vw, 2.5rem);
+  padding: clamp(1.25rem, 2.5vw, 1.75rem) var(--gutter);
 }
-
-.footer-inner {
-  width: min(var(--max-w), 100%);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: clamp(2rem, 6vw, 5rem);
-  align-items: start;
-  padding-bottom: clamp(1.5rem, 3vw, 2rem);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: clamp(1rem, 2vw, 1.5rem);
-}
-
-.footer-wordmark {
-  font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: .04em;
-  color: var(--text);
-  display: block;
-  margin-bottom: .65rem;
-}
-
-.footer-tagline {
-  font-size: .82rem;
-  color: var(--text-3);
-  line-height: 1.6;
-  margin: 0;
-  max-width: 380px;
-}
-
-.footer-links {
-  display: flex;
-  gap: clamp(2rem, 5vw, 4rem);
-}
-
-.footer-links > div {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: .45rem;
-  text-align: center;
-}
-
-.footer-links h4 {
-  font-family: var(--font-ui);
-  font-size: .68rem;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin: 0 0 .3rem;
-}
-
-.footer-links .text-btn {
-  font-size: .82rem;
-  color: var(--text-3);
-  padding: 0;
-  text-decoration: none;
-  font-weight: 500;
-  min-height: unset;
-  justify-content: center;
-  text-align: center;
-}
-.footer-links .text-btn:hover { color: var(--accent); }
 
 .footer-legal {
   width: min(var(--max-w), 100%);
@@ -2418,7 +2356,6 @@ footer {
   color: var(--text-3);
   line-height: 1.6;
 }
-
 
 
 /* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
@@ -2481,8 +2418,6 @@ footer {
   .marketing-grid { grid-template-columns: 1fr; }
   .newsletter-fields { grid-template-columns: 1fr; }
 
-  .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
-  .footer-links { flex-wrap: wrap; gap: 2rem; }
   .policy-grid { grid-template-columns: 1fr; }
   .privacy-notice { grid-template-columns: 1fr; }
   .privacy-notice-actions { justify-content: flex-start; }

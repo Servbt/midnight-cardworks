@@ -88,16 +88,23 @@ afterEach(() => {
 });
 
 describe('Midnight Cardworks storefront', () => {
-  it('filters listings from the compact category control and keeps footer categories in sync', async () => {
+  // Retargeted twice, most recently when the footer was reduced to the disclaimer alone. It
+  // used to assert the footer's Shop column stayed in sync with the header's category control,
+  // which meant two controls for one job. The assertion now states the stronger contract: the
+  // category control is the single route to the filters, and the footer carries no navigation,
+  // links or headings at all, so a competing one cannot return unnoticed.
+  it('filters listings from the compact category control, which the footer no longer duplicates', async () => {
     render(<App />);
     await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Shop category' }), 'Tokens');
     expect(screen.getByRole('link', { name: 'Open listing for Midnight Token Pack' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' })).not.toBeInTheDocument();
-    const footer = screen.getByRole('navigation', { name: 'Footer navigation' });
-    await userEvent.click(within(footer).getByRole('button', { name: 'Display' }));
-    expect(screen.getByRole('link', { name: 'Open listing for Archive Showcase Proxy' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open listing for Midnight Token Pack' })).not.toBeInTheDocument();
+
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).queryAllByRole('button')).toHaveLength(0);
+    expect(within(footer).queryByRole('navigation')).not.toBeInTheDocument();
+    expect(within(footer).queryByRole('heading')).not.toBeInTheDocument();
+    expect(within(footer).getByText(/Not affiliated with/)).toBeInTheDocument();
   });
 
   it('loads catalog batches without hiding products from search', async () => {
@@ -342,12 +349,16 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.queryByRole('region', { name: 'Privacy and cookie notice' })).not.toBeInTheDocument();
   });
 
-  it('opens the privacy page from the footer and lets shoppers allow analytics', async () => {
+  // Retargeted: the footer no longer carries links, so the privacy page is reached from the
+  // account area. The analytics flow is unchanged.
+  it('opens the privacy page from the account area and lets shoppers allow analytics', async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Necessary only' }));
-    const footer = screen.getByRole('contentinfo');
-    await userEvent.click(within(footer).getByRole('button', { name: 'Privacy & Cookies' }));
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Preferences & offers' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Read the privacy policy' }));
 
     expect(window.location.pathname).toBe('/privacy');
     expect(await screen.findByRole('heading', { name: 'Privacy & Cookies' })).toBeInTheDocument();

@@ -37,11 +37,22 @@ describe('global CSS isolation', () => {
     expect(styles).toMatch(/\.summary-row strong,\s*\.summary-row span:last-child\s*\{[^}]*white-space:\s*nowrap/s);
   });
 
-  it('centers footer navigation columns and link labels', () => {
+  // Retargeted: this guarded the centring of the footer's link columns. Those columns are gone —
+  // the footer is the disclaimer alone — so the test now holds the reduction instead, and fails
+  // if any of the removed footer CSS returns without markup to justify it.
+  it('keeps the footer to the disclaimer alone', () => {
     const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+    const markup = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
 
-    expect(styles).toMatch(/\.footer-links > div\s*\{[^}]*align-items:\s*center[^}]*text-align:\s*center/s);
-    expect(styles).toMatch(/\.footer-links \.text-btn\s*\{[^}]*justify-content:\s*center[^}]*text-align:\s*center/s);
+    expect(styles).toMatch(/\.footer-legal\s*\{[^}]*width:\s*min\(var\(--max-w\)/s);
+    for (const removed of ['.footer-inner', '.footer-wordmark', '.footer-links', '.footer-tagline', '.footer-brand']) {
+      expect(styles).not.toContain(removed);
+    }
+
+    // and the markup really is the disclaimer with nothing else in it
+    const footer = markup.match(/<footer>[\s\S]*?<\/footer>/)?.[0] ?? '';
+    expect(footer).toMatch(/<p className="footer-legal">/);
+    expect(footer).not.toMatch(/<nav|<button|footer-wordmark/);
   });
 
   it('stacks cart rows and controls for narrow mobile screens', () => {
