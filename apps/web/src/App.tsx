@@ -1884,31 +1884,6 @@ export default function App() {
     </aside>}
 
     <footer>
-      <div className="footer-inner">
-        <div className="footer-brand">
-          <span className="footer-wordmark">Midnight Cardworks</span>
-          <p className="footer-tagline">Dark collector studio. Custom proxies, token packs, and display cards made for commander nights and display binders.</p>
-        </div>
-        <nav className="footer-links" aria-label="Footer navigation">
-          <div>
-            <h4>Shop</h4>
-            <button className="text-btn" onClick={() => showShop({ category: 'All', query: '' })}>All products</button>
-            {categories.filter((c) => c !== 'All').map((c) => <button key={c} className="text-btn" onClick={() => showShop({ category: c, query: '', scrollToTop: true })}>{c}</button>)}
-          </div>
-          <div>
-            <h4>Studio</h4>
-            <button className="text-btn" onClick={startOrder}>Start a commission</button>
-            <button className="text-btn" onClick={() => showContact({ scrollToTop: true })}>Contact</button>
-            <button className="text-btn" onClick={() => showFaq({ scrollToTop: true })}>FAQ</button>
-            <button className="text-btn" onClick={() => showBlog({ scrollToTop: true })}>Blog</button>
-            <button className="text-btn" onClick={() => setView('account')}>Account</button>
-          </div>
-          <div>
-            <h4>Legal</h4>
-            <button className="text-btn" onClick={() => showPrivacy({ scrollToTop: true })}>Privacy & Cookies</button>
-          </div>
-        </nav>
-      </div>
       <p className="footer-legal">Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</p>
     </footer>
   </main>;
