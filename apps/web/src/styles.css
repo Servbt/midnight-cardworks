@@ -2957,3 +2957,55 @@ footer {
 .admin-panel :is(button) { white-space: normal; }
 
 .admin-panel :is(.field-grid textarea) { min-height: 120px; }
+
+
+/* ─── ACCOUNT HUB ─────────────────────────────────────────────────────────────
+   The account page opens one section at a time rather than stacking every panel.
+   Each selector here is a new .account-* name, so the block cannot reach the
+   shop, the FAQ or the seller console. Font sizes and radii are ones the sheet
+   already uses (.82rem/.92rem and the radius tokens), so this adds no new type
+   or corner values to the rendered page. */
+.account-hub h2 { margin: 0 0 .5rem; }
+.account-hub > p { margin: 0; color: var(--text-2); line-height: 1.6; }
+
+.account-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: 1.4rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--border);
+}
+.account-nav button {
+  white-space: nowrap;
+  min-height: unset;
+  padding: .5rem .95rem;
+  font-size: .82rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-2);
+}
+.account-nav button:hover:not([aria-current='page']) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+/* Same active treatment as the seller console's tabs, so the two read as one system. */
+.account-nav button[aria-current='page'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: #0d0d1a;
+}
+
+.account-preferences { display: grid; gap: 1rem; }
+.account-preferences > p { margin: 0; color: var(--text-2); line-height: 1.6; }
+.account-preferences h3 { margin: .4rem 0 0; font-size: .92rem; color: var(--text); }
+
+/* The coupon offer used to be a .panel.narrow card of its own; inside the preferences
+   section it needs to carry that card itself, or it renders as a raised block with no
+   border or radius. Same geometry as the other inner cards. */
+.account-newsletter-offer {
+  border: 1px solid rgba(212,168,83,.35);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+}
