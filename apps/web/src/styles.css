@@ -1025,7 +1025,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   font-size: .8rem;
   font-weight: 700;
   text-align: center;
-  border-radius: 0 0 14px 14px;
+  border-radius: 0;
   border-top: 1px solid rgba(110,231,183,.25);
   margin: 0;
 }
@@ -1245,7 +1245,7 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   margin: .1rem 0 -.35rem;
   padding: .65rem .85rem;
   border: 1px solid rgba(110,231,183,.25);
-  border-radius: 10px;
+  border-radius: 0;
   background: rgba(110,231,183,.08);
   color: var(--success);
   font-weight: 750;
@@ -2586,7 +2586,6 @@ footer {
   .quantity-stepper,
   .results-controls select,
   .cart-status,
-  .detail-confirmation,
   .success,
   .status-message,
   .cart-message,
