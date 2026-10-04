@@ -525,12 +525,64 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
   aspect-ratio: 5/7;
   overflow: hidden;
   background: #0d0d1a;
+  /* Stacking context for the rotating artwork below. */
+  position: relative;
 }
+/* The hero rotates through the featured listings. Every image is stacked here and only the
+   active one is opaque, so a change is a crossfade rather than a flash of empty plate while
+   the next photo loads. Non-active images stay in the DOM, which is what makes that possible. */
 .hero-feature-frame img {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity .7s ease;
+}
+.hero-feature-frame img.is-active { opacity: 1; }
+
+/* The title and price are keyed on the product in the JSX, so they remount and replay this. */
+.hero-feature-title,
+.hero-feature-price { animation: hero-meta-in .45s ease both; }
+@keyframes hero-meta-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Indicators for the rotation. The visible mark is 7px, but the button around it is a
+   finger-sized 24px so it can actually be tapped on a phone. */
+.hero-feature-dots { display: flex; gap: .15rem; justify-content: center; }
+.hero-feature-dots button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.hero-feature-dots button::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(212,168,83,.5);
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.hero-feature-dots button.is-active::before { background: var(--accent); border-color: transparent; }
+.hero-feature-dots button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Someone who asked their system not to move things gets a still hero. The rotation timer is
+   switched off in the JSX too — this is the half that stops the fade. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-feature-frame img { transition: none; }
+  .hero-feature-title,
+  .hero-feature-price { animation: none; }
+  .hero-feature:hover { transform: none; }
 }
 .hero-feature-meta {
   display: flex;
@@ -2799,9 +2851,15 @@ footer {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.admin-panel :is(.listing-flag.is-live, .listing-flag.is-sale) {
+.admin-panel :is(.listing-flag.is-live, .listing-flag.is-sale, .listing-flag.is-featured) {
   border-color: var(--accent-border);
   color: var(--accent);
+}
+.admin-panel :is(.listing-hint) {
+  margin: .3rem 0 1rem;
+  color: var(--text-3);
+  font-size: .82rem;
+  line-height: 1.6;
 }
 .admin-panel :is(.listing-flag.is-hidden) { color: var(--text-3); border-color: var(--border); }
 /* The groups sit two-up, and each label carries a hairline so the form reads as
