@@ -31,6 +31,36 @@ const blogPosts = [
   { id: 'blog_1', slug: 'first-drop-notes', title: 'First Drop Notes', excerpt: 'Launch context for the first Midnight Cardworks lineup.', body: 'The first drop focuses on commander tables.\n\nExpect proxy centerpieces, tokens, and display cards.', published: true, publishedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
 ];
 
+
+// The hero rotation reads the real catalogue, so tests that need a specific set of featured
+// listings swap the products response instead of the shared fixture.
+function stubCatalogue(listings: Array<Record<string, unknown>>) {
+  const base = globalThis.fetch as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/api/products/golden')) return new Response(JSON.stringify({ product: listings[0] }), { status: 200 });
+    if (url.includes('/api/products')) return new Response(JSON.stringify({ products: listings }), { status: 200 });
+    return base(input, init);
+  }));
+}
+
+// jsdom has no matchMedia, so the rotation runs in tests unless a test asks for the reduced
+// -motion path explicitly.
+function stubReducedMotion() {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('prefers-reduced-motion'),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false
+  })) as unknown as typeof window.matchMedia;
+  return () => { window.matchMedia = original; };
+}
+
 beforeEach(() => {
   mockAuth.isAdmin = false;
   mockAuth.isSignedIn = false;
@@ -1421,5 +1451,82 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Account' })[0]);
     expect(screen.getByRole('button', { name: 'Sign in with Clerk' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Account email')).not.toBeInTheDocument();
+  });
+
+  it('rotates the hero through the listings featured for it', async () => {
+    stubCatalogue([{ ...products[0], featured: true }, { ...products[1], featured: true }, products[2]]);
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'View Golden Hour Commander Proxy' })).toBeInTheDocument();
+
+    // Real timers on purpose: the point is that the rotation timer actually advances the hero,
+    // which is what makes a second featured listing reachable at all.
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'View Midnight Token Pack' })).toBeInTheDocument(),
+      { timeout: 9000 }
+    );
+  }, 15000);
+
+  it('shows an indicator per featured listing and jumps to the one clicked', async () => {
+    stubCatalogue([{ ...products[0], featured: true }, { ...products[1], featured: true }, { ...products[2], featured: true }]);
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'View Golden Hour Commander Proxy' })).toBeInTheDocument();
+    const indicators = within(screen.getByRole('group', { name: 'Featured listings' })).getAllByRole('button');
+    expect(indicators).toHaveLength(3);
+
+    await userEvent.click(indicators[2]);
+
+    expect(screen.getByRole('button', { name: 'View Archive Showcase Proxy' })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Featured listings' })).getAllByRole('button')[2])
+      .toHaveAttribute('aria-current', 'true');
+  });
+
+  it('keeps the first listing as the hero, with no indicators, when nothing is featured', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'View Golden Hour Commander Proxy' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Featured listings' })).not.toBeInTheDocument();
+  });
+
+  it('leaves the hero still for a shopper who asked for reduced motion', async () => {
+    const restore = stubReducedMotion();
+    try {
+      stubCatalogue([{ ...products[0], featured: true }, { ...products[1], featured: true }]);
+      render(<App />);
+
+      expect(await screen.findByRole('button', { name: 'View Golden Hour Commander Proxy' })).toBeInTheDocument();
+      // the indicators are still offered — they just do not move on their own
+      expect(screen.getByRole('group', { name: 'Featured listings' })).toBeInTheDocument();
+
+      await new Promise((resolve) => setTimeout(resolve, 6500));
+
+      expect(screen.getByRole('button', { name: 'View Golden Hour Commander Proxy' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'View Midnight Token Pack' })).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  }, 15000);
+
+  it('features a listing in the home hero from the admin dashboard', async () => {
+    mockAuth.isAdmin = true;
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin dashboard' }));
+    await userEvent.click(await screen.findByRole('tab', { name: /Listings/ }));
+
+    expect(await screen.findByText(/Nothing is featured in the home hero/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Feature Golden Hour Commander Proxy in the home hero'));
+
+    expect(screen.getByText('1 featured in the home hero.')).toBeInTheDocument();
+    expect(screen.getByText('Featured in hero')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save Golden Hour Commander Proxy' }));
+
+    expect(await screen.findByText('Saved Golden Hour Commander Proxy.')).toBeInTheDocument();
+    const posted = (fetch as unknown as { mock: { calls: Array<[string, RequestInit]> } }).mock.calls
+      .find(([url, init]) => String(url).includes('/api/admin/products') && init?.method === 'POST');
+    expect(posted).toBeTruthy();
+    expect(JSON.parse(String(posted![1].body))).toMatchObject({ slug: 'golden', featured: true });
   });
 });

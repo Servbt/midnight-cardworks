@@ -27,7 +27,7 @@ const isProductOnSale = (product: Product) => product.saleActive && product.sale
 const effectiveProductPrice = (product: Product) => isProductOnSale(product) ? product.salePrice! : product.price;
 const flatShippingCents = 499;
 const freeShippingThresholdCents = 5000;
-const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, saleActive: false, salePrice: null, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, active: true };
+const blankProduct: Product = { id: '', slug: '', title: '', description: '', price: 0, saleActive: false, salePrice: null, category: '', tags: [], image: 'https://placehold.co/600x800/111111/f9f871?text=New+Card', inventory: 0, featured: false, active: true };
 const blankFaqItem: FaqItem = { id: '', question: '', answer: '', sortOrder: 40, active: true, createdAt: '', updatedAt: '' };
 const blankBlogPost: BlogPost = { id: '', slug: '', title: '', excerpt: '', body: '', published: false, publishedAt: undefined, createdAt: '', updatedAt: '' };
 const launchNotes = [
@@ -1093,6 +1093,9 @@ export default function App() {
     </article>;
   }
 
+  // Only live featured listings reach the hero, so the count says the same thing the storefront does.
+  const featuredListingCount = adminProducts.filter((product) => product.featured && product.active).length;
+
   function productEditor(product: Product, isNew = false) {
     const originalTitle = isNew ? 'new product' : products.find((item) => item.slug === product.slug)?.title || product.title || product.slug;
     const setProduct = (patch: Partial<Product>) => isNew ? setNewProduct((item) => ({ ...item, ...patch })) : updateAdminProduct(product.slug, patch);
@@ -1117,6 +1120,7 @@ export default function App() {
           <span className={`listing-flag${product.active ? ' is-live' : ' is-hidden'}`}>{product.active ? 'Live' : 'Hidden'}</span>
           <span className="listing-flag">{formatMoney(effectiveProductPrice(product))}</span>
           {isProductOnSale(product) && <span className="listing-flag is-sale">On sale</span>}
+          {product.featured && <span className="listing-flag is-featured">{product.active ? 'Featured in hero' : 'Featured, hidden'}</span>}
         </div>}
       </header>
       <div className="editor-grid">
@@ -1135,6 +1139,7 @@ export default function App() {
             <label>{isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`}<input aria-label={isNew ? 'New product price in dollars' : `Price in dollars for ${originalTitle}`} type="number" step="0.01" value={(product.price / 100).toFixed(2)} onChange={(e) => setProduct({ price: moneyToCents(e.target.value) })} /></label>
             <label>{isNew ? 'New product inventory' : `Inventory for ${originalTitle}`}<input aria-label={isNew ? 'New product inventory' : `Inventory for ${originalTitle}`} type="number" min="0" value={product.inventory} onChange={(e) => setProduct({ inventory: Number(e.target.value) })} /></label>
             <label className="checkbox-row"><input aria-label={isNew ? 'Active listing for new product' : `Active listing for ${originalTitle}`} type="checkbox" checked={product.active} onChange={(e) => setProduct({ active: e.target.checked })} /> Active listing</label>
+            <label className="checkbox-row"><input aria-label={isNew ? 'Feature new product in the home hero' : `Feature ${originalTitle} in the home hero`} type="checkbox" checked={Boolean(product.featured)} onChange={(e) => setProduct({ featured: e.target.checked })} /> Feature in the home hero</label>
           </div>
         </div>
         <div className="listing-group">
@@ -1310,7 +1315,26 @@ export default function App() {
     </section>
   </div> : null;
 
-  const heroFeature = useMemo(() => products.find((p) => p.featured) ?? products[0], [products]);
+  // The hero rotates through the listings the seller has featured. It used to take only the
+  // first featured listing, so a second one could be flagged and never be seen. Falls back to
+  // the first product when nothing is featured, so the hero is never empty.
+  const heroRotation = useMemo(() => {
+    const featured = products.filter((product) => product.featured && product.active);
+    return featured.length > 0 ? featured : products.slice(0, 1);
+  }, [products]);
+  const heroRotationCount = heroRotation.length;
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
+  // Advance on a timer, but not under a shopper's cursor and not for someone whose system asks
+  // for reduced motion.
+  useEffect(() => {
+    if (heroRotationCount < 2 || heroPaused) return;
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => setHeroIndex((index) => (index + 1) % heroRotationCount), 6000);
+    return () => window.clearInterval(timer);
+  }, [heroRotationCount, heroPaused]);
+  const heroPosition = heroRotationCount > 0 ? heroIndex % heroRotationCount : 0;
+  const heroFeature = heroRotation[heroPosition];
 
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
@@ -1367,17 +1391,44 @@ export default function App() {
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
         </div>
-        <div className="hero-art">
-          {heroFeature ? <button type="button" className="hero-feature" onClick={() => showProduct(heroFeature)} aria-label={`View ${heroFeature.title}`}>
-            <span className="hero-feature-frame">
-              <img src={heroFeature.image} alt={`${heroFeature.title} card art`} />
-            </span>
-            <span className="hero-feature-meta">
-              <span className="hero-feature-label">Featured</span>
-              <span className="hero-feature-title">{displayProductTitle(heroFeature.title)}</span>
-              <span className="hero-feature-price">From {formatMoney(effectiveProductPrice(heroFeature))}</span>
-            </span>
-          </button> : null}
+        <div
+          className="hero-art"
+          onMouseEnter={() => setHeroPaused(true)}
+          onMouseLeave={() => setHeroPaused(false)}
+          onFocusCapture={() => setHeroPaused(true)}
+          onBlurCapture={() => setHeroPaused(false)}
+        >
+          {heroFeature ? <>
+            <button type="button" className="hero-feature" onClick={() => showProduct(heroFeature)} aria-label={`View ${heroFeature.title}`}>
+              <span className="hero-feature-frame">
+                {/* Every featured image is stacked in the frame so a switch is a crossfade
+                    rather than a flash of empty plate while the next photo loads. */}
+                {heroRotation.map((product, index) => <img
+                  key={product.id}
+                  src={product.image}
+                  alt={index === heroPosition ? `${product.title} card art` : ''}
+                  aria-hidden={index !== heroPosition}
+                  className={index === heroPosition ? 'is-active' : undefined}
+                />)}
+              </span>
+              <span className="hero-feature-meta">
+                <span className="hero-feature-label">Featured</span>
+                {/* Keyed on the product so the fade replays on every change. */}
+                <span className="hero-feature-title" key={`title-${heroFeature.id}`}>{displayProductTitle(heroFeature.title)}</span>
+                <span className="hero-feature-price" key={`price-${heroFeature.id}`}>From {formatMoney(effectiveProductPrice(heroFeature))}</span>
+              </span>
+            </button>
+            {heroRotationCount > 1 && <div className="hero-feature-dots" role="group" aria-label="Featured listings">
+              {heroRotation.map((product, index) => <button
+                key={`dot-${product.id}`}
+                type="button"
+                className={index === heroPosition ? 'is-active' : undefined}
+                aria-label={`Show ${displayProductTitle(product.title)}`}
+                aria-current={index === heroPosition ? 'true' : undefined}
+                onClick={() => setHeroIndex(index)}
+              />)}
+            </div>}
+          </> : null}
         </div>
       </div>
     </header> : null}
@@ -1754,7 +1805,7 @@ export default function App() {
           <button role="tab" aria-selected={listingTab === 'current'} className={listingTab === 'current' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('current')}>Current listings ({adminProducts.length})</button>
           <button role="tab" aria-selected={listingTab === 'create'} className={listingTab === 'create' ? 'active-tab' : 'ghost'} onClick={() => setListingTab('create')}>Create listing</button>
         </div>
-        {listingTab === 'create' ? <section className="listing-tab-panel" role="tabpanel" aria-label="Create listing"><h3>Create listing</h3>{productEditor(newProduct, true)}</section> : <section className="listing-tab-panel" role="tabpanel" aria-label="Current listings"><h3>Current listings</h3>{adminProducts.map((p) => productEditor(p))}</section>}
+        {listingTab === 'create' ? <section className="listing-tab-panel" role="tabpanel" aria-label="Create listing"><h3>Create listing</h3>{productEditor(newProduct, true)}</section> : <section className="listing-tab-panel" role="tabpanel" aria-label="Current listings"><h3>Current listings</h3><p className="listing-hint">{featuredListingCount === 0 ? 'Nothing is featured in the home hero. Tick "Feature in the home hero" on a listing to show it there.' : `${featuredListingCount} featured in the home hero${featuredListingCount > 1 ? ', rotating on a timer.' : '.'}`}</p>{adminProducts.map((p) => productEditor(p))}</section>}
       </section>}
       {adminTab === 'sales' && <section className="admin-workspace sale-workspace" role="tabpanel" aria-label="Sales">
         <div className="section-heading"><div><h3>Sale manager</h3><p>Turn sale pricing on or off for one listing, selected listings, or the whole current lineup.</p></div></div>
