@@ -1,4 +1,4 @@
-# Midnight Cardworks
+# ServbotShop
 
 Private MVP ecommerce storefront for custom card listings. The UI is an original neon-yellow, TV-world inspired interface: bold contrast, card-grid drama, and collector-first storytelling without using any Persona assets.
 
@@ -99,7 +99,7 @@ Email sending is optional and uses Resend when configured. Without `RESEND_API_K
 
 ```bash
 RESEND_API_KEY=re_...
-EMAIL_FROM=Midnight Cardworks <orders@your-domain.com>
+EMAIL_FROM=ServbotShop <orders@your-domain.com>
 ORDER_NOTIFICATION_EMAIL=owner@example.com # optional; falls back to ADMIN_EMAILS
 ```
 

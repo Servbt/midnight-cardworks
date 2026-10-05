@@ -138,8 +138,8 @@ export default function App() {
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [imageViewZoom, setImageViewZoom] = useState(1);
   const [imageViewOrigin, setImageViewOrigin] = useState({ x: 50, y: 50 });
-  const [campaignSubject, setCampaignSubject] = useState('New drop from Midnight Cardworks');
-  const [campaignMessage, setCampaignMessage] = useState('A new Midnight Cardworks update is ready. Add a short note about the deal, new product, or launch coupon here.');
+  const [campaignSubject, setCampaignSubject] = useState('New drop from ServbotShop');
+  const [campaignMessage, setCampaignMessage] = useState('A new ServbotShop update is ready. Add a short note about the deal, new product, or launch coupon here.');
   const { isAdmin, getAdminToken } = useAdminAccess();
   const { isSignedIn, email: sessionEmail, getCustomerToken } = useCustomerSession();
 
@@ -434,7 +434,7 @@ export default function App() {
 
   useEffect(() => {
     if (view === 'product' && selectedProduct) {
-      document.title = `${selectedProduct.title} | Midnight Cardworks`;
+      document.title = `${selectedProduct.title} | ServbotShop`;
       let description = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
       if (!description) {
         description = document.createElement('meta');
@@ -443,17 +443,17 @@ export default function App() {
       }
       description.content = selectedProduct.description;
     } else if (view === 'faq') {
-      document.title = 'FAQ | Midnight Cardworks';
+      document.title = 'FAQ | ServbotShop';
     } else if (view === 'blog') {
-      document.title = 'Blog | Midnight Cardworks';
+      document.title = 'Blog | ServbotShop';
     } else if (view === 'blog-post') {
-      document.title = selectedBlogPost ? `${selectedBlogPost.title} | Midnight Cardworks` : 'Blog | Midnight Cardworks';
+      document.title = selectedBlogPost ? `${selectedBlogPost.title} | ServbotShop` : 'Blog | ServbotShop';
     } else if (view === 'privacy') {
-      document.title = 'Privacy & Cookies | Midnight Cardworks';
+      document.title = 'Privacy & Cookies | ServbotShop';
     } else if (view === 'unsubscribe') {
-      document.title = 'Unsubscribe | Midnight Cardworks';
+      document.title = 'Unsubscribe | ServbotShop';
     } else if (view === 'home' || view === 'shop') {
-      document.title = 'Midnight Cardworks';
+      document.title = 'ServbotShop';
     }
   }, [view, selectedProduct, selectedBlogPost]);
 
@@ -1229,7 +1229,7 @@ export default function App() {
       <div className="newsletter-copy">
         <p className="eyebrow">Launch list</p>
         <h2 id="newsletter-offer-title">Get a coupon for the first drop.</h2>
-        <p>Join the Midnight Cardworks email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.</p>
+        <p>Join the ServbotShop email list for a launch coupon, new product notes, and sale alerts. No unrelated ads, and every email includes an unsubscribe link.</p>
       </div>
       {newsletterSignupForm(true)}
     </section>
@@ -1338,7 +1338,7 @@ export default function App() {
 
   const navigation = <div className="top-nav" role="banner">
     <div className="nav-primary">
-      <a className="brand" href="/" aria-label="Midnight Cardworks home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>Midnight Cardworks</a>
+      <a className="brand" href="/" aria-label="ServbotShop home" onClick={(event) => { event.preventDefault(); showHome({ scrollToTop: true }); }}>ServbotShop</a>
       <div className="nav-search">
         <span className="nav-search-icon" aria-hidden="true">⌕</span>
         <input
@@ -1594,13 +1594,13 @@ export default function App() {
     {view === 'cart' && <section className="panel cart-panel" role="region" aria-label="Cart marketplace layout">
       <div className="cart-heading-row"><div><p className="eyebrow">Shopping Cart</p><h2>Your cart</h2>{cart.length > 0 && <span className="cart-item-count">{itemCount} {itemCount === 1 ? 'item' : 'items'}</span>}</div>{cart.length > 0 && <button className="ghost clear-cart-button" type="button" onClick={requestClearCart}>Clear cart</button>}</div>
       {cartNotice && <div className="cart-status" role="status"><span>{cartNotice}</span>{removedCartLine && <button className="ghost" type="button" onClick={undoRemoveFromCart} aria-label={`Undo removing ${removedCartLine.product.title}`}>Undo</button>}{clearCartRequested && <div className="cart-status-actions"><button type="button" onClick={confirmClearCart}>Confirm clear cart</button><button className="ghost" type="button" onClick={() => { setClearCartRequested(false); setCartNotice(''); }}>Keep items</button></div>}</div>}
-      {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><p>Sign in from your account page to reuse saved checkout info from a previous visit.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop Midnight Cardworks">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
+      {cart.length === 0 ? <><div className="empty-cart-state"><p className="eyebrow">No items queued</p><h3>Your cart is empty — tune into the latest drops.</h3><p>Start with commander proxies, token packs, or display cards built for casual play.</p><p>Sign in from your account page to reuse saved checkout info from a previous visit.</p><div className="empty-cart-actions"><button onClick={continueShopping}>Continue shopping</button><button className="ghost" onClick={browseTokenPacks}>Browse token packs</button></div><div className="empty-cart-cues" aria-label="Why shop ServbotShop">{launchNotes.map((note) => <span key={note.title}>{note.title}</span>)}</div></div>{recentlyViewedSection}</> : <>
         <form className="checkout-form cart-marketplace-shell" aria-label="Checkout details" onSubmit={(event) => { event.preventDefault(); void checkout(); }}>
           <div className="cart-main-column">
           <section className="cart-items-card" role="region" aria-label="Items in your cart">
             <div className="cart-section-header"><div><h3>Items in your cart</h3><p>{itemCount} {itemCount === 1 ? 'item' : 'items'} in cart</p></div><div className="cart-column-labels" aria-hidden="true"><span>Item</span><span>Quantity</span><span>Price</span></div></div>
             <div className="cart-items" aria-label="Cart items">
-              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{displayProductTitle(line.product.title)}</span><small>Fulfilled by Midnight Cardworks</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(effectiveProductPrice(line.product) * line.quantity)}</strong></div>)}
+              {cart.map((line) => <div className="cart-line" key={line.product.id}><a className="cart-item-link" href={`/products/${line.product.slug}`} onClick={(e) => { e.preventDefault(); showProduct(line.product); }} aria-label={`View ${line.product.title} listing from cart`}><img src={line.product.image} alt={`${line.product.title} preview`} /><span>{displayProductTitle(line.product.title)}</span><small>Fulfilled by ServbotShop</small></a><div className="cart-line-actions"><button className="quantity-stepper" type="button" disabled={line.quantity <= 1} onClick={() => updateQuantity(line.product.id, line.quantity - 1)} aria-label={`Decrease quantity for ${line.product.title}`}>−</button><label className="quantity-field">Qty<input aria-label={`Quantity for ${line.product.title}`} type="number" min="1" max={line.product.inventory} value={line.quantity} onChange={(e) => updateQuantity(line.product.id, Number(e.target.value))} /></label><button className="quantity-stepper" type="button" disabled={line.quantity >= line.product.inventory} onClick={() => updateQuantity(line.product.id, line.quantity + 1)} aria-label={`Increase quantity for ${line.product.title}`}>+</button><button className="remove-cart-item" type="button" onClick={() => removeFromCart(line.product.id)} aria-label={`Remove ${line.product.title} from cart`}>Remove</button></div><strong className="cart-line-total">Line total: {formatMoney(effectiveProductPrice(line.product) * line.quantity)}</strong></div>)}
             </div>
           </section>
           <div className="checkout-intro">
@@ -1739,7 +1739,7 @@ export default function App() {
     {view === 'blog' && <section className="panel narrow content-page blog-page" aria-label="Blog">
       <p className="eyebrow">Blog</p>
       <h2>Studio notes</h2>
-      <p>Product notes, launch updates, and behind-the-scenes context from Midnight Cardworks.</p>
+      <p>Product notes, launch updates, and behind-the-scenes context from ServbotShop.</p>
       {publicBlogPosts.length === 0 ? <p>No posts are published yet.</p> : <div className="blog-list">{publicBlogPosts.map((post) => <article className="content-card blog-card" key={post.id}>
         <div><span className="status-badge">{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : 'Published'}</span><h3>{post.title}</h3><p>{post.excerpt}</p></div>
         <button type="button" onClick={() => showBlogPost(post, { scrollToTop: true })}>Read {post.title}</button>
@@ -1758,12 +1758,12 @@ export default function App() {
 
     {view === 'contact' && <section className="panel narrow contact-panel">
       <p className="eyebrow">Support channel</p>
-      <h2>Contact Midnight Cardworks</h2>
+      <h2>Contact ServbotShop</h2>
       <p>Questions about a listing, order, custom request, or fulfillment? Send a message and it will go straight to the shop inbox.</p>
       {contactMessage === 'sent' && <div className="contact-success-card" role="status" aria-label="Message sent confirmation">
         <span className="status-badge">Sent</span>
         <h3>Message received</h3>
-        <p>Thanks, {contactName} — your note is in the Midnight Cardworks inbox.</p>
+        <p>Thanks, {contactName} — your note is in the ServbotShop inbox.</p>
         <p>I’ll reply to {contactEmail} within 1–2 business days.</p>
         <p>Need to add details? Send another message anytime.</p>
       </div>}
@@ -1870,7 +1870,7 @@ export default function App() {
     {view === 'privacy' && <section className="panel narrow policy-panel" aria-label="Privacy and cookie policy">
       <p className="eyebrow">Privacy & Cookies</p>
       <h2>Privacy & Cookies</h2>
-      <p>Last updated June 21, 2026. This page explains what Midnight Cardworks collects to run the shop, fulfill orders, answer messages, and improve the storefront.</p>
+      <p>Last updated June 21, 2026. This page explains what ServbotShop collects to run the shop, fulfill orders, answer messages, and improve the storefront.</p>
       <div className="policy-grid">
         <article className="policy-card">
           <h3>Information used to run the shop</h3>
@@ -1894,11 +1894,11 @@ export default function App() {
         </article>
         <article className="policy-card">
           <h3>Your choices</h3>
-          <p>You can choose Necessary only, allow analytics, unsubscribe from marketing email, clear saved checkout details from the account page, or contact Midnight Cardworks with privacy or order questions.</p>
+          <p>You can choose Necessary only, allow analytics, unsubscribe from marketing email, clear saved checkout details from the account page, or contact ServbotShop with privacy or order questions.</p>
         </article>
         <article className="policy-card">
           <h3>No ad tracking</h3>
-          <p>Midnight Cardworks does not sell personal information, use advertising pixels, or track shoppers across unrelated websites.</p>
+          <p>ServbotShop does not sell personal information, use advertising pixels, or track shoppers across unrelated websites.</p>
         </article>
       </div>
       <div className="policy-actions">

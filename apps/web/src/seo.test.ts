@@ -5,7 +5,7 @@ describe('crawlable homepage shell', () => {
   it('exposes meaningful SEO metadata and landing copy before React loads', () => {
     const html = readFileSync('index.html', 'utf8');
 
-    expect(html).toContain('<title>Midnight Cardworks | Custom Trading Card Proxies & Collectible Cards</title>');
+    expect(html).toContain('<title>ServbotShop | Custom Trading Card Proxies & Collectible Cards</title>');
     expect(html).toContain('name="description"');
     expect(html).toContain('property="og:title"');
     expect(html).toContain('type="application/ld+json"');
