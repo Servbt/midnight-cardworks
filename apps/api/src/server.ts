@@ -118,7 +118,7 @@ function publicSubscriber(subscriber: MarketingSubscriber) {
   return safeSubscriber;
 }
 function productSeoHead(product: Product) {
-  const title = `${product.title} | Midnight Cardworks`;
+  const title = `${product.title} | ServbotShop`;
   const url = productUrl(product.slug);
   const jsonLd = JSON.stringify({
     '@context': 'https://schema.org',

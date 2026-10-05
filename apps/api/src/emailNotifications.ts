@@ -45,7 +45,7 @@ function marketingFooter(subscriber: MarketingSubscriber) {
     unsubscribeUrl,
     text: [
       '',
-      'You are receiving this because you signed up for Midnight Cardworks deals and product updates.',
+      'You are receiving this because you signed up for ServbotShop deals and product updates.',
       'Unsubscribe: ' + unsubscribeUrl,
       'Postal address: ' + address
     ].join(newline)
@@ -61,7 +61,7 @@ function buildPendingOrderAdminEmail(order: Order): ResendEmail | undefined {
     to,
     subject: 'Pending checkout started ' + order.id,
     text: [
-      'A Midnight Cardworks checkout order was created and is waiting for payment.',
+      'A ServbotShop checkout order was created and is waiting for payment.',
       '',
       'Order: ' + order.id,
       'Customer: ' + order.email,
@@ -83,7 +83,7 @@ function buildPaidEmail(order: Order): { customer: ResendEmail; admin?: ResendEm
   if (!from) return undefined;
   const customerName = order.customerName ? ' ' + order.customerName : '';
   const text = [
-    'Thanks' + customerName + ' - your Midnight Cardworks order is confirmed.',
+    'Thanks' + customerName + ' - your ServbotShop order is confirmed.',
     '',
     'Order: ' + order.id,
     'Total: ' + money(order.total),
@@ -107,7 +107,7 @@ function buildFulfilledEmail(order: Order): ResendEmail | undefined {
     from,
     to: [order.email],
     subject: 'Order ' + order.id + ' fulfilled',
-    text: ['Good news - your Midnight Cardworks order has been marked fulfilled.', '', 'Order: ' + order.id, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, '', 'Thanks again for supporting the shop.'].filter(Boolean).join(newline)
+    text: ['Good news - your ServbotShop order has been marked fulfilled.', '', 'Order: ' + order.id, order.shippingAddress ? 'Ship to: ' + order.shippingAddress : undefined, '', 'Thanks again for supporting the shop.'].filter(Boolean).join(newline)
   };
 }
 
@@ -119,7 +119,7 @@ function buildCanceledEmail(order: Order): ResendEmail | undefined {
     to: [order.email],
     subject: 'Order ' + order.id + ' canceled',
     text: [
-      'Your Midnight Cardworks order has been canceled.',
+      'Your ServbotShop order has been canceled.',
       '',
       'Order: ' + order.id,
       order.refundReason ? 'Note: ' + order.refundReason : undefined,
@@ -139,7 +139,7 @@ function buildRefundedEmail(order: Order): ResendEmail | undefined {
     to: [order.email],
     subject: 'Order ' + order.id + ' ' + (isFullRefund ? 'refunded' : 'partially refunded'),
     text: [
-      'Your Midnight Cardworks order has been ' + (isFullRefund ? 'refunded' : 'partially refunded') + '.',
+      'Your ServbotShop order has been ' + (isFullRefund ? 'refunded' : 'partially refunded') + '.',
       '',
       'Order: ' + order.id,
       'Refunded to date: ' + money(refundedAmount),
@@ -159,7 +159,7 @@ function buildRefundFailedEmail(order: Order): ResendEmail | undefined {
     to: [order.email],
     subject: 'Refund update for order ' + order.id,
     text: [
-      'We tried to refund your Midnight Cardworks order, but Stripe reported that the refund failed.',
+      'We tried to refund your ServbotShop order, but Stripe reported that the refund failed.',
       '',
       'Order: ' + order.id,
       order.refundReason ? 'Note: ' + order.refundReason : undefined,
@@ -177,7 +177,7 @@ function buildContactEmail(message: ContactMessage): ResendEmail | undefined {
     from,
     to,
     reply_to: message.email,
-    subject: 'New Midnight Cardworks message from ' + message.name,
+    subject: 'New ServbotShop message from ' + message.name,
     text: [
       'New customer message from ' + message.name,
       'Email: ' + message.email,
@@ -195,9 +195,9 @@ function buildMarketingWelcomeEmail(subscriber: MarketingSubscriber): ResendEmai
   return {
     from,
     to: [subscriber.email],
-    subject: 'Your Midnight Cardworks launch coupon',
+    subject: 'Your ServbotShop launch coupon',
     text: [
-      subscriber.name ? 'Welcome, ' + subscriber.name + '.' : 'Welcome to Midnight Cardworks.',
+      subscriber.name ? 'Welcome, ' + subscriber.name + '.' : 'Welcome to ServbotShop.',
       '',
       'Your launch coupon code is ' + subscriber.couponCode + '.',
       'Enter it during Stripe Checkout when promotion codes are enabled for the shop.',

@@ -1,5 +1,5 @@
 /**
- * Import an Etsy listings export into the Midnight Cardworks product catalogue.
+ * Import an Etsy listings export into the ServbotShop product catalogue.
  *
  *   npx tsx scripts/import-etsy-listings.ts --csv "/path/to/EtsyListingsDownload.csv"
  *   npx tsx scripts/import-etsy-listings.ts --csv "..." --apply [--retire-placeholders]

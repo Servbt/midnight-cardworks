@@ -131,7 +131,7 @@ if (present('VITE_PLAUSIBLE_DOMAIN') && present('APP_BASE_URL')) {
   }
 }
 
-console.log('Midnight Cardworks production environment audit');
+console.log('ServbotShop production environment audit');
 console.log('Secret values are intentionally hidden.\n');
 
 for (const name of required) {

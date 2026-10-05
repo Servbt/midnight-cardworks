@@ -692,7 +692,7 @@ describe('storefront API', () => {
 
   it('serves product routes with SEO meta tags for shareable listing pages', async () => {
     const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
-    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><html><head><title>Midnight Cardworks</title></head><body><div id="root"></div></body></html>');
+    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><html><head><title>ServbotShop</title></head><body><div id="root"></div></body></html>');
 
     try {
       const app = await buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
@@ -700,7 +700,7 @@ describe('storefront API', () => {
 
       expect(productPage.statusCode).toBe(200);
       expect(productPage.headers['content-type']).toContain('text/html');
-      expect(productPage.body).toContain('<title>Golden Hour Commander Proxy | Midnight Cardworks</title>');
+      expect(productPage.body).toContain('<title>Golden Hour Commander Proxy | ServbotShop</title>');
       expect(productPage.body).toContain('property="og:title" content="Golden Hour Commander Proxy"');
       expect(productPage.body).toContain('property="og:url" content="/products/golden-hour-commander-proxy"');
       expect(productPage.body).toContain('type="application/ld+json"');
@@ -711,7 +711,7 @@ describe('storefront API', () => {
 
   it('serves the built React app and keeps API 404s as JSON in production mode', async () => {
     const staticRoot = await mkdtemp(path.join(tmpdir(), 'midnight-cardworks-web-'));
-    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>Midnight Cardworks</title><div id="root"></div>');
+    await writeFile(path.join(staticRoot, 'index.html'), '<!doctype html><title>ServbotShop</title><div id="root"></div>');
 
     try {
       const app = await buildServer(createInMemoryStore(), { serveStaticRoot: staticRoot });
@@ -721,9 +721,9 @@ describe('storefront API', () => {
 
       expect(home.statusCode).toBe(200);
       expect(home.headers['content-type']).toContain('text/html');
-      expect(home.body).toContain('Midnight Cardworks');
+      expect(home.body).toContain('ServbotShop');
       expect(clientRoute.statusCode).toBe(200);
-      expect(clientRoute.body).toContain('Midnight Cardworks');
+      expect(clientRoute.body).toContain('ServbotShop');
       expect(missingApi.statusCode).toBe(404);
       expect(missingApi.json()).toEqual({ error: 'Not found' });
     } finally {

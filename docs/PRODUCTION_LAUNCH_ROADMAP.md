@@ -1,8 +1,8 @@
-# Midnight Cardworks Production Launch Roadmap
+# ServbotShop Production Launch Roadmap
 
 Last updated: 2026-09-21
 
-This document is the source of truth for taking Midnight Cardworks from a working
+This document is the source of truth for taking ServbotShop from a working
 MVP to a public production shop. Work through one gate at a time. Do not mark a
 gate complete until its evidence is recorded here.
 
@@ -17,7 +17,7 @@ gate complete until its evidence is recorded here.
 
 ## Current Production Snapshot
 
-- Current service URL: `https://midnight-cardworks.onrender.com`
+- Current service URL: `https://servbotshop.com`
 - Hosting: Render web service and Render Postgres
 - Hosting verified 2026-09-21: Starter web service and Basic-256mb Postgres.
 - Monitoring: Render Health Check Path corrected to `/health` on 2026-09-21;

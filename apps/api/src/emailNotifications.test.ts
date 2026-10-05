@@ -32,14 +32,14 @@ describe('createEmailNotifierFromEnv', () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('RESEND_API_KEY', 're_test');
-    vi.stubEnv('EMAIL_FROM', 'Midnight Cardworks <orders@example.com>');
+    vi.stubEnv('EMAIL_FROM', 'ServbotShop <orders@example.com>');
     vi.stubEnv('ADMIN_EMAILS', 'owner@example.com, helper@example.com');
 
     await createEmailNotifierFromEnv().sendOrderPending(order);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(sentEmailBody(fetchMock)).toMatchObject({
-      from: 'Midnight Cardworks <orders@example.com>',
+      from: 'ServbotShop <orders@example.com>',
       to: ['owner@example.com', 'helper@example.com'],
       subject: 'Pending checkout started ord_pending'
     });
@@ -49,7 +49,7 @@ describe('createEmailNotifierFromEnv', () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('RESEND_API_KEY', 're_test');
-    vi.stubEnv('EMAIL_FROM', 'Midnight Cardworks <orders@example.com>');
+    vi.stubEnv('EMAIL_FROM', 'ServbotShop <orders@example.com>');
     vi.stubEnv('ORDER_NOTIFICATION_EMAIL', 'orders@example.com');
     vi.stubEnv('ADMIN_EMAILS', 'owner@example.com');
 

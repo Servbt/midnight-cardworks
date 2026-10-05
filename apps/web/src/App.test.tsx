@@ -28,7 +28,7 @@ const faqItems = [
   { id: 'faq_2', question: 'Can I ask about a custom idea?', answer: 'Yes, send a note with the card name and direction.', sortOrder: 20, active: true, createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
 ];
 const blogPosts = [
-  { id: 'blog_1', slug: 'first-drop-notes', title: 'First Drop Notes', excerpt: 'Launch context for the first Midnight Cardworks lineup.', body: 'The first drop focuses on commander tables.\n\nExpect proxy centerpieces, tokens, and display cards.', published: true, publishedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
+  { id: 'blog_1', slug: 'first-drop-notes', title: 'First Drop Notes', excerpt: 'Launch context for the first ServbotShop lineup.', body: 'The first drop focuses on commander tables.\n\nExpect proxy centerpieces, tokens, and display cards.', published: true, publishedAt: '2026-06-21T00:00:00.000Z', createdAt: '2026-06-21T00:00:00.000Z', updatedAt: '2026-06-21T00:00:00.000Z' }
 ];
 
 
@@ -117,7 +117,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Midnight Cardworks storefront', () => {
+describe('ServbotShop storefront', () => {
   // Retargeted twice, most recently when the footer was reduced to the disclaimer alone. It
   // used to assert the footer's Shop column stayed in sync with the header's category control,
   // which meant two controls for one job. The assertion now states the stronger contract: the
@@ -163,7 +163,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByText('Premium commander centerpiece')).toBeInTheDocument();
     expect(screen.getByText('Copy link to this card')).toBeInTheDocument();
     expect(screen.getByText('Casual play only')).toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe('Golden Hour Commander Proxy | Midnight Cardworks'));
+    await waitFor(() => expect(document.title).toBe('Golden Hour Commander Proxy | ServbotShop'));
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toContain('Premium commander centerpiece');
   });
 
@@ -292,7 +292,7 @@ describe('Midnight Cardworks storefront', () => {
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' }));
     expect(await screen.findByText('Copy link to this card')).toBeInTheDocument();
 
-    const brandHomeLink = screen.getByRole('link', { name: 'Midnight Cardworks home' });
+    const brandHomeLink = screen.getByRole('link', { name: 'ServbotShop home' });
     expect(brandHomeLink).toHaveAttribute('href', '/');
     await userEvent.click(brandHomeLink);
 
@@ -305,7 +305,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     expect(await screen.findByText('Midnight Collector Studio')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('link', { name: 'Midnight Cardworks home' }));
+    await userEvent.click(screen.getByRole('link', { name: 'ServbotShop home' }));
 
     expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
   });
@@ -319,7 +319,7 @@ describe('Midnight Cardworks storefront', () => {
 
     await userEvent.click(within(categoryNav).getByRole('button', { name: 'Contact' }));
 
-    expect(await screen.findByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Contact ServbotShop' })).toBeInTheDocument();
     expect(scrollTo).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: 'auto' });
 
     scrollTo.mockClear();
@@ -347,7 +347,7 @@ describe('Midnight Cardworks storefront', () => {
 
     expect(window.location.pathname).toBe('/blog');
     expect(await screen.findByRole('heading', { name: 'Studio notes' })).toBeInTheDocument();
-    expect(screen.getByText('Launch context for the first Midnight Cardworks lineup.')).toBeInTheDocument();
+    expect(screen.getByText('Launch context for the first ServbotShop lineup.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Read First Drop Notes' }));
 
@@ -521,7 +521,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(screen.getByRole('button', { name: /cart, 0/i })).toBeInTheDocument();
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Contact' })[0]);
-    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Contact ServbotShop' })).toBeInTheDocument();
     expect(screen.queryByText('Midnight Collector Studio')).not.toBeInTheDocument();
   });
 
@@ -548,7 +548,7 @@ describe('Midnight Cardworks storefront', () => {
     render(<App />);
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Contact' })[0]);
-    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Contact ServbotShop' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Your name'), 'Ari Buyer');
     await userEvent.type(screen.getByLabelText('Your email'), 'buyer@example.com');
     await userEvent.type(screen.getByLabelText('Order number optional'), 'ord_test');
@@ -557,7 +557,7 @@ describe('Midnight Cardworks storefront', () => {
 
     const confirmation = await screen.findByRole('status', { name: 'Message sent confirmation' });
     expect(within(confirmation).getByRole('heading', { name: 'Message received' })).toBeInTheDocument();
-    expect(within(confirmation).getByText('Thanks, Ari Buyer — your note is in the Midnight Cardworks inbox.')).toBeInTheDocument();
+    expect(within(confirmation).getByText('Thanks, Ari Buyer — your note is in the ServbotShop inbox.')).toBeInTheDocument();
     expect(within(confirmation).getByText('I’ll reply to buyer@example.com within 1–2 business days.')).toBeInTheDocument();
     expect(within(confirmation).getByText('Need to add details? Send another message anytime.')).toBeInTheDocument();
     expect(screen.getByLabelText('How can we help?')).toHaveValue('');
@@ -751,7 +751,7 @@ describe('Midnight Cardworks storefront', () => {
     expect(within(itemsPanel).getByText('Item')).toBeInTheDocument();
     expect(within(itemsPanel).getByText('Quantity')).toBeInTheDocument();
     expect(within(itemsPanel).getByText('Price')).toBeInTheDocument();
-    expect(within(itemsPanel).getAllByText('Fulfilled by Midnight Cardworks')).toHaveLength(2);
+    expect(within(itemsPanel).getAllByText('Fulfilled by ServbotShop')).toHaveLength(2);
     expect(within(itemsPanel).queryByText('Direct from studio')).not.toBeInTheDocument();
 
     const summaryPanel = within(cartLayout).getByRole('region', { name: 'Cart summary' });
@@ -1383,7 +1383,7 @@ describe('Midnight Cardworks storefront', () => {
     const history = await screen.findByRole('region', { name: 'Order history' });
     await userEvent.click(within(history).getByRole('button', { name: 'Contact support about ord_test' }));
 
-    expect(screen.getByRole('heading', { name: 'Contact Midnight Cardworks' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Contact ServbotShop' })).toBeInTheDocument();
     expect(screen.getByLabelText('Order number optional')).toHaveValue('ord_test');
   });
 

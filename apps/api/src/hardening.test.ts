@@ -66,11 +66,11 @@ describe('launch hardening', () => {
       await writeFile(path.join(staticRoot, 'index.html'), [
         '<!doctype html><html lang="en"><head>',
         '<meta charset="UTF-8" />',
-        '<title>Midnight Cardworks | Custom Trading Card Proxies</title>',
+        '<title>ServbotShop | Custom Trading Card Proxies</title>',
         '<meta name="description" content="Shop premium custom proxies." />',
         '<link rel="canonical" href="https://servbotshop.com/" />',
         '<meta property="og:type" content="website" />',
-        '<meta property="og:title" content="Midnight Cardworks | Custom Trading Card Proxies" />',
+        '<meta property="og:title" content="ServbotShop | Custom Trading Card Proxies" />',
         '<meta property="og:url" content="https://servbotshop.com/" />',
         '<meta name="theme-color" content="#070710" />',
         '</head><body><div id="root"></div></body></html>'
