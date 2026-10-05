@@ -27,7 +27,6 @@ describe('crawlable homepage shell', () => {
     // list is a real loss - it must name exactly the three the site links to.
     expect(ld.sameAs).toEqual([
       'https://x.com/Servbot006',
-      'https://www.pixiv.net/en/artworks/105648522',
       'https://www.etsy.com/shop/ServbotShop'
     ]);
   });

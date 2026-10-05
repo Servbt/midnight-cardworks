@@ -41,7 +41,6 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 // this one list and a handle only ever changes in one place.
 const socialLinks = [
   { label: 'X', about: 'ServbotShop on X', href: 'https://x.com/Servbot006' },
-  { label: 'Pixiv', about: 'ServbotShop on Pixiv', href: 'https://www.pixiv.net/en/artworks/105648522' },
   { label: 'Etsy', about: 'ServbotShop on Etsy', href: 'https://www.etsy.com/shop/ServbotShop' }
 ];
 

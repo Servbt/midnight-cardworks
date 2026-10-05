@@ -117,7 +117,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const STUDIO_PROFILE_URLS = ['https://x.com/Servbot006', 'https://www.pixiv.net/en/artworks/105648522', 'https://www.etsy.com/shop/ServbotShop'];
+const STUDIO_PROFILE_URLS = ['https://x.com/Servbot006', 'https://www.etsy.com/shop/ServbotShop'];
 
 describe('ServbotShop storefront', () => {
   // Retargeted three times: it began as a footer-sync test, then held the footer's reduction to
@@ -140,7 +140,7 @@ describe('ServbotShop storefront', () => {
     // the footer's only links are the studio profiles, and they point where they should
     const profileLinks = within(footer).getAllByRole('link');
     expect(profileLinks.map((link) => link.getAttribute('aria-label')))
-      .toEqual(['ServbotShop on X', 'ServbotShop on Pixiv', 'ServbotShop on Etsy']);
+      .toEqual(['ServbotShop on X', 'ServbotShop on Etsy']);
     expect(profileLinks.map((link) => link.getAttribute('href')))
       .toEqual(STUDIO_PROFILE_URLS);
   });
@@ -154,7 +154,7 @@ describe('ServbotShop storefront', () => {
     expect(rows).toHaveLength(2);
     for (const row of rows) {
       const links = within(row).getAllByRole('link');
-      expect(links.map((link) => link.textContent)).toEqual(['X', 'Pixiv', 'Etsy']);
+      expect(links.map((link) => link.textContent)).toEqual(['X', 'Etsy']);
       expect(links.map((link) => link.getAttribute('href'))).toEqual(STUDIO_PROFILE_URLS);
       // opened in a new tab, and without handing the opened page a handle on this one
       for (const link of links) {

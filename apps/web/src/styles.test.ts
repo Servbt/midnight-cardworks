@@ -63,7 +63,6 @@ describe('global CSS isolation', () => {
     const list = markup.match(/const socialLinks = \[[\s\S]*?\];/)?.[0] ?? '';
     expect(list.match(/href: '[^']+'/g)).toEqual([
       "href: 'https://x.com/Servbot006'",
-      "href: 'https://www.pixiv.net/en/artworks/105648522'",
       "href: 'https://www.etsy.com/shop/ServbotShop'"
     ]);
     expect(markup).toMatch(/rel="me noopener noreferrer"/);
