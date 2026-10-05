@@ -49,6 +49,10 @@ describe('global CSS isolation', () => {
     expect(styles).toMatch(/\.footer-row\s*\{[^}]*width:\s*min\(var\(--max-w\)[^}]*justify-content:\s*space-between/s);
     expect(styles).toMatch(/\.footer-legal\s*\{[^}]*flex:\s*1 1 20rem/s);
     expect(styles).toMatch(/\.social-links a\s*\{[^}]*border-radius:\s*var\(--radius-pill\)/s);
+    // circular (square box on the pill radius) and a step up from the 32px they were as text
+    expect(styles).toMatch(/\.social-links a\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/s);
+    // the mark takes the link's colour, so both go accent together on hover
+    expect(styles).toMatch(/\.social-links a svg\s*\{[^}]*fill:\s*currentColor/s);
     for (const removed of ['.footer-inner', '.footer-wordmark', '.footer-links', '.footer-tagline', '.footer-brand']) {
       expect(styles).not.toContain(removed);
     }

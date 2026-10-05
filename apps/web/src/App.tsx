@@ -39,9 +39,24 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 
 // The studio's profiles. They appear in the hero and again in the footer, so both read from
 // this one list and a handle only ever changes in one place.
+// The glyphs are the official brand marks from Simple Icons (CC0), inlined as single monochrome
+// paths. They carry no fill of their own, so they take the link's colour, and being inline they
+// cost no extra request and cannot flash as they load.
 const socialLinks = [
-  { label: 'X', about: 'ServbotShop on X', href: 'https://x.com/Servbot006' },
-  { label: 'Etsy', about: 'ServbotShop on Etsy', href: 'https://www.etsy.com/shop/ServbotShop' }
+  {
+    label: 'X',
+    about: 'ServbotShop on X',
+    href: 'https://x.com/Servbot006',
+    viewBox: '0 0 24 24',
+    path: 'M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z'
+  },
+  {
+    label: 'Etsy',
+    about: 'ServbotShop on Etsy',
+    href: 'https://www.etsy.com/shop/ServbotShop',
+    viewBox: '0 0 24 24',
+    path: 'M8.559 2.445c0-.325.033-.52.59-.52h7.465c1.3 0 2.02 1.11 2.54 3.193l.42 1.666h1.27c.23-4.728.43-6.784.43-6.784s-3.196.36-5.09.36H6.635L1.521.196v1.37l1.725.326c1.21.24 1.5.496 1.6 1.606 0 0 .11 3.27.11 8.64 0 5.385-.09 8.61-.09 8.61 0 .973-.39 1.333-1.59 1.573l-1.722.33V24l5.13-.165h8.55c1.935 0 6.39.165 6.39.165.105-1.17.75-6.48.855-7.064h-1.2l-1.284 2.91c-1.005 2.28-2.476 2.445-4.11 2.445h-4.906c-1.63 0-2.415-.64-2.415-2.05V12.8s3.62 0 4.79.096c.912.064 1.463.325 1.76 1.598l.39 1.695h1.41l-.09-4.278.192-4.305h-1.391l-.45 1.89c-.283 1.244-.48 1.47-1.754 1.6-1.666.17-4.815.14-4.815.14V2.45h-.05z'
+  }
 ];
 
 // rel="me" is the microformat that proves these profiles belong to this site; noopener and
@@ -54,7 +69,10 @@ function socialLinkRow(variant: 'hero' | 'footer') {
       target="_blank"
       rel="me noopener noreferrer"
       aria-label={link.about}
-    >{link.label}</a>)}
+      title={link.about}
+    >{/* The mark is decorative - the anchor's aria-label is the accessible name. */}
+      <svg viewBox={link.viewBox} aria-hidden="true" focusable="false"><path d={link.path} /></svg>
+    </a>)}
   </div>;
 }
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';

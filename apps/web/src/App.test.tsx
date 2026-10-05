@@ -154,8 +154,13 @@ describe('ServbotShop storefront', () => {
     expect(rows).toHaveLength(2);
     for (const row of rows) {
       const links = within(row).getAllByRole('link');
-      expect(links.map((link) => link.textContent)).toEqual(['X', 'Etsy']);
       expect(links.map((link) => link.getAttribute('href'))).toEqual(STUDIO_PROFILE_URLS);
+      // Icon-only: no visible text at all, one real inline glyph per link, and the accessible
+      // name coming from aria-label - which is the whole load-bearing part of a symbol link.
+      expect(links.map((link) => link.textContent)).toEqual(['', '']);
+      expect(links.map((link) => link.querySelector('svg path') !== null)).toEqual([true, true]);
+      expect(links.map((link) => link.getAttribute('aria-label')))
+        .toEqual(['ServbotShop on X', 'ServbotShop on Etsy']);
       // opened in a new tab, and without handing the opened page a handle on this one
       for (const link of links) {
         expect(link).toHaveAttribute('target', '_blank');

@@ -2399,22 +2399,24 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* The studio's X and Etsy links. Rendered in the hero under the highlights row and at
    the end of the footer, so they share one rule and differ only in alignment. Sizes and colours
    are existing ones: the .68rem of the highlights row, the hairline border, the pill radius. */
-.social-links { display: flex; flex-wrap: wrap; gap: .4rem; }
+/* Icon-only now, so the pills become 40px circles - a step up from the 32px they were as text
+   labels. The same hairline and the same pill radius, closed into a circle by the square box. */
+.social-links { display: flex; flex-wrap: wrap; gap: .45rem; }
 .social-links a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: .1rem .6rem;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--border-2);
   border-radius: var(--radius-pill);
   color: var(--text-3);
-  font-size: .68rem;
-  font-weight: 600;
-  letter-spacing: .06em;
   text-decoration: none;
   transition: border-color .2s ease, color .2s ease;
 }
+/* currentColor is what ties the mark to the link: both go accent together on hover. */
+.social-links a svg { width: 17px; height: 17px; fill: currentColor; }
 .social-links a:hover { border-color: var(--accent-border); color: var(--accent); }
+.social-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .social-links.is-hero { margin-top: 1rem; }
 .social-links.is-footer { justify-content: flex-end; }
 
