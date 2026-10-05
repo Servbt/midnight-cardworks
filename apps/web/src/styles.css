@@ -2395,18 +2395,59 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* The footer is the disclaimer line alone: no wordmark, no link columns. It used to
    carry a brand block and three columns of links, which made it the tallest block on
    the page and duplicated the header's category control. */
+/* ─── STUDIO PROFILES ─── */
+/* The studio's X, Pixiv and Etsy links. Rendered in the hero under the highlights row and at
+   the end of the footer, so they share one rule and differ only in alignment. Sizes and colours
+   are existing ones: the .68rem of the highlights row, the hairline border, the pill radius. */
+.social-links { display: flex; flex-wrap: wrap; gap: .4rem; }
+.social-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: .1rem .6rem;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-pill);
+  color: var(--text-3);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-decoration: none;
+  transition: border-color .2s ease, color .2s ease;
+}
+.social-links a:hover { border-color: var(--accent-border); color: var(--accent); }
+.social-links.is-hero { margin-top: 1rem; }
+.social-links.is-footer { justify-content: flex-end; }
+
 footer {
   background: var(--bg-dark);
   border-top: 1px solid var(--border);
   padding: clamp(1.25rem, 2.5vw, 1.75rem) var(--gutter);
 }
 
-.footer-legal {
+/* One row: the disclaimer left, the studio profiles right. The centring that used to live on
+   .footer-legal moved up here, because the row is what is centred now. */
+.footer-row {
   width: min(var(--max-w), 100%);
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem 1.5rem;
+  flex-wrap: wrap;
+}
+
+.footer-legal {
+  flex: 1 1 20rem;
+  margin: 0;
   font-size: .72rem;
   color: var(--text-3);
   line-height: 1.6;
+}
+
+/* Once the row wraps, a right-aligned pair of pills under a paragraph reads as a mistake, so
+   they line up with the text instead. */
+@media (max-width: 720px) {
+  .social-links.is-footer { justify-content: flex-start; }
 }
 
 

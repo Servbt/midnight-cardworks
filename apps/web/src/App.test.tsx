@@ -117,12 +117,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const STUDIO_PROFILE_URLS = ['https://x.com/Servbot006', 'https://www.pixiv.net/en/artworks/105648522', 'https://www.etsy.com/shop/ServbotShop'];
+
 describe('ServbotShop storefront', () => {
-  // Retargeted twice, most recently when the footer was reduced to the disclaimer alone. It
-  // used to assert the footer's Shop column stayed in sync with the header's category control,
-  // which meant two controls for one job. The assertion now states the stronger contract: the
-  // category control is the single route to the filters, and the footer carries no navigation,
-  // links or headings at all, so a competing one cannot return unnoticed.
+  // Retargeted three times: it began as a footer-sync test, then held the footer's reduction to
+  // the disclaimer alone. The studio profiles now sit in the footer, so the contract is that the
+  // category control stays the single route to the filters and the footer carries the disclaimer
+  // plus exactly the three profiles - no competing navigation, buttons or headings.
   it('filters listings from the compact category control, which the footer no longer duplicates', async () => {
     render(<App />);
     await screen.findByRole('link', { name: 'Open listing for Golden Hour Commander Proxy' });
@@ -135,6 +136,36 @@ describe('ServbotShop storefront', () => {
     expect(within(footer).queryByRole('navigation')).not.toBeInTheDocument();
     expect(within(footer).queryByRole('heading')).not.toBeInTheDocument();
     expect(within(footer).getByText(/Not affiliated with/)).toBeInTheDocument();
+
+    // the footer's only links are the studio profiles, and they point where they should
+    const profileLinks = within(footer).getAllByRole('link');
+    expect(profileLinks.map((link) => link.getAttribute('aria-label')))
+      .toEqual(['ServbotShop on X', 'ServbotShop on Pixiv', 'ServbotShop on Etsy']);
+    expect(profileLinks.map((link) => link.getAttribute('href')))
+      .toEqual(STUDIO_PROFILE_URLS);
+  });
+
+  it('links the studio profiles under the hero highlights and again in the footer', async () => {
+    render(<App />);
+    await screen.findByRole('heading', { name: 'Cards made for the midnight table.' });
+
+    // one row in the hero, one in the footer - same links, same order
+    const rows = await screen.findAllByRole('group', { name: 'ServbotShop profiles' });
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const links = within(row).getAllByRole('link');
+      expect(links.map((link) => link.textContent)).toEqual(['X', 'Pixiv', 'Etsy']);
+      expect(links.map((link) => link.getAttribute('href'))).toEqual(STUDIO_PROFILE_URLS);
+      // opened in a new tab, and without handing the opened page a handle on this one
+      for (const link of links) {
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link.getAttribute('rel')).toBe('me noopener noreferrer');
+      }
+    }
+
+    // the hero row sits directly under the highlights it follows
+    const stats = screen.getByLabelText('Storefront highlights');
+    expect(stats.nextElementSibling).toBe(rows[0]);
   });
 
   it('loads catalog batches without hiding products from search', async () => {

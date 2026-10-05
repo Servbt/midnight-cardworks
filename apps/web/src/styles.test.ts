@@ -37,22 +37,36 @@ describe('global CSS isolation', () => {
     expect(styles).toMatch(/\.summary-row strong,\s*\.summary-row span:last-child\s*\{[^}]*white-space:\s*nowrap/s);
   });
 
-  // Retargeted: this guarded the centring of the footer's link columns. Those columns are gone —
-  // the footer is the disclaimer alone — so the test now holds the reduction instead, and fails
-  // if any of the removed footer CSS returns without markup to justify it.
-  it('keeps the footer to the disclaimer alone', () => {
+  // Retargeted again: first this guarded the centring of the footer's link columns, then the
+  // reduction to the disclaimer alone. The studio profiles now share the footer with the
+  // disclaimer, so it holds that shape instead - one centred row carrying both - and still fails
+  // if any of the removed footer navigation CSS comes back without markup to justify it.
+  it('keeps the footer to the disclaimer and the studio profiles', () => {
     const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
     const markup = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
 
-    expect(styles).toMatch(/\.footer-legal\s*\{[^}]*width:\s*min\(var\(--max-w\)/s);
+    // the centring moved off the paragraph and onto the row, which is what is centred now
+    expect(styles).toMatch(/\.footer-row\s*\{[^}]*width:\s*min\(var\(--max-w\)[^}]*justify-content:\s*space-between/s);
+    expect(styles).toMatch(/\.footer-legal\s*\{[^}]*flex:\s*1 1 20rem/s);
+    expect(styles).toMatch(/\.social-links a\s*\{[^}]*border-radius:\s*var\(--radius-pill\)/s);
     for (const removed of ['.footer-inner', '.footer-wordmark', '.footer-links', '.footer-tagline', '.footer-brand']) {
       expect(styles).not.toContain(removed);
     }
 
-    // and the markup really is the disclaimer with nothing else in it
+    // the markup really is the disclaimer plus the shared profile row, and nothing else
     const footer = markup.match(/<footer>[\s\S]*?<\/footer>/)?.[0] ?? '';
     expect(footer).toMatch(/<p className="footer-legal">/);
+    expect(footer).toMatch(/socialLinkRow\('footer'\)/);
     expect(footer).not.toMatch(/<nav|<button|footer-wordmark/);
+
+    // and the row points only at the three studio profiles, opened safely
+    const list = markup.match(/const socialLinks = \[[\s\S]*?\];/)?.[0] ?? '';
+    expect(list.match(/href: '[^']+'/g)).toEqual([
+      "href: 'https://x.com/Servbot006'",
+      "href: 'https://www.pixiv.net/en/artworks/105648522'",
+      "href: 'https://www.etsy.com/shop/ServbotShop'"
+    ]);
+    expect(markup).toMatch(/rel="me noopener noreferrer"/);
   });
 
   it('stacks cart rows and controls for narrow mobile screens', () => {
