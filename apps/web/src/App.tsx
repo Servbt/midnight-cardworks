@@ -36,6 +36,28 @@ const launchNotes = [
   { title: 'Casual-play clarity', copy: 'Every page keeps the unofficial, not-tournament-legal note visible.' }
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
+
+// The studio's profiles. They appear in the hero and again in the footer, so both read from
+// this one list and a handle only ever changes in one place.
+const socialLinks = [
+  { label: 'X', about: 'ServbotShop on X', href: 'https://x.com/Servbot006' },
+  { label: 'Pixiv', about: 'ServbotShop on Pixiv', href: 'https://www.pixiv.net/en/artworks/105648522' },
+  { label: 'Etsy', about: 'ServbotShop on Etsy', href: 'https://www.etsy.com/shop/ServbotShop' }
+];
+
+// rel="me" is the microformat that proves these profiles belong to this site; noopener and
+// noreferrer keep the opened tab from reaching back into this one.
+function socialLinkRow(variant: 'hero' | 'footer') {
+  return <div className={`social-links is-${variant}`} role="group" aria-label="ServbotShop profiles">
+    {socialLinks.map((link) => <a
+      key={link.label}
+      href={link.href}
+      target="_blank"
+      rel="me noopener noreferrer"
+      aria-label={link.about}
+    >{link.label}</a>)}
+  </div>;
+}
 const savedCheckoutInfoKey = 'midnight-cardworks.checkoutInfo';
 const analyticsPreferenceKey = 'midnight-cardworks.analyticsPreference';
 const newsletterOfferHomeSeenKey = 'midnight-cardworks.newsletterOfferHomeSeen';
@@ -1390,6 +1412,7 @@ export default function App() {
             <button className="ghost" onClick={startOrder}>Start a commission</button>
           </div>
           <div className="mini-stats" aria-label="Storefront highlights">{storefrontStats.map((stat) => <span key={stat}>{stat}</span>)}</div>
+          {socialLinkRow('hero')}
         </div>
         <div
           className="hero-art"
@@ -1935,7 +1958,10 @@ export default function App() {
     </aside>}
 
     <footer>
-      <p className="footer-legal">Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</p>
+      <div className="footer-row">
+        <p className="footer-legal">Unofficial custom game pieces for casual play. Not affiliated with or endorsed by Wizards of the Coast. Not tournament legal.</p>
+        {socialLinkRow('footer')}
+      </div>
     </footer>
   </main>;
 }

@@ -15,4 +15,20 @@ describe('crawlable homepage shell', () => {
     expect(html).not.toContain('How it works');
     expect(html).not.toContain('Pricing and packages');
   });
+
+  it('declares the studio profiles in the structured data', () => {
+    const html = readFileSync('index.html', 'utf8');
+    const block = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] ?? '{}';
+    const ld = JSON.parse(block);
+
+    expect(ld['@type']).toBe('Store');
+    expect(ld.name).toBe('ServbotShop');
+    // sameAs is how a search engine ties these profiles to the shop, so an empty or drifting
+    // list is a real loss - it must name exactly the three the site links to.
+    expect(ld.sameAs).toEqual([
+      'https://x.com/Servbot006',
+      'https://www.pixiv.net/en/artworks/105648522',
+      'https://www.etsy.com/shop/ServbotShop'
+    ]);
+  });
 });
