@@ -2415,6 +2415,8 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 /* currentColor is what ties the mark to the link: both go accent together on hover. */
 .social-links a svg { width: 17px; height: 17px; fill: currentColor; }
+/* A centreline mark is stroked rather than filled, and its own glyph size is set inline. */
+.social-links a svg[data-stroked] { fill: none; stroke: currentColor; }
 .social-links a:hover { border-color: var(--accent-border); color: var(--accent); }
 .social-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .social-links.is-hero { margin-top: 1rem; }

@@ -117,7 +117,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const STUDIO_PROFILE_URLS = ['https://x.com/Servbot006', 'https://www.etsy.com/shop/ServbotShop'];
+const STUDIO_PROFILE_URLS = ['https://x.com/Servbot006', 'https://www.etsy.com/shop/ServbotShop', 'https://www.whatnot.com/user/servbotshop'];
 
 describe('ServbotShop storefront', () => {
   // Retargeted three times: it began as a footer-sync test, then held the footer's reduction to
@@ -140,7 +140,7 @@ describe('ServbotShop storefront', () => {
     // the footer's only links are the studio profiles, and they point where they should
     const profileLinks = within(footer).getAllByRole('link');
     expect(profileLinks.map((link) => link.getAttribute('aria-label')))
-      .toEqual(['ServbotShop on X', 'ServbotShop on Etsy']);
+      .toEqual(['ServbotShop on X', 'ServbotShop on Etsy', 'ServbotShop on Whatnot']);
     expect(profileLinks.map((link) => link.getAttribute('href')))
       .toEqual(STUDIO_PROFILE_URLS);
   });
@@ -157,10 +157,10 @@ describe('ServbotShop storefront', () => {
       expect(links.map((link) => link.getAttribute('href'))).toEqual(STUDIO_PROFILE_URLS);
       // Icon-only: no visible text at all, one real inline glyph per link, and the accessible
       // name coming from aria-label - which is the whole load-bearing part of a symbol link.
-      expect(links.map((link) => link.textContent)).toEqual(['', '']);
-      expect(links.map((link) => link.querySelector('svg path') !== null)).toEqual([true, true]);
+      expect(links.map((link) => link.textContent)).toEqual(['', '', '']);
+      expect(links.map((link) => link.querySelector('svg path') !== null)).toEqual([true, true, true]);
       expect(links.map((link) => link.getAttribute('aria-label')))
-        .toEqual(['ServbotShop on X', 'ServbotShop on Etsy']);
+        .toEqual(['ServbotShop on X', 'ServbotShop on Etsy', 'ServbotShop on Whatnot']);
       // opened in a new tab, and without handing the opened page a handle on this one
       for (const link of links) {
         expect(link).toHaveAttribute('target', '_blank');

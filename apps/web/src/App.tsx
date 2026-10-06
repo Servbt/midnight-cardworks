@@ -42,7 +42,19 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 // The glyphs are the official brand marks from Simple Icons (CC0), inlined as single monochrome
 // paths. They carry no fill of their own, so they take the link's colour, and being inline they
 // cost no extra request and cannot flash as they load.
-const socialLinks = [
+type SocialLink = {
+  label: string;
+  about: string;
+  href: string;
+  viewBox: string;
+  path: string;
+  /** Set only for artwork that is a centreline and so has to be stroked, not filled. */
+  strokeWidth?: number;
+  /** Rendered glyph box in px, for a mark whose proportions need more room than the default. */
+  glyph?: number;
+};
+
+const socialLinks: SocialLink[] = [
   {
     label: 'X',
     about: 'ServbotShop on X',
@@ -56,6 +68,20 @@ const socialLinks = [
     href: 'https://www.etsy.com/shop/ServbotShop',
     viewBox: '0 0 24 24',
     path: 'M8.559 2.445c0-.325.033-.52.59-.52h7.465c1.3 0 2.02 1.11 2.54 3.193l.42 1.666h1.27c.23-4.728.43-6.784.43-6.784s-3.196.36-5.09.36H6.635L1.521.196v1.37l1.725.326c1.21.24 1.5.496 1.6 1.606 0 0 .11 3.27.11 8.64 0 5.385-.09 8.61-.09 8.61 0 .973-.39 1.333-1.59 1.573l-1.722.33V24l5.13-.165h8.55c1.935 0 6.39.165 6.39.165.105-1.17.75-6.48.855-7.064h-1.2l-1.284 2.91c-1.005 2.28-2.476 2.445-4.11 2.445h-4.906c-1.63 0-2.415-.64-2.415-2.05V12.8s3.62 0 4.79.096c.912.064 1.463.325 1.76 1.598l.39 1.695h1.41l-.09-4.278.192-4.305h-1.391l-.45 1.89c-.283 1.244-.48 1.47-1.754 1.6-1.666.17-4.815.14-4.815.14V2.45h-.05z'
+  },
+  {
+    // Whatnot publish no standalone mark, so this is their artwork taken from the Arcticons set
+    // and drawn the way it is built: a centreline that has to be stroked. That needs two things
+    // the filled marks do not - a stroke weight, and a viewBox that hugs the artwork rather than
+    // a square one, because the W is about twice as wide as it is tall and a square box would
+    // leave it looking small and lost next to the other two.
+    label: 'Whatnot',
+    about: 'ServbotShop on Whatnot',
+    href: 'https://www.whatnot.com/user/servbotshop',
+    viewBox: '2.00 11.57 44.00 24.86',
+    path: 'M30.485 33.929a6.53 6.53 0 0 1-4.725-2.023L24 30.062l-1.76 1.844a6.53 6.53 0 0 1-9.45 0L6.307 25.11a6.53 6.53 0 0 1 .217-9.232a6.527 6.527 0 0 1 9.232.217l1.76 1.844l1.76-1.844a6.53 6.53 0 0 1 9.45 0l1.76 1.844l1.76-1.844a6.527 6.527 0 0 1 9.232-.217a6.53 6.53 0 0 1 .217 9.232l-6.485 6.796a6.53 6.53 0 0 1-4.724 2.023m-8.814-6.306L24 30.062',
+    strokeWidth: 5,
+    glyph: 23
   }
 ];
 
@@ -70,8 +96,21 @@ function socialLinkRow(variant: 'hero' | 'footer') {
       rel="me noopener noreferrer"
       aria-label={link.about}
       title={link.about}
-    >{/* The mark is decorative - the anchor's aria-label is the accessible name. */}
-      <svg viewBox={link.viewBox} aria-hidden="true" focusable="false"><path d={link.path} /></svg>
+    >{/* The mark is decorative - the anchor's aria-label is the accessible name. A centreline
+        mark is stroked and needs its own glyph size; a solid one is filled and takes the
+        default. */}
+      <svg
+        viewBox={link.viewBox}
+        aria-hidden="true"
+        focusable="false"
+        data-stroked={link.strokeWidth ? 'true' : undefined}
+        style={link.glyph ? { width: `${link.glyph}px`, height: `${link.glyph}px` } : undefined}
+      ><path
+        d={link.path}
+        strokeWidth={link.strokeWidth}
+        strokeLinecap={link.strokeWidth ? 'round' : undefined}
+        strokeLinejoin={link.strokeWidth ? 'round' : undefined}
+      /></svg>
     </a>)}
   </div>;
 }

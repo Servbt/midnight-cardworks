@@ -53,6 +53,8 @@ describe('global CSS isolation', () => {
     expect(styles).toMatch(/\.social-links a\s*\{[^}]*width:\s*40px[^}]*height:\s*40px/s);
     // the mark takes the link's colour, so both go accent together on hover
     expect(styles).toMatch(/\.social-links a svg\s*\{[^}]*fill:\s*currentColor/s);
+    // a centreline mark is stroked, so it must not also be filled
+    expect(styles).toMatch(/\.social-links a svg\[data-stroked\]\s*\{[^}]*fill:\s*none[^}]*stroke:\s*currentColor/s);
     for (const removed of ['.footer-inner', '.footer-wordmark', '.footer-links', '.footer-tagline', '.footer-brand']) {
       expect(styles).not.toContain(removed);
     }
@@ -64,10 +66,11 @@ describe('global CSS isolation', () => {
     expect(footer).not.toMatch(/<nav|<button|footer-wordmark/);
 
     // and the row points only at the three studio profiles, opened safely
-    const list = markup.match(/const socialLinks = \[[\s\S]*?\];/)?.[0] ?? '';
+    const list = markup.match(/const socialLinks(?::\s*SocialLink\[\])?\s*=\s*\[[\s\S]*?\];/)?.[0] ?? '';
     expect(list.match(/href: '[^']+'/g)).toEqual([
       "href: 'https://x.com/Servbot006'",
-      "href: 'https://www.etsy.com/shop/ServbotShop'"
+      "href: 'https://www.etsy.com/shop/ServbotShop'",
+      "href: 'https://www.whatnot.com/user/servbotshop'"
     ]);
     expect(markup).toMatch(/rel="me noopener noreferrer"/);
   });
