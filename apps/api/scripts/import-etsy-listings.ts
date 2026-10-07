@@ -83,7 +83,7 @@ export function inspiration(title: string): string {
 export function categorize(title: string): string {
   const t = title.toLowerCase();
   if (/token/.test(t)) return 'Tokens';
-  if (/commission|custom mtg/.test(t)) return 'Custom';
+  if (/commission|custom mtg/.test(t)) return 'Commission';
   if (/dual land|land|island|forest|swamp|plains|mountain|bayou|tundra|taiga|plateau|scrubland|badlands|savannah/.test(t))
     return 'Lands';
   if (/set\b/.test(t)) return 'Sets';
@@ -96,7 +96,7 @@ export const CATEGORY_TAG: Record<string, string> = {
   Lands: 'land card',
   Tokens: 'token',
   Sets: 'card set',
-  Custom: 'commission',
+  Commission: 'commission',
 };
 
 /**

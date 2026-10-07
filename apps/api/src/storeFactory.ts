@@ -1,7 +1,7 @@
 import { assertProductionDatabase } from './productionConfig.js';
 import { PrismaClient } from '@prisma/client';
 import { createInMemoryStore } from './store.js';
-import { retireListings, seedCatalogueListings, syncTaxonomyTags } from './catalogue.js';
+import { retireListings, seedCatalogueListings, syncCatalogueFacets } from './catalogue.js';
 import { createPrismaStore, seedPrismaContent, seedPrismaProducts } from './prismaStore.js';
 import type { Store } from './types.js';
 
@@ -18,7 +18,7 @@ export async function createStoreFromEnv(env: NodeJS.ProcessEnv = process.env): 
   await seedPrismaContent(prisma);
   await retireListings(prisma);
   // Derived tags, so unlike the rest of the seed these are kept in step with the taxonomy.
-  await syncTaxonomyTags(prisma);
+  await syncCatalogueFacets(prisma);
   return {
     store: createPrismaStore(prisma),
     disconnect: () => prisma.$disconnect()

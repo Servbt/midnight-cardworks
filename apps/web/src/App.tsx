@@ -40,7 +40,7 @@ const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 // The order the storefront lists card types and colour identities in, most-used first. These
 // are the same words the taxonomy tags each listing with, so a facet filter is a tag lookup.
 const CARD_TYPE_ORDER = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land',
-  'Planeswalker', 'Battle', 'Token', 'Set', 'Commission'];
+  'Planeswalker', 'Battle', 'Token', 'Set'];
 const COLOUR_ORDER = ['White', 'Blue', 'Black', 'Red', 'Green', 'Multicolour', 'Colorless'];
 
 /** A listing's card type and colour identity, read back off its tags. */

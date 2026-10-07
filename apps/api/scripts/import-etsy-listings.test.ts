@@ -101,8 +101,11 @@ suite('categorize', () => {
     expect(categorize('Medallion Proxy Set - Tloz Inspired')).toBe('Sets');
   });
 
+  // Commission is a category of product rather than a kind of card, so it gets its own bucket
+  // instead of being folded into Custom - which is what the storefront files it under now.
   it('recognises commission work', () => {
-    expect(categorize('Custom MTG Proxy Card Commission \u2013 Anime Style EDH Commander Card Art')).toBe('Custom');
+    expect(categorize('Custom MTG Proxy Card Commission \u2013 Anime Style EDH Commander Card Art')).toBe('Commission');
+    expect(categorize('Cabbage Merchant Proxy - ATLA Inspired (Commission Series)')).toBe('Commission');
   });
 
   it('falls back to Proxies', () => {

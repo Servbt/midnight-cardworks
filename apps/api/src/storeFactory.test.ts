@@ -5,10 +5,10 @@ const calls = vi.hoisted(() => ({
   createMany: [] as Array<{ data: Array<{ slug: string }>; skipDuplicates?: boolean }>,
   updateMany: [] as Array<{ where: { slug: { in: string[] }; active: boolean }; data: { active: boolean } }>,
   findMany: [] as Array<{ where: { slug: { in: string[] } }; select?: unknown }>,
-  update: [] as Array<{ where: { slug: string }; data: { tags: string[] } }>,
+  update: [] as Array<{ where: { slug: string }; data: { tags: string[]; category?: string } }>,
   upsert: 0,
   /** What findMany reports as already stored. A test sets this to provoke an update. */
-  storedRows: [] as Array<{ slug: string; tags: string[] }>,
+  storedRows: [] as Array<{ slug: string; tags: string[]; category?: string }>,
 }));
 
 vi.mock('@prisma/client', () => ({
@@ -39,6 +39,7 @@ vi.mock('@prisma/client', () => ({
 
 const { createStoreFromEnv } = await import('./storeFactory.js');
 const { catalogueListings, RETIRED_LISTING_SLUGS } = await import('./catalogue.js');
+const { CARD_TYPES, COLOUR_IDENTITIES } = await import('./cardTaxonomy.js');
 
 const DB_ENV = { NODE_ENV: 'development', DATABASE_URL: 'postgres://user:pass@localhost:5432/shop' };
 
@@ -107,21 +108,45 @@ describe('card taxonomy', () => {
     expect(land?.tags).toContain('White');
   });
 
-  it('gives a listing with no single colour its type and no colour tag', () => {
+  it('gives a commission a category and no card type at all', () => {
     const commission = catalogueListings.find((l) => l.slug === 'cabbage-merchant-proxy');
-    expect(commission?.tags).toContain('Commission');
-    expect(commission?.tags).not.toContain('Colorless');
+    // a commission is a kind of product, not a kind of card
+    expect(commission?.category).toBe('Commission');
+    expect(commission?.tags).not.toContain('Commission');
+    for (const type of ['Instant', 'Land', 'Token', 'Set', 'Commission']) {
+      expect(commission?.tags, type).not.toContain(type);
+    }
+    // and so it carries no colour either
+    expect(commission?.tags.filter((t) => COLOUR_IDENTITIES.includes(t as never))).toEqual([]);
   });
 
-  it('knows a type and colour for every listing in the catalogue', async () => {
+  it('files every commission listing under the Commission category', () => {
+    const commissions = catalogueListings.filter((l) => /commission/i.test(l.title));
+    expect(commissions.length).toBeGreaterThan(0);
+    for (const listing of commissions) {
+      expect(listing.category, listing.slug).toBe('Commission');
+    }
+  });
+
+  it('gives a card type to every listing that has a taxonomy entry, and none to the rest', async () => {
     const { cardTaxonomy } = await import('./cardTaxonomy.js');
-    expect(Object.keys(cardTaxonomy).length).toBe(catalogueListings.length);
+    const untagged: string[] = [];
     for (const listing of catalogueListings) {
       const facets = cardTaxonomy[listing.slug];
-      expect(facets, listing.slug).toBeDefined();
+      if (!facets) {
+        // no entry means no card type, which is the honest state for a commission
+        untagged.push(listing.slug);
+        expect(listing.tags.filter((t) => CARD_TYPES.includes(t as never)), listing.slug).toEqual([]);
+        continue;
+      }
       expect(listing.tags, listing.slug).toContain(facets.type);
       if (facets.colour) expect(listing.tags, listing.slug).toContain(facets.colour);
     }
+    // the only listings without a type are the commissions, and there is no Commission card type
+    expect(untagged.sort()).toEqual(
+      catalogueListings.filter((l) => l.category === 'Commission').map((l) => l.slug).sort(),
+    );
+    expect(CARD_TYPES).not.toContain('Commission' as never);
   });
 
   it('brings listings that predate the taxonomy into step without losing their own tags', async () => {
@@ -149,5 +174,30 @@ describe('card taxonomy', () => {
     calls.storedRows = [{ slug: 'not-in-the-taxonomy', tags: ['whatever'] }];
     await createStoreFromEnv(DB_ENV);
     expect(calls.update).toEqual([]);
+  });
+
+  it('takes the retired Commission tag back off a listing that still carries it', async () => {
+    calls.storedRows = [{ slug: 'cabbage-merchant-proxy', tags: ['custom proxy card', 'Commission'], category: 'Custom' }];
+    await createStoreFromEnv(DB_ENV);
+
+    const update = calls.update.find((u) => u.where.slug === 'cabbage-merchant-proxy');
+    expect(update, 'the commission listing should have been rewritten').toBeDefined();
+    expect(update!.data.tags).toEqual(['custom proxy card']);
+    expect(update!.data.category).toBe('Commission');
+  });
+
+  it('re-files a commission that is still sitting under the old category', async () => {
+    calls.storedRows = [{ slug: 'cabbage-merchant-proxy', tags: [], category: 'Custom' }];
+    await createStoreFromEnv(DB_ENV);
+    const update = calls.update.find((u) => u.where.slug === 'cabbage-merchant-proxy');
+    expect(update!.data.category).toBe('Commission');
+  });
+
+  it("leaves an ordinary listing's own category alone", async () => {
+    // the owner moved this one to Lands in /admin; a boot must not pull it back
+    calls.storedRows = [{ slug: 'force-of-will-proxy-card', tags: ['force proxy card', 'Instant', 'Blue'], category: 'Lands' }];
+    await createStoreFromEnv(DB_ENV);
+    const update = calls.update.find((u) => u.where.slug === 'force-of-will-proxy-card');
+    expect(update, 'nothing about this listing needed writing').toBeUndefined();
   });
 });

@@ -48,6 +48,12 @@ function stubCatalogue(listings: Array<Record<string, unknown>>) {
   }));
 }
 
+// A commission: a category of product, with no card type at all.
+const commissionProducts = [
+  { ...products[0], slug: 'cabbage-merchant', title: 'Cabbage Merchant Proxy', category: 'Commission', tags: ['custom proxy card'] },
+  { ...products[1], slug: 'force-of-will', title: 'Force of Will Proxy Card', category: 'Proxies', tags: ['custom proxy card', 'Instant', 'Blue'] },
+];
+
 // Three listings carrying the taxonomy tags the storefront filters read.
 const facetProducts = [
   { ...products[0], slug: 'force-of-will', title: 'Force of Will Proxy Card', tags: ['custom proxy card', 'Instant', 'Blue'] },
@@ -1620,5 +1626,23 @@ describe('ServbotShop storefront', () => {
     await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' }));
 
     expect(await screen.findByLabelText('Card type and colour identity')).toHaveTextContent('Instant · Blue');
+  });
+
+  it('offers Commission as a category but never as a card type', async () => {
+    stubCatalogue(commissionProducts);
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Cabbage Merchant Proxy' });
+
+    // it is a category, and filtering by it finds the commission
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Commission' }));
+    expect(screen.getByRole('link', { name: 'Open listing for Cabbage Merchant Proxy' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open listing for Force of Will Proxy Card' })).not.toBeInTheDocument();
+
+    // and it is not on offer as a card type
+    const typeGroup = document.querySelector('#filter-type-options');
+    expect(typeGroup, 'the card type group should be open').not.toBeNull();
+    expect(within(typeGroup as HTMLElement).queryByText('Commission')).not.toBeInTheDocument();
+    // the real card types still are
+    expect(within(typeGroup as HTMLElement).getByText('Instant')).toBeInTheDocument();
   });
 });

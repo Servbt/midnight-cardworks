@@ -12,11 +12,13 @@
 // ("Proxy", "Proxy Card", "- <theme> Inspired", "V1/V2"). A hand-written checked-in script for
 // this is a follow-up; it is deliberately not claimed here until it exists.
 //
-// Listings that are not a single card — token packs, land sets, commissions — carry their own
-// type and are given no colour, rather than being forced into a card type they are not.
+// Listings that are not a single card - token packs and land sets - carry their own type and are
+// given no colour, rather than being forced into a card type they are not. Commissions are not
+// listed here at all: a commission is a kind of product rather than a card, so it is a category
+// on the storefront instead of a card type, and a listing with no entry simply carries no type.
 
 export const CARD_TYPES = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land',
-  'Planeswalker', 'Battle', 'Token', 'Set', 'Commission'] as const;
+  'Planeswalker', 'Battle', 'Token', 'Set'] as const;
 export const COLOUR_IDENTITIES = ['White', 'Blue', 'Black', 'Red', 'Green', 'Multicolour', 'Colorless'] as const;
 
 export type CardType = (typeof CARD_TYPES)[number];
@@ -40,7 +42,6 @@ export const cardTaxonomy: Record<string, CardFacets> = {
   'delighted-halfling': { type: 'Creature', colour: 'Green' },
   'smothering-tithe-proxy': { type: 'Enchantment', colour: 'White' },
   'yawgmoths-will': { type: 'Sorcery', colour: 'Black' },
-  'cabbage-merchant-proxy': { type: 'Commission' },
   'orims-chant-proxy': { type: 'Instant', colour: 'White' },
   'chrome-mox-proxy': { type: 'Artifact', colour: 'Colorless' },
   'culling-the-weak-proxy': { type: 'Instant', colour: 'Black' },
@@ -97,7 +98,6 @@ export const cardTaxonomy: Record<string, CardFacets> = {
   'horn-of-greed-proxy': { type: 'Artifact', colour: 'Colorless' },
   'mystical-tutor-proxy': { type: 'Instant', colour: 'Blue' },
   'clue-token': { type: 'Token', colour: 'Colorless' },
-  'custom-mtg-proxy-card-commission-anime-style-edh-commander-c': { type: 'Commission' },
   'grave-pact-proxy': { type: 'Enchantment', colour: 'Black' },
   'final-fortune-proxy': { type: 'Instant', colour: 'Red' },
   'firestorm-proxy': { type: 'Instant', colour: 'Red' },
