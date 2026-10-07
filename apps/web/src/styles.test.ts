@@ -82,4 +82,24 @@ describe('global CSS isolation', () => {
     expect(styles).toMatch(/@media \(max-width:\s*860px\)[\s\S]*\.cart-line-actions\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
     expect(styles).toMatch(/@media \(max-width:\s*860px\)[\s\S]*\.cart-line-total\s*\{[^}]*text-align:\s*left/s);
   });
+
+  // The filter groups grew past the viewport once Card type and Colour identity were added, and
+  // the sidebar could not be scrolled: a bare `overflow: hidden` further down the rule was
+  // silently beating `overflow-y: auto`. Both halves of the fix are held here.
+  it('keeps the shop filters scrollable inside the sidebar', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+    const sidebar = styles.match(/\.shop-sidebar \{[^}]*\}/s)?.[0] ?? '';
+
+    expect(sidebar).toMatch(/max-height:\s*calc\(100vh/);
+    expect(sidebar).toMatch(/overflow-y:\s*auto/);
+    // a plain `overflow` here would win over overflow-y and clip the lower groups again
+    expect(sidebar).not.toMatch(/\n\s*overflow:\s/);
+
+    // and the header stays put so Clear is reachable however far the options scroll
+    const header = styles.match(/\.sidebar-header \{[^}]*\}/s)?.[0] ?? '';
+    expect(header).toMatch(/position:\s*sticky/);
+    expect(header).toMatch(/top:\s*0/);
+    // it scrolls under the options, so it needs to be opaque
+    expect(header).toMatch(/background:\s*var\(/);
+  });
 });

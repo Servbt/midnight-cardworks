@@ -779,22 +779,30 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
+/* The filter groups scroll inside the sidebar rather than running off the bottom of the
+   viewport. Do not add a plain `overflow: hidden` here - it silently wins over the overflow-y
+   below and clips the lower groups, which is exactly the bug this replaced. */
 .shop-sidebar {
   position: sticky;
   top: calc(var(--nav-primary-h) + var(--nav-secondary-h) + 1.25rem);
   max-height: calc(100vh - var(--nav-primary-h) - var(--nav-secondary-h) - 2.5rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;
   display: grid;
   gap: 0;
+  align-content: start;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-surface);
-  overflow: hidden;
 }
 
+/* Sticky inside the scrolling sidebar, so Clear stays reachable however far down the options go. */
 .sidebar-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
