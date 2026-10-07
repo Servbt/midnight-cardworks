@@ -48,6 +48,16 @@ function stubCatalogue(listings: Array<Record<string, unknown>>) {
   }));
 }
 
+/**
+ * The sidebar opens with only Colour identity and Search expanded, so a test that wants to touch a
+ * card-type or category option has to open its group first - which is what a visitor does too.
+ */
+async function openFilterGroup(section: 'category' | 'type' | 'colour' | 'search') {
+  const toggle = document.querySelector(`[aria-controls="filter-${section}-options"]`);
+  if (!toggle) throw new Error(`no filter toggle for ${section}`);
+  if (toggle.getAttribute('aria-expanded') !== 'true') await userEvent.click(toggle as HTMLElement);
+}
+
 // A commission: a category of product, with no card type at all.
 const commissionProducts = [
   { ...products[0], slug: 'cabbage-merchant', title: 'Cabbage Merchant Proxy', category: 'Commission', tags: ['custom proxy card'] },
@@ -1588,6 +1598,7 @@ describe('ServbotShop storefront', () => {
     render(<App />);
     await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' });
 
+    await openFilterGroup('type');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Instant' }));
     expect(screen.getByRole('link', { name: 'Open listing for Force of Will Proxy Card' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open listing for Birds of Paradise Proxy' })).not.toBeInTheDocument();
@@ -1611,6 +1622,7 @@ describe('ServbotShop storefront', () => {
     render(<App />);
     await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' });
 
+    await openFilterGroup('type');
     for (const present of ['Instant', 'Land', 'Creature', 'Blue', 'Colorless', 'Green']) {
       expect(screen.getByRole('checkbox', { name: present })).toBeInTheDocument();
     }
@@ -1634,15 +1646,35 @@ describe('ServbotShop storefront', () => {
     await screen.findByRole('link', { name: 'Open listing for Cabbage Merchant Proxy' });
 
     // it is a category, and filtering by it finds the commission
+    await openFilterGroup('category');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Commission' }));
     expect(screen.getByRole('link', { name: 'Open listing for Cabbage Merchant Proxy' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open listing for Force of Will Proxy Card' })).not.toBeInTheDocument();
 
     // and it is not on offer as a card type
+    await openFilterGroup('type');
     const typeGroup = document.querySelector('#filter-type-options');
     expect(typeGroup, 'the card type group should be open').not.toBeNull();
     expect(within(typeGroup as HTMLElement).queryByText('Commission')).not.toBeInTheDocument();
     // the real card types still are
     expect(within(typeGroup as HTMLElement).getByText('Instant')).toBeInTheDocument();
+  });
+
+  it('opens on a fresh load with only Colour identity and Search expanded', async () => {
+    stubCatalogue(facetProducts);
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' });
+
+    const open = [...document.querySelectorAll('.filter-section-toggle')]
+      .filter((toggle) => toggle.getAttribute('aria-expanded') === 'true')
+      .map((toggle) => toggle.textContent?.replace('▾', '').trim());
+
+    // Category and Card type stay shut so the sidebar is not a wall of options on arrival
+    expect(open).toEqual(['Colour identity', 'Search']);
+    expect(document.querySelector('#filter-category-options')).toBeNull();
+    expect(document.querySelector('#filter-type-options')).toBeNull();
+    // and opening one is the visitor's call, remembered while they shop
+    await openFilterGroup('type');
+    expect(document.querySelector('#filter-type-options')).not.toBeNull();
   });
 });

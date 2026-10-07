@@ -160,7 +160,7 @@ export default function App() {
   const [cartNotice, setCartNotice] = useState('');
   const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
-  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Category', 'Card type', 'Colour', 'Search']);
+  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Colour', 'Search']);
   const [shareNotice, setShareNotice] = useState('');
   const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('home');
