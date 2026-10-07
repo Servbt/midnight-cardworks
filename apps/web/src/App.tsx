@@ -37,6 +37,20 @@ const launchNotes = [
 ];
 const storefrontStats = ['Custom proxies', 'Token packs', 'Display cards'];
 
+// The order the storefront lists card types and colour identities in, most-used first. These
+// are the same words the taxonomy tags each listing with, so a facet filter is a tag lookup.
+const CARD_TYPE_ORDER = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land',
+  'Planeswalker', 'Battle', 'Token', 'Set', 'Commission'];
+const COLOUR_ORDER = ['White', 'Blue', 'Black', 'Red', 'Green', 'Multicolour', 'Colorless'];
+
+/** A listing's card type and colour identity, read back off its tags. */
+function cardFacets(product: Product): string[] {
+  return [
+    ...CARD_TYPE_ORDER.filter((type) => product.tags.includes(type)),
+    ...COLOUR_ORDER.filter((colour) => product.tags.includes(colour)),
+  ];
+}
+
 // The studio's profiles. They appear in the hero and again in the footer, so both read from
 // this one list and a handle only ever changes in one place.
 // The glyphs are the official brand marks from Simple Icons (CC0), inlined as single monochrome
@@ -146,12 +160,14 @@ export default function App() {
   const [cartNotice, setCartNotice] = useState('');
   const [clearCartRequested, setClearCartRequested] = useState(false);
   const [addedProductIds, setAddedProductIds] = useState<string[]>([]);
-  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Category', 'Search']);
+  const [openFilterSections, setOpenFilterSections] = useState<string[]>(['Category', 'Card type', 'Colour', 'Search']);
   const [shareNotice, setShareNotice] = useState('');
   const [detailQuantity, setDetailQuantity] = useState('1');
   const [view, setView] = useState<View>('home');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
+  const [cardType, setCardType] = useState('All');
+  const [colour, setColour] = useState('All');
   const [productLimit, setProductLimit] = useState(12);
   const [email, setEmail] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -324,6 +340,8 @@ export default function App() {
       if (window.location.pathname === '/shop') {
         setCategory(params.get('category') ?? 'All');
         setQuery(params.get('q') ?? '');
+        setCardType(params.get('type') ?? 'All');
+        setColour(params.get('colour') ?? 'All');
         setView('shop');
         return;
       }
@@ -498,11 +516,24 @@ export default function App() {
   }, [analyticsPreference, view]);
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))];
+  // Only the types and colours actually in the catalogue are offered, so no filter dead-ends.
+  const cardTypeOptions = useMemo(
+    () => ['All', ...CARD_TYPE_ORDER.filter((type) => products.some((p) => p.tags.includes(type)))],
+    [products],
+  );
+  const colourOptions = useMemo(
+    () => ['All', ...COLOUR_ORDER.filter((value) => products.some((p) => p.tags.includes(value)))],
+    [products],
+  );
+  const filtersActive = query !== '' || category !== 'All' || cardType !== 'All' || colour !== 'All';
   const visibleProducts = useMemo(() => products.filter((p) => {
     const matchesQuery = [p.title, p.description, p.category, ...p.tags].join(' ').toLowerCase().includes(query.toLowerCase());
-    return matchesQuery && (category === 'All' || p.category === category);
-  }), [products, query, category]);
-  useEffect(() => { setProductLimit(12); }, [query, category]);
+    return matchesQuery
+      && (category === 'All' || p.category === category)
+      && (cardType === 'All' || p.tags.includes(cardType))
+      && (colour === 'All' || p.tags.includes(colour));
+  }), [products, query, category, cardType, colour]);
+  useEffect(() => { setProductLimit(12); }, [query, category, cardType, colour]);
   const subtotal = cart.reduce((sum, line) => sum + effectiveProductPrice(line.product) * line.quantity, 0);
   const shippingCost = subtotal >= freeShippingThresholdCents ? 0 : flatShippingCents;
   const orderTotal = subtotal + shippingCost;
@@ -588,12 +619,26 @@ export default function App() {
     window.scrollTo({ top: 0, left: 0, behavior: options.behavior ?? 'auto' });
   }
 
-  function shopPath(nextCategory = category, nextQuery = query) {
+  function shopPath(nextCategory = category, nextQuery = query, nextType = cardType, nextColour = colour) {
     const params = new URLSearchParams();
     if (nextCategory && nextCategory !== 'All') params.set('category', nextCategory);
     if (nextQuery.trim()) params.set('q', nextQuery.trim());
+    if (nextType && nextType !== 'All') params.set('type', nextType);
+    if (nextColour && nextColour !== 'All') params.set('colour', nextColour);
     const search = params.toString();
     return `/shop${search ? `?${search}` : ''}`;
+  }
+
+  /** Collapse or reveal one filter group. */
+  function toggleFilterSection(section: string) {
+    setOpenFilterSections((sections) => sections.includes(section)
+      ? sections.filter((s) => s !== section)
+      : [...sections, section]);
+  }
+
+  /** Every filter at once, so Clear means clear. */
+  function clearShopFilters() {
+    showShop({ category: 'All', query: '', cardType: 'All', colour: 'All' });
   }
 
   function showHome(options: { scrollToTop?: boolean } = {}) {
@@ -603,13 +648,17 @@ export default function App() {
     if (options.scrollToTop) scrollToPageTop();
   }
 
-  function showShop(options: { scrollToTop?: boolean; category?: string; query?: string } = {}) {
+  function showShop(options: { scrollToTop?: boolean; category?: string; query?: string; cardType?: string; colour?: string } = {}) {
     const nextCategory = options.category ?? category;
     const nextQuery = options.query ?? query;
+    const nextType = options.cardType ?? cardType;
+    const nextColour = options.colour ?? colour;
     if (options.category !== undefined) setCategory(nextCategory);
     if (options.query !== undefined) setQuery(nextQuery);
+    if (options.cardType !== undefined) setCardType(nextType);
+    if (options.colour !== undefined) setColour(nextColour);
     setView('shop');
-    const nextPath = shopPath(nextCategory, nextQuery);
+    const nextPath = shopPath(nextCategory, nextQuery, nextType, nextColour);
     if (`${window.location.pathname}${window.location.search}` === nextPath) window.history.replaceState({}, '', nextPath);
     else window.history.pushState({}, '', nextPath);
     if (options.scrollToTop) scrollToPageTop();
@@ -1444,6 +1493,12 @@ export default function App() {
       <select className="mobile-category-select" aria-label="Shop category" value={category} onChange={(event) => showShop({ category: event.target.value, scrollToTop: true })}>
         {categories.map((c) => <option key={c} value={c}>{c === 'All' ? 'All products' : c}</option>)}
       </select>
+      <select className="mobile-category-select" aria-label="Card type" value={cardType} onChange={(event) => showShop({ cardType: event.target.value, scrollToTop: true })}>
+        {cardTypeOptions.map((type) => <option key={type} value={type}>{type === 'All' ? 'All card types' : type}</option>)}
+      </select>
+      <select className="mobile-category-select" aria-label="Colour identity" value={colour} onChange={(event) => showShop({ colour: event.target.value, scrollToTop: true })}>
+        {colourOptions.map((value) => <option key={value} value={value}>{value === 'All' ? 'All colours' : value}</option>)}
+      </select>
       <button className={`nav-tab desktop-category${view === 'shop' && category === 'All' ? ' active' : ''}`} onClick={() => showShop({ category: 'All', scrollToTop: true })}>All</button>
       {categories.filter((c) => c !== 'All').map((c) => (
         <button key={c} className={`nav-tab desktop-category${view === 'shop' && category === c ? ' active' : ''}`} onClick={() => showShop({ category: c, scrollToTop: true })}>{c}</button>
@@ -1531,7 +1586,7 @@ export default function App() {
       <h2 className="shop-section-heading">Shop the current lineup</h2>
       <div className="shop-layout">
         <aside className="shop-sidebar" aria-label="Shop filters">
-          <div className="sidebar-header"><h3>Filters</h3>{(query || category !== 'All') && <button className="sidebar-clear" type="button" onClick={() => showShop({ category: 'All', query: '' })}>Clear</button>}</div>
+          <div className="sidebar-header"><h3>Filters</h3>{filtersActive && <button className="sidebar-clear" type="button" onClick={clearShopFilters}>Clear</button>}</div>
           <div className="filter-section">
             <button
               className="filter-section-toggle"
@@ -1553,9 +1608,43 @@ export default function App() {
             <button
               className="filter-section-toggle"
               type="button"
+              aria-expanded={openFilterSections.includes('Card type')}
+              aria-controls="filter-type-options"
+              onClick={() => toggleFilterSection('Card type')}
+            >Card type<span className={`filter-chevron${openFilterSections.includes('Card type') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Card type') && <div className="filter-options" id="filter-type-options">
+              {cardTypeOptions.map((type) => (
+                <label key={type} className="filter-option">
+                  <input type="checkbox" checked={cardType === type} onChange={() => showShop({ cardType: type })} />
+                  {type}
+                </label>
+              ))}
+            </div>}
+          </div>
+          <div className="filter-section">
+            <button
+              className="filter-section-toggle"
+              type="button"
+              aria-expanded={openFilterSections.includes('Colour')}
+              aria-controls="filter-colour-options"
+              onClick={() => toggleFilterSection('Colour')}
+            >Colour identity<span className={`filter-chevron${openFilterSections.includes('Colour') ? ' open' : ''}`}>▾</span></button>
+            {openFilterSections.includes('Colour') && <div className="filter-options" id="filter-colour-options">
+              {colourOptions.map((value) => (
+                <label key={value} className="filter-option">
+                  <input type="checkbox" checked={colour === value} onChange={() => showShop({ colour: value })} />
+                  {value}
+                </label>
+              ))}
+            </div>}
+          </div>
+          <div className="filter-section">
+            <button
+              className="filter-section-toggle"
+              type="button"
               aria-expanded={openFilterSections.includes('Search')}
               aria-controls="filter-search-options"
-              onClick={() => setOpenFilterSections((sections) => sections.includes('Search') ? sections.filter((s) => s !== 'Search') : [...sections, 'Search'])}
+              onClick={() => toggleFilterSection('Search')}
             >Search<span className={`filter-chevron${openFilterSections.includes('Search') ? ' open' : ''}`}>▾</span></button>
             {openFilterSections.includes('Search') && <div className="filter-options" id="filter-search-options" style={{ paddingTop: '.35rem' }}>
               <input aria-label="Search products" placeholder="Search cards, tokens..." value={query} onChange={(e) => showShop({ query: e.target.value })} style={{ width: '100%', fontSize: '.82rem', padding: '.55rem .75rem' }} />
@@ -1568,10 +1657,10 @@ export default function App() {
         <div className="shop-results">
           <div className="results-bar">
             <span className="results-count">{visibleProducts.length} {visibleProducts.length === 1 ? 'item' : 'items'}</span>
-            {category !== 'All' && <button className="results-clear" type="button" onClick={() => showShop({ category: 'All' })}>Show all</button>}
+            {filtersActive && <button className="results-clear" type="button" onClick={clearShopFilters}>Show all</button>}
           </div>
           {visibleProducts.length === 0
-            ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={() => showShop({ category: 'All', query: '' })}>Clear filters</button></div>
+            ? <div className="empty-state"><h3>No signal on this channel.</h3><p>Try a different search term or browse the full collection.</p><button onClick={clearShopFilters}>Clear filters</button></div>
             : <div className="product-grid">{visibleProducts.slice(0, productLimit).map((product) => {
                 const categoryBadgeClass = product.category === 'Commander' ? 'badge badge-commander' : product.category === 'Tokens' ? 'badge badge-tokens' : product.category === 'Display' ? 'badge badge-display' : 'badge';
                 return <article
@@ -1600,7 +1689,7 @@ export default function App() {
                   </div>
                   <div className="product-card__info">
                     <span className="product-card__name" title={product.title}>{displayProductTitle(product.title)}</span>
-                    <span className="product-card__meta">{product.category}</span>
+                    <span className="product-card__meta">{[product.category, ...cardFacets(product)].join(' · ')}</span>
                     <div className={`price-stack${isProductOnSale(product) ? ' is-sale' : ''}`}>
                       <span className="product-card__price-label">From</span>
                       {isProductOnSale(product) && <span className="product-card__original-price">{formatMoney(product.price)}</span>}
@@ -1663,6 +1752,7 @@ export default function App() {
               <button className="share-listing-btn ghost" type="button" onClick={() => void copyListingLink(selectedProduct.slug)}>Copy link to this card</button>
               {shareNotice && <span className="share-notice" role="status">{shareNotice}</span>}
             </div>
+            {cardFacets(selectedProduct).length > 0 && <p className="product-facets" aria-label="Card type and colour identity">{cardFacets(selectedProduct).join(' · ')}</p>}
             <div className="product-description"><h3>About this card</h3><p className="product-detail-desc">{selectedProduct.description}</p></div>
             <details className="product-tags"><summary>Explore tags</summary><div className="tag-row">{selectedProduct.tags.map((tag) => <span key={tag}>#{tag}</span>)}</div></details>
           </div>

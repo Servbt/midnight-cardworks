@@ -38,11 +38,22 @@ function stubCatalogue(listings: Array<Record<string, unknown>>) {
   const base = globalThis.fetch as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.includes('/api/products/golden')) return new Response(JSON.stringify({ product: listings[0] }), { status: 200 });
+    const detail = url.match(/\/api\/products\/([^/?]+)/);
+    if (detail) {
+      const hit = listings.find((listing) => listing.slug === detail[1]) ?? listings[0];
+      return new Response(JSON.stringify({ product: hit }), { status: 200 });
+    }
     if (url.includes('/api/products')) return new Response(JSON.stringify({ products: listings }), { status: 200 });
     return base(input, init);
   }));
 }
+
+// Three listings carrying the taxonomy tags the storefront filters read.
+const facetProducts = [
+  { ...products[0], slug: 'force-of-will', title: 'Force of Will Proxy Card', tags: ['custom proxy card', 'Instant', 'Blue'] },
+  { ...products[1], slug: 'city-of-brass', title: 'City of Brass Proxy Card', tags: ['custom proxy card', 'Land', 'Colorless'] },
+  { ...products[2], slug: 'birds-of-paradise', title: 'Birds of Paradise Proxy', tags: ['custom proxy card', 'Creature', 'Green'] },
+];
 
 // jsdom has no matchMedia, so the rotation runs in tests unless a test asks for the reduced
 // -motion path explicitly.
@@ -1564,5 +1575,50 @@ describe('ServbotShop storefront', () => {
       .find(([url, init]) => String(url).includes('/api/admin/products') && init?.method === 'POST');
     expect(posted).toBeTruthy();
     expect(JSON.parse(String(posted![1].body))).toMatchObject({ slug: 'golden', featured: true });
+  });
+
+  it('narrows the lineup by card type and by colour identity, and says so in the url', async () => {
+    stubCatalogue(facetProducts);
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Instant' }));
+    expect(screen.getByRole('link', { name: 'Open listing for Force of Will Proxy Card' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open listing for Birds of Paradise Proxy' })).not.toBeInTheDocument();
+    expect(window.location.search).toContain('type=Instant');
+
+    // a second facet narrows further rather than widening - the two are ANDed
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Green' }));
+    expect(screen.getByText(/No signal on this channel/)).toBeInTheDocument();
+    expect(window.location.search).toContain('colour=Green');
+
+    // and Clear really clears everything, not just the category
+    await userEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(screen.getByRole('link', { name: 'Open listing for Birds of Paradise Proxy' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open listing for City of Brass Proxy Card' })).toBeInTheDocument();
+    expect(window.location.search).not.toContain('type=');
+    expect(window.location.search).not.toContain('colour=');
+  });
+
+  it('offers only the card types and colours the catalogue actually holds', async () => {
+    stubCatalogue(facetProducts);
+    render(<App />);
+    await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' });
+
+    for (const present of ['Instant', 'Land', 'Creature', 'Blue', 'Colorless', 'Green']) {
+      expect(screen.getByRole('checkbox', { name: present })).toBeInTheDocument();
+    }
+    // nothing in this catalogue is a Red planeswalker, so it must not be offered
+    expect(screen.queryByRole('checkbox', { name: 'Planeswalker' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Red' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Multicolour' })).not.toBeInTheDocument();
+  });
+
+  it('shows a listing its own card type and colour identity', async () => {
+    stubCatalogue(facetProducts);
+    render(<App />);
+    await userEvent.click(await screen.findByRole('link', { name: 'Open listing for Force of Will Proxy Card' }));
+
+    expect(await screen.findByLabelText('Card type and colour identity')).toHaveTextContent('Instant · Blue');
   });
 });

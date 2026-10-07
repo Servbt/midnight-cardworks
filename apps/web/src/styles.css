@@ -2395,6 +2395,16 @@ h1, h2, h3 { margin: 0; line-height: 1.05; }
 /* The footer is the disclaimer line alone: no wordmark, no link columns. It used to
    carry a brand block and three columns of links, which made it the tallest block on
    the page and duplicated the header's category control. */
+/* The card type and colour identity of a listing, shown under its title. */
+.product-facets {
+  margin: 0 0 1rem;
+  color: var(--accent);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
 /* ─── STUDIO PROFILES ─── */
 /* The studio's X and Etsy links. Rendered in the hero under the highlights row and at
    the end of the footer, so they share one rule and differ only in alignment. Sizes and colours
