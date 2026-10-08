@@ -102,4 +102,33 @@ describe('global CSS isolation', () => {
     // it scrolls under the options, so it needs to be opaque
     expect(header).toMatch(/background:\s*var\(/);
   });
+
+  // On mobile the sidebar is hidden and this strip is the whole filter UI, so it has to be
+  // readable: three selects sharing 390px with `flex: 1` left about 60px each, and a native
+  // select's arrow landed on a label truncated to "All pr".
+  it('keeps the mobile filter strip readable and scrollable', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+    const mobile = styles.slice(styles.indexOf('@media (max-width: 860px)'));
+    expect(mobile, 'the 860px block should exist').not.toBe('');
+
+    const select = mobile.match(/\.mobile-category-select \{[^}]*\}/s)?.[0] ?? '';
+    expect(select).toMatch(/flex:\s*0 0 auto/);
+    expect(select).not.toMatch(/min-width:\s*0/);
+    // padding on the right so the native arrow sits beside the label rather than over it
+    expect(select).toMatch(/padding:[^;]*1\.75rem/);
+
+    const nav = mobile.match(/\.nav-secondary \{[^}]*\}/s)?.[0] ?? '';
+    expect(nav).toMatch(/overflow-x:\s*auto/);
+    // `overflow: visible` here is what let the strip run off the screen with no way to scroll it
+    expect(nav).not.toMatch(/overflow:\s*visible/);
+  });
+
+  it('centres the studio profile links in both rows on mobile', () => {
+    const styles = readFileSync(join(process.cwd(), 'src/styles.css'), 'utf8');
+    const mobile = styles.slice(styles.indexOf('@media (max-width: 860px)'));
+    const rule = mobile.match(/\.social-links\.is-hero,\s*\.social-links\.is-footer \{[^}]*\}/s)?.[0] ?? '';
+    expect(rule).toMatch(/justify-content:\s*center/);
+    // the row has to take the width first, or centring inside a shrink-wrapped row does nothing
+    expect(rule).toMatch(/width:\s*100%/);
+  });
 });
